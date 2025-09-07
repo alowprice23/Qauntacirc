@@ -50,8 +50,11 @@ dependencies = [
     "jsonschema>=4.17.0",
     
     # Async and messaging
-    "asyncio-nats-client>=0.11.5",
+    "nats-py>=2.2.0",
     "aiofiles>=23.0.0",
+    "msgpack>=1.0.0",
+    "protobuf>=4.0.0",
+    "pybreaker>=1.0.0",
     
     # Utilities
     "click>=8.0.0",

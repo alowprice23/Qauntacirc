@@ -65,6 +65,28 @@ class BudgetError(QuantaCircError):
     """Raised for issues related to the error budget."""
     pass
 
+
+# --- Messaging Errors ---
+
+class MessagingError(QuantaCircError):
+    """Raised for general errors within the messaging subsystem."""
+    pass
+
+class QuantumStateError(ValidationError):
+    """
+    Raised for errors related to quantum state validation or consistency.
+    Inherits from ValidationError to support detailed error reporting.
+    """
+    pass
+
+class SchemaValidationError(ValidationError):
+    """
+    Raised when a message payload does not conform to its schema.
+    Inherits from ValidationError to support detailed error reporting.
+    """
+    pass
+
+
 # Example of how these might be used:
 
 def example_function(value):
