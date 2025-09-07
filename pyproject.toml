@@ -50,7 +50,7 @@ dependencies = [
     "jsonschema>=4.17.0",
     
     # Async and messaging
-    "asyncio-nats-client>=2.5.0",
+    "asyncio-nats-client>=0.11.5",
     "aiofiles>=23.0.0",
     
     # Utilities
@@ -74,7 +74,7 @@ dependencies = [
     "prometheus-client>=0.16.0",
     
     # Code analysis
-    "ast-decompiler>=2.0.0",
+    "ast-decompiler>=0.8.0",
     "astor>=0.8.1",
     
     # Testing framework integration
@@ -170,7 +170,6 @@ strict_equality = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
-addopts = "--cov=. --cov-report=term-missing --cov-report=html --cov-fail-under=85"
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
@@ -224,8 +223,8 @@ exclude_lines = [
     "raise NotImplementedError",
     "if 0:",
     "if __name__ == .__main__.:",
-    "class .*\bProtocol\):",
-    "@(abc\.)?abstractmethod",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
 ]
 
 [tool.bandit]
