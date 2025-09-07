@@ -1,0 +1,120 @@
+import numpy as np
+
+class LyapunovFunction:
+    """
+    Represents a Lyapunov function for stability analysis of a dynamical system.
+
+    A function V(x) is a Lyapunov function for a system x_dot = f(x) if
+    V(x) > 0 for x != 0, V(0) = 0, and dV/dt <= 0 along the system's trajectories.
+    """
+    def __init__(self, function_type='quadratic', P=None):
+        """
+        Initializes the Lyapunov function.
+
+        Args:
+            function_type (str): Type of Lyapunov function ('quadratic' or 'general').
+            P (np.ndarray, optional): For a quadratic Lyapunov function V(x) = x.T * P * x,
+                                     P is a positive definite matrix. Defaults to None.
+        """
+        self.function_type = function_type
+        if function_type == 'quadratic':
+            if P is None:
+                raise ValueError("Matrix P must be provided for a quadratic Lyapunov function.")
+            self.P = P
+            if not self._is_positive_definite(P):
+                raise ValueError("Matrix P for a quadratic Lyapunov function must be positive definite.")
+
+    def _is_positive_definite(self, A):
+        """Checks if a matrix is positive definite."""
+        return np.all(np.linalg.eigvals(A) > 0)
+
+    def evaluate(self, x):
+        """Evaluates the Lyapunov function at a given state x."""
+        if self.function_type == 'quadratic':
+            return x.T @ self.P @ x
+        else:
+            # For a general Lyapunov function, this method should be overridden
+            raise NotImplementedError("evaluate() must be implemented for a general Lyapunov function.")
+
+    def derivative(self, x, x_dot):
+        """
+        Evaluates the time derivative of the Lyapunov function along the system's trajectory.
+
+        For V(x) = x.T * P * x, dV/dt = x_dot.T * P * x + x.T * P * x_dot.
+        """
+        if self.function_type == 'quadratic':
+            return x_dot.T @ self.P @ x + x.T @ self.P @ x_dot
+        else:
+            raise NotImplementedError("derivative() must be implemented for a general Lyapunov function.")
+
+class StabilityAnalyzer:
+    """
+    Analyzes the stability of a system using Lyapunov's direct method.
+    """
+    def __init__(self, lyapunov_function: LyapunovFunction, system_dynamics):
+        """
+        Initializes the stability analyzer.
+
+        Args:
+            lyapunov_function (LyapunovFunction): The Lyapunov function for the system.
+            system_dynamics (callable): A function f(x) that returns x_dot, the time
+                                        derivative of the system's state.
+        """
+        self.lyapunov_function = lyapunov_function
+        self.system_dynamics = system_dynamics
+
+    def check_stability(self, x):
+        """
+        Checks the stability of the system at a given state x.
+
+        Returns:
+            str: 'stable', 'asymptotically stable', or 'unstable'.
+        """
+        v_x = self.lyapunov_function.evaluate(x)
+        if v_x <= 0 and not np.all(x == 0):
+            return 'unstable' # V(x) is not positive definite
+
+        x_dot = self.system_dynamics(x)
+        v_dot = self.lyapunov_function.derivative(x, x_dot)
+
+        if v_dot > 0:
+            return 'unstable'
+        elif v_dot < 0:
+            return 'asymptotically stable'
+        else: # v_dot == 0
+            return 'stable'
+
+    def estimate_stability_rate(self, x):
+        """
+        Estimates the exponential stability rate if the system is exponentially stable.
+
+        Requires V_dot(x) <= -alpha * V(x) for some alpha > 0.
+        """
+        v_x = self.lyapunov_function.evaluate(x)
+        if v_x == 0:
+            return np.inf # Rate is infinite at the origin
+
+        x_dot = self.system_dynamics(x)
+        v_dot = self.lyapunov_function.derivative(x, x_dot)
+
+        if v_dot >= 0:
+            return 0 # Not exponentially stable
+
+        # alpha = -V_dot(x) / V(x)
+        return -v_dot / v_x
+
+    def validate_trajectory(self, trajectory):
+        """
+        Validates that the Lyapunov function is non-increasing along a given trajectory.
+
+        Args:
+            trajectory (list of np.ndarray): A list of states over time.
+
+        Returns:
+            bool: True if the trajectory is stable, False otherwise.
+        """
+        v_values = [self.lyapunov_function.evaluate(x) for x in trajectory]
+        for i in range(len(v_values) - 1):
+            if v_values[i+1] > v_values[i]:
+                return False
+        return True
