@@ -32,13 +32,18 @@ def get_normalized_laplacian(adj_matrix, form='sym'):
         np.ndarray: The normalized Laplacian matrix.
     """
     degrees = np.sum(adj_matrix, axis=1)
-    D_inv_sqrt = np.diag(1.0 / np.sqrt(degrees), where=degrees > 0)
+    # To handle disconnected nodes, we only compute the inverse for non-zero degrees.
+    inv_degrees = np.zeros_like(degrees, dtype=float)
+    non_zero_mask = degrees > 0
+    inv_degrees[non_zero_mask] = 1.0 / degrees[non_zero_mask]
 
     if form == 'sym':
+        inv_sqrt_degrees = np.sqrt(inv_degrees)
+        D_inv_sqrt = np.diag(inv_sqrt_degrees)
         I = np.identity(adj_matrix.shape[0])
         return I - D_inv_sqrt @ adj_matrix @ D_inv_sqrt
     elif form == 'rw':
-        D_inv = np.diag(1.0 / degrees, where=degrees > 0)
+        D_inv = np.diag(inv_degrees)
         return np.identity(adj_matrix.shape[0]) - D_inv @ adj_matrix
     else:
         raise ValueError("Form must be 'sym' or 'rw'.")

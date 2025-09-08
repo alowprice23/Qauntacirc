@@ -142,10 +142,13 @@ def estimate_lyapunov_exponent(trajectory: np.ndarray, dt: float = 1.0) -> float
     # Add a small epsilon to zeros, or filter them out.
     # For this heuristic, we assume non-zero potentials.
     # A zero potential would imply reaching the target state.
-    trajectory[trajectory == 0] = 1e-9
+
+    # Create a copy to avoid modifying the original array
+    traj_no_zeros = np.copy(trajectory.astype(float))
+    traj_no_zeros[traj_no_zeros == 0] = 1e-9
 
     # Calculate the average logarithmic rate of change
-    log_ratios = np.log(np.abs(trajectory[1:] / trajectory[:-1]))
+    log_ratios = np.log(np.abs(traj_no_zeros[1:] / traj_no_zeros[:-1]))
 
     # Filter out any non-finite values that might arise
     finite_ratios = log_ratios[np.isfinite(log_ratios)]

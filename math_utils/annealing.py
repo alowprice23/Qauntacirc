@@ -16,7 +16,9 @@ class TemperatureSchedule:
         if schedule_type == 'exponential':
             self.alpha = (final_temp / initial_temp) ** (1.0 / steps)
         elif schedule_type == 'logarithmic':
-            self.c = initial_temp / math.log(1 + 1)
+            # Per README, T_k = c / log(k + 2).
+            # To have get_temperature(0) == initial_temp, we need c = initial_temp * log(2).
+            self.c = initial_temp * math.log(2)
         elif schedule_type == 'linear':
             self.beta = (initial_temp - final_temp) / steps
 
@@ -25,7 +27,10 @@ class TemperatureSchedule:
         if self.schedule_type == 'exponential':
             return self.initial_temp * (self.alpha ** step)
         elif self.schedule_type == 'logarithmic':
-            return self.c / math.log(1 + step + 1)
+            # Per README, T_k = c / log(k + 2)
+            if step < 0:
+                return float('inf')
+            return self.c / math.log(step + 2)
         elif self.schedule_type == 'linear':
             return self.initial_temp - self.beta * step
         else:

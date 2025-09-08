@@ -24,16 +24,21 @@ def maximum_likelihood_estimator(data, log_likelihood_func, initial_params):
 
     return result.x
 
-def m_estimator(data, psi_func, initial_param):
+def huber_rho(u, c=1.345):
+    """Huber's rho function, the integral of the psi function."""
+    abs_u = np.abs(u)
+    return np.where(abs_u <= c, 0.5 * u**2, c * abs_u - 0.5 * c**2)
+
+def m_estimator(data, rho_func, initial_param):
     """
     Generic M-estimator for a single parameter.
 
     M-estimators are a generalization of MLEs that are robust to outliers.
-    They solve sum(psi((x_i - theta) / s)) = 0, where psi is an influence function.
+    They minimize sum(rho((x_i - theta) / s)), where rho is a robust loss function.
 
     Args:
         data (np.ndarray): The observed data.
-        psi_func (callable): The influence function (e.g., Huber's psi).
+        rho_func (callable): The robust loss function (e.g., Huber's rho).
         initial_param (float): Initial guess for the parameter.
 
     Returns:
@@ -41,8 +46,10 @@ def m_estimator(data, psi_func, initial_param):
     """
     # The scale 's' is often estimated robustly, e.g., using MAD.
     s = np.median(np.abs(data - np.median(data))) * 1.4826
+    if s == 0:
+        s = 1.0 # Avoid division by zero if all data points are the same
 
-    objective = lambda theta: np.sum(psi_func((data - theta) / s))**2
+    objective = lambda theta: np.sum(rho_func((data - theta) / s))
 
     result = minimize(objective, initial_param)
 

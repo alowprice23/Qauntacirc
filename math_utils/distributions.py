@@ -84,8 +84,9 @@ def bayesian_estimation_normal(data, prior_mu, prior_sigma, n_samples=1000):
 
     This is a simplified example. A full implementation would use MCMC methods.
     """
-    # Assuming known variance
-    sigma = np.std(data)
+    # Assuming known variance, using sample variance for estimation
+    sigma = np.std(data, ddof=1)
+    if sigma == 0: sigma = 1e-9 # Avoid division by zero
     n = len(data)
 
     # Posterior parameters
