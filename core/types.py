@@ -157,3 +157,43 @@ class VerificationReport(BaseModel):
 
     def to_json_schema(self):
         return self.schema_json(indent=2)
+
+# ==============================================================================
+# CLI Application Context
+# ==============================================================================
+from rich.console import Console
+
+class ProjectConfig(BaseModel):
+    pass
+
+class AgentConfig(BaseModel):
+    pass
+
+class ExecutionConfig(BaseModel):
+    pass
+
+class MemoryConfig(BaseModel):
+    pass
+
+class SecurityConfig(BaseModel):
+    pass
+
+class QuantaCircConfig(BaseModel):
+    project: ProjectConfig = Field(default_factory=ProjectConfig)
+    agents: AgentConfig = Field(default_factory=AgentConfig)
+    execution: ExecutionConfig = Field(default_factory=ExecutionConfig)
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
+    security: SecurityConfig = Field(default_factory=SecurityConfig)
+
+class AppContext(BaseModel):
+    config: QuantaCircConfig
+    console: Console
+    interactive: bool
+    log_level: str
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    def verify_quantum_state(self) -> bool:
+        # Dummy implementation
+        return True

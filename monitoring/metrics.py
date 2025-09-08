@@ -73,12 +73,25 @@ CONVERGENCE_RESIDUAL = Gauge(
     ["algorithm", "iteration"],
 )
 
+# Generation-specific metrics
+generation_counter = Counter(
+    "generation_requests_total",
+    "Total number of generation requests."
+)
+
+generation_duration = Histogram(
+    "generation_duration_seconds",
+    "Duration of generation requests."
+)
+
 
 class QuantumMetrics:
     """
     A centralized class for managing and recording quantum-aware metrics.
     Integrates with Prometheus for metric collection and exposure.
     """
+def initialize_metrics():
+    print("Initializing metrics")
 
     def __init__(self, instance_name="default_instance"):
         """
