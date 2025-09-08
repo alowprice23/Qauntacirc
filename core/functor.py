@@ -14,12 +14,61 @@ from scipy.linalg import expm
 import networkx as nx
 from typing import Dict, Any, List
 
-# Assuming a type definition for software state from core.types
-# This is a simplified representation for this module's purpose.
-SoftwareState = Dict[str, Any]
+from core.types import SoftwareState, QuantumState
+
+class Functor:
+    """
+    A class that encapsulates the functorial mapping from software
+    systems to quantum systems.
+    """
+    def __init__(self, beta: float = 0.1, max_features: int = 128):
+        self.beta = beta
+        self.max_features = max_features
+
+    def map_software_to_quantum(self, state: SoftwareState, metrics: Dict[str, Any]) -> QuantumState:
+        """
+        The main functor F that maps a software state to a density matrix.
+        This is the primary method of the functor.
+
+        Args:
+            state: The software state to map.
+            metrics: The metrics associated with the software state (used to enrich the state).
+
+        Returns:
+            A QuantumState object representing the quantum state of the software.
+        """
+        # The existing map_to_density_matrix function expects a dictionary.
+        # We convert the pydantic model to a dict to work with it.
+        # This assumes that the SoftwareState object will be populated with
+        # more than just the fields in the pydantic model, which is an
+        # inconsistency in the current codebase.
+        state_dict = state.model_dump()
+
+        # The orchestrator also passes metrics, which might be needed to enrich the state
+        # for the functor. Let's merge them into the dict.
+        if metrics:
+            state_dict.update(metrics)
+
+        rho_matrix = map_to_density_matrix(
+            state_dict,
+            beta=self.beta,
+            max_features=self.max_features
+        )
+
+        # The QuantumState model expects a list of lists for the density matrix.
+        density_matrix_list = rho_matrix.tolist()
+
+        # The state_vector is not computed here, so we leave it as an empty list.
+        # This is another inconsistency to be aware of.
+        return QuantumState(
+            state_vector=[],
+            density_matrix=density_matrix_list,
+            measurement_basis="computational"
+        )
+
 
 # Placeholder for a more sophisticated feature extractor
-def extract_features(state: SoftwareState, max_features: int = 128) -> np.ndarray:
+def extract_features(state: Dict[str, Any], max_features: int = 128) -> np.ndarray:
     """
     (phi) Extracts a semantic feature vector from a software state.
 
@@ -28,7 +77,7 @@ def extract_features(state: SoftwareState, max_features: int = 128) -> np.ndarra
     in Part 3 of the project plan.
 
     Args:
-        state: The software state to analyze.
+        state: The software state to analyze (as a dictionary).
         max_features: The dimension of the feature vector to generate.
 
     Returns:
@@ -115,7 +164,7 @@ def create_density_matrix(H: np.ndarray) -> np.ndarray:
     rho = neg_H_exp / trace
     return rho
 
-def map_to_density_matrix(state: SoftwareState, beta: float = 0.1, max_features: int = 128) -> np.ndarray:
+def map_to_density_matrix(state: Dict[str, Any], beta: float = 0.1, max_features: int = 128) -> np.ndarray:
     """
     The main functor F that maps a software state to a density matrix.
 
@@ -125,7 +174,7 @@ def map_to_density_matrix(state: SoftwareState, beta: float = 0.1, max_features:
     3. Density Matrix Creation (Gibbs state)
 
     Args:
-        state: The software state to map.
+        state: The software state to map (as a dictionary).
         beta: The weight for mixing graph structure into the Hermitian matrix.
         max_features: The dimensionality of the feature space.
 
@@ -136,7 +185,17 @@ def map_to_density_matrix(state: SoftwareState, beta: float = 0.1, max_features:
     feature_vector = extract_features(state, max_features=max_features)
 
     # Step 2: Hermitian Assembly (Psi)
-    dep_graph = state.get("dependency_graph", nx.DiGraph())
+    # The dependency graph is expected to be a networkx graph.
+    # If it's not present, an empty graph is created.
+    dep_graph_data = state.get("dependency_graph")
+    if isinstance(dep_graph_data, nx.DiGraph):
+        dep_graph = dep_graph_data
+    else:
+        # In a real system, we might load this from a serialized format.
+        # For the placeholder, we assume it's either a graph or nothing.
+        dep_graph = nx.DiGraph()
+
+
     H = hermitian_assembly(feature_vector, dep_graph, beta=beta)
 
     # Step 3: Density Matrix Creation
