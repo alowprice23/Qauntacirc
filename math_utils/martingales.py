@@ -84,3 +84,27 @@ def optional_stopping_theorem_bound(sequence, stopping_time):
     expected_x0 = np.mean(sequence[0])
 
     return np.isclose(expected_xt, expected_x0)
+
+
+def is_supermartingale(sequence: np.ndarray) -> tuple[bool, float]:
+    """
+    Checks if a sequence has properties of a supermartingale.
+
+    A sequence X_n is a supermartingale if E[X_{n+1} | F_n] <= X_n.
+    This is empirically checked by testing if the sequence has a non-positive drift.
+
+    Args:
+        sequence (np.ndarray): The sequence of random variables.
+
+    Returns:
+        A tuple containing:
+        - bool: True if the sequence has a non-positive drift.
+        - float: The calculated drift.
+    """
+    if len(sequence) < 2:
+        return True, 0.0  # Not enough data to decide
+
+    diffs = np.diff(sequence)
+    drift = np.mean(diffs)
+
+    return drift <= 0, drift

@@ -31,6 +31,18 @@ class TemperatureSchedule:
         else:
             raise ValueError(f"Unknown schedule type: {self.schedule_type}")
 
+
+class GeometricCoolingSchedule:
+    """
+    A simple container for geometric cooling schedule parameters.
+    This class was added to resolve an ImportError in the tests.
+    """
+    def __init__(self, initial_temp: float, cooling_rate: float, min_temp: float):
+        self.initial_temp = initial_temp
+        self.cooling_rate = cooling_rate
+        self.min_temp = min_temp
+
+
 class TwoPhaseAnnealer:
     """
     A two-phase simulated annealer with quantum-mechanical temperature schedules.

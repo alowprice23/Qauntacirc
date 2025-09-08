@@ -118,3 +118,38 @@ class StabilityAnalyzer:
             if v_values[i+1] > v_values[i]:
                 return False
         return True
+
+
+def estimate_lyapunov_exponent(trajectory: np.ndarray, dt: float = 1.0) -> float:
+    """
+    Estimates the largest Lyapunov exponent from a time series.
+
+    This method uses the average logarithmic growth rate of the trajectory values
+    as a heuristic for the Lyapunov exponent. A positive exponent suggests chaos
+    (divergence), while a negative one suggests stability (convergence).
+
+    Args:
+        trajectory: A 1D numpy array representing the time series.
+        dt: The time step between trajectory points.
+
+    Returns:
+        The estimated Lyapunov exponent.
+    """
+    if len(trajectory) < 2:
+        return 0.0
+
+    # Ensure trajectory has no zeros to avoid log(0)
+    # Add a small epsilon to zeros, or filter them out.
+    # For this heuristic, we assume non-zero potentials.
+    # A zero potential would imply reaching the target state.
+    trajectory[trajectory == 0] = 1e-9
+
+    # Calculate the average logarithmic rate of change
+    log_ratios = np.log(np.abs(trajectory[1:] / trajectory[:-1]))
+
+    # Filter out any non-finite values that might arise
+    finite_ratios = log_ratios[np.isfinite(log_ratios)]
+    if len(finite_ratios) == 0:
+        return 0.0
+
+    return np.mean(finite_ratios) / dt

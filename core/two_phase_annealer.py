@@ -93,7 +93,7 @@ class TwoPhaseAnnealer:
                 # Logarithmic cooling for Phase A: T_k = c / log(k + 2)
                 self.temperature = self.phase_a_cooling_const / math.log(iteration + 2)
 
-        if self.phase == "B":
+        elif self.phase == "B":
             # Exponential cooling for Phase B
             self.temperature *= self.phase_b_cooling_rate
 
@@ -131,15 +131,19 @@ class TwoPhaseAnnealer:
         Convergence is determined by the change in energy over a recent window,
         indicating a "flatlined" energy landscape.
         """
-        if len(self.energy_history) < self.convergence_window:
+        window_size = self.convergence_window
+        if len(self.energy_history) < window_size:
             return False
 
-        recent_energies = self.energy_history[-self.convergence_window:]
-        energy_change = abs(np.mean(recent_energies[:10]) - np.mean(recent_energies[-10:]))
+        recent_energies = np.array(self.energy_history[-window_size:])
 
-        # Also check if we are in the final phase at a very low temperature
-        if self.phase == "B" and self.temperature == self.min_temp:
-             if energy_change < self.convergence_tolerance:
-                return True
+        # Check for flatness using standard deviation
+        energy_std = np.std(recent_energies)
 
-        return False
+        # Convergence is met if the energy has flatlined (low std dev) in the
+        # final phase at the minimum temperature.
+        is_converged = (self.phase == "B" and
+                        self.temperature <= self.min_temp and
+                        energy_std < self.convergence_tolerance)
+
+        return is_converged

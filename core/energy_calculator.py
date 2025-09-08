@@ -55,73 +55,42 @@ class EnergyCalculator:
         self._w_api_surface = self.config.get("w_api_surface", WEIGHT_API_SURFACE)
 
     @lru_cache(maxsize=128)
-    def compute_static_energy(self, metrics: Dict[str, float]) -> float:
-        """
-        Computes the static energy component from code metrics.
-
-        Static energy relates to the inherent complexity and structure of the code.
-        It's derived from metrics like cyclomatic complexity, coupling, and cohesion.
-
-        Args:
-            metrics: A dictionary of static code metrics.
-                Expected keys: 'cyclomatic_complexity', 'coupling', 'cohesion'.
-
-        Returns:
-            The calculated static energy component.
-        """
+    def _cached_compute_static_energy(self, metrics_tuple: tuple) -> float:
+        metrics = dict(metrics_tuple)
         complexity = metrics.get('cyclomatic_complexity', 0)
         coupling = metrics.get('coupling', 0)
-        cohesion = metrics.get('cohesion', 1)  # Assume perfect cohesion if not provided
-
-        # Cohesion is "good", so its contribution should be inverse
+        cohesion = metrics.get('cohesion', 1)
         e_static = (self._w_complexity * complexity +
                     self._w_coupling * coupling -
-                    self._w_cohesion * (1 / (cohesion + 1e-6))) # add small epsilon to avoid division by zero
+                    self._w_cohesion * (1 / (cohesion + 1e-6)))
         return e_static
 
+    def compute_static_energy(self, metrics: Dict[str, float]) -> float:
+        return self._cached_compute_static_energy(tuple(sorted(metrics.items())))
+
     @lru_cache(maxsize=128)
-    def compute_dynamic_energy(self, metrics: Dict[str, float]) -> float:
-        """
-        Computes the dynamic energy component from runtime metrics.
-
-        Dynamic energy relates to the system's behavior during execution.
-        It's derived from runtime performance indicators and memory consumption.
-
-        Args:
-            metrics: A dictionary of dynamic runtime metrics.
-                Expected keys: 'avg_response_time', 'peak_memory_usage'.
-
-        Returns:
-            The calculated dynamic energy component.
-        """
+    def _cached_compute_dynamic_energy(self, metrics_tuple: tuple) -> float:
+        metrics = dict(metrics_tuple)
         runtime_perf = metrics.get('avg_response_time', 0)
         memory_usage = metrics.get('peak_memory_usage', 0)
-
         e_dynamic = (self._w_runtime_perf * runtime_perf +
                      self._w_memory_usage * memory_usage)
         return e_dynamic
 
+    def compute_dynamic_energy(self, metrics: Dict[str, float]) -> float:
+        return self._cached_compute_dynamic_energy(tuple(sorted(metrics.items())))
+
     @lru_cache(maxsize=128)
-    def compute_interaction_energy(self, metrics: Dict[str, float]) -> float:
-        """
-        Computes the interaction energy component from dependency metrics.
-
-        Interaction energy captures the complexity of connections between different
-        parts of the system, such as modules or services.
-
-        Args:
-            metrics: A dictionary of interaction metrics.
-                Expected keys: 'inter_module_dependencies', 'api_surface_area'.
-
-        Returns:
-            The calculated interaction energy component.
-        """
+    def _cached_compute_interaction_energy(self, metrics_tuple: tuple) -> float:
+        metrics = dict(metrics_tuple)
         inter_module_deps = metrics.get('inter_module_dependencies', 0)
         api_surface_area = metrics.get('api_surface_area', 0)
-
         e_interaction = (self._w_inter_module_deps * inter_module_deps +
                          self._w_api_surface * api_surface_area)
         return e_interaction
+
+    def compute_interaction_energy(self, metrics: Dict[str, float]) -> float:
+        return self._cached_compute_interaction_energy(tuple(sorted(metrics.items())))
 
     def compute_total_energy(self, static_metrics: Dict[str, float],
                              dynamic_metrics: Dict[str, float],
