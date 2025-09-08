@@ -3,7 +3,7 @@ from typing import Any, Dict, Optional
 
 from .client import QuantumState
 
-logger = logging.logging.getLogger(__name__)
+logger = logging.getLogger(__name__)
 
 class ResponseValidator:
     """

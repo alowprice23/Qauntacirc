@@ -6,7 +6,7 @@ enabling agents to store, retrieve, and learn from past decisions.
 from typing import List, Dict, Any, NamedTuple
 import numpy as np
 
-from core.types import State, Proposal, Action
+from core.types import QCState as State, AgentTask as Proposal, AgentResult as Action
 
 # Placeholder for the actual Constellation client
 # In a real implementation, this would be in its own module, e.g., memory/constellation.py

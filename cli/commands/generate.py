@@ -181,7 +181,7 @@ def status(ctx: typer.Context):
     # Implementation for displaying pipeline status...
 
 @app.command()
-def cancel(ctx: typer.Context, job_id: Optional[str] = None):
+def cancel(ctx: typer.Context, job_id: Optional[str] = typer.Option(None, "--job-id", help="ID of the job to cancel")):
     """Cancel running generation job"""
     from rich.console import Console
     console = Console()

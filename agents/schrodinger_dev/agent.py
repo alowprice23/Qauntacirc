@@ -13,8 +13,8 @@ from agents.base.agent import QuantumAgent
 from agents.base import ops as base_ops
 from core.state_space import StateSpace
 from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action, Status
-from monitoring.metrics import MetricsLogger
+from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
+from monitoring.metrics import QuantumMetrics as MetricsLogger
 from agents.base.policies import PolicyEngine
 from agents.base.memory import AgentMemory
 from llm.client import LLMClient
@@ -57,15 +57,15 @@ class SchrodingerDevAgent(QuantumAgent):
         Analyzes a state containing a task DAG from PlanckForge.
 
         Args:
-            state: The current state, expected to have a 'task_dag' field.
+            state: The current state, expected to have a 'task_dag' field in metadata.
 
         Returns:
             A proposal containing generated code and proof skeletons.
         """
-        if "task_dag" not in state or "tasks" not in state.get("planck_forge_output", {}):
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.FAILED, reason="Task DAG or task list not found in state.")
+        if "task_dag" not in state.metadata or "tasks" not in state.metadata.get("planck_forge_output", {}):
+            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="Task DAG or task list not found in state.")
 
-        tasks = state["planck_forge_output"]["tasks"]
+        tasks = state.metadata["planck_forge_output"]["tasks"]
         generated_files = {}
         llm_confidence_scores = []
 
@@ -78,7 +78,7 @@ class SchrodingerDevAgent(QuantumAgent):
 
         for result in results:
             if isinstance(result, Exception):
-                return Proposal(agent_id=self.agent_id, data={}, status=Status.FAILED, reason=f"Failed to generate code: {result}")
+                return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason=f"Failed to generate code: {result}")
 
             generated_files.update(result["file_map"])
             llm_confidence_scores.append(result["confidence"])
@@ -86,8 +86,9 @@ class SchrodingerDevAgent(QuantumAgent):
         avg_confidence = sum(llm_confidence_scores) / len(llm_confidence_scores) if llm_confidence_scores else 0
 
         return Proposal(
-            agent_id=self.agent_id,
-            data={"generated_files": generated_files, "avg_llm_confidence": avg_confidence},
+            agent_name=self.name,
+            task_type="analysis",
+            payload={"generated_files": generated_files, "avg_llm_confidence": avg_confidence},
             status=Status.SUCCESS
         )
 
@@ -128,11 +129,11 @@ class SchrodingerDevAgent(QuantumAgent):
         """
         Validates the generated code skeletons in the proposal.
         """
-        if proposal.status != Status.SUCCESS or "generated_files" not in proposal.data:
+        if proposal.status != Status.SUCCESS or "generated_files" not in proposal.payload:
             return False
 
         try:
-            for file_path, content in proposal.data["generated_files"].items():
+            for file_path, content in proposal.payload["generated_files"].items():
                 if file_path.endswith(".py"):
                     ops.validate_python_syntax(content)
             return True
@@ -144,7 +145,7 @@ class SchrodingerDevAgent(QuantumAgent):
         """
         Executes the proposal by calculating the energy of the generated code.
         """
-        generated_files = proposal.data["generated_files"]
+        generated_files = proposal.payload["generated_files"]
 
         # 1. Calculate static energy from code complexity
         total_complexity = 0
@@ -162,10 +163,9 @@ class SchrodingerDevAgent(QuantumAgent):
 
         # 2. Calculate dynamic energy from code generation quality (LLM confidence)
         # We model low confidence as contributing to higher dynamic energy
-        avg_confidence = proposal.data.get("avg_llm_confidence", 0.5)
+        avg_confidence = proposal.payload.get("avg_llm_confidence", 0.5)
         quality_metric = (1.0 - avg_confidence) * 100 # Scale to be a significant number
 
-        dynamic_metrics = {'code_generation_quality': quality_metric}
         # Assuming energy_calculator can be extended or uses a flexible key system
         # For now, let's manually calculate a simple dynamic energy component
         dynamic_energy = self.energy_calculator.config.get("w_code_quality", 1.0) * quality_metric
@@ -180,7 +180,9 @@ class SchrodingerDevAgent(QuantumAgent):
         }
 
         return Action(
-            agent_id=self.agent_id,
-            data=action_data,
-            status=Status.SUCCESS
+            task_id=proposal.id,
+            agent_name=self.name,
+            action_taken=True,
+            status=Status.SUCCESS,
+            result=action_data
         )

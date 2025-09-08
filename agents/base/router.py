@@ -63,6 +63,9 @@ class AgentRouter:
         """
         required_caps = set(task.get("required_capabilities", []))
 
+        if not agent["capabilities"].issuperset(required_caps):
+            return 0.0
+
         # Capability matching score (e.g., Jaccard similarity)
         match_score = len(agent["capabilities"].intersection(required_caps)) / len(agent["capabilities"].union(required_caps))
         if not agent["capabilities"].union(required_caps): # Avoid division by zero
@@ -88,9 +91,14 @@ class AgentRouter:
         best_agent = None
         highest_score = -1.0
 
+        required_caps = set(task.get("required_capabilities", []))
+
         for agent_info in self.agents:
             agent_instance = agent_info["instance"]
             if not agent_instance.is_active:
+                continue
+
+            if not agent_info["capabilities"].issuperset(required_caps):
                 continue
 
             score = self._score_agent_for_task(agent_info, task)

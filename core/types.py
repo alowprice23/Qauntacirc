@@ -12,6 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID, uuid4
+from enum import Enum
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -73,6 +74,11 @@ class QCState(BaseModel):
 # Agent Communication Protocol
 # ==============================================================================
 
+class Status(str, Enum):
+    """Status of an agent operation."""
+    SUCCESS = "SUCCESS"
+    FAILED = "FAILED"
+
 class AgentTask(BaseModel):
     """Communication protocol for agent requests."""
     id: UUID = Field(default_factory=uuid4, description="Unique identifier for the task.")
@@ -80,6 +86,8 @@ class AgentTask(BaseModel):
     task_type: str = Field(..., description="Type of task to be performed.")
     payload: Dict[str, Any] = Field(..., description="Task-specific data payload.")
     priority: int = Field(5, ge=1, le=10, description="Task priority (1-10).")
+    status: Status = Field(Status.SUCCESS, description="Status of the proposal.")
+    reason: Optional[str] = Field(None, description="Reason for failure, if any.")
     quantum_context: Optional[QCState] = Field(None, description="The QCState context for the task.")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of task creation.")
 
@@ -88,6 +96,8 @@ class AgentResult(BaseModel):
     task_id: UUID = Field(..., description="Identifier of the task this is a result for.")
     agent_name: str = Field(..., description="Name of the agent that performed the task.")
     action_taken: bool = Field(..., description="Indicates if the agent took a substantive action.")
+    status: Status = Field(Status.SUCCESS, description="Status of the action.")
+    result: Optional[Dict[str, Any]] = Field(None, description="The result of the action.")
     energy_delta: Optional[Dict[str, float]] = Field(None, description="Change in energy components due to the action.")
     error: Optional[str] = Field(None, description="Error message, if any.")
     artifacts: List[str] = Field([], description="List of URIs to any generated artifacts (e.g., plots, logs).")

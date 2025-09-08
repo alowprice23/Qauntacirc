@@ -6,9 +6,8 @@ and operational guarantees.
 import abc
 from typing import List, Any
 
-from core.types import State, Action
+from core.types import QCState as State, AgentResult as Action
 from core.constraint_solver import ConstraintSolver
-from core.energy_calculator import EnergyState
 from math_utils.lyapunov import is_lyapunov_stable
 from core.closure_rules import ClosureRule
 
@@ -34,11 +33,11 @@ class Contract:
 
     def check_preconditions(self, state: State) -> bool:
         """Checks if all preconditions are met for the current state."""
-        return all(cond.check(state) for cond in self.preconditions)
+        return all(cond.check(state=state) for cond in self.preconditions)
 
     def check_postconditions(self, state: State, action: Action) -> bool:
         """Checks if all postconditions are met after an action is taken."""
-        return all(cond.check(state, action) for cond in self.postconditions)
+        return all(cond.check(state=state, action=action) for cond in self.postconditions)
 
 
 class EnergyCondition(Condition):
@@ -49,17 +48,15 @@ class EnergyCondition(Condition):
         self.solver = solver
         self.max_energy = max_energy
 
-    def check(self, state: State) -> bool:
+    def check(self, state: State, **kwargs) -> bool:
         """
         Verifies that the current energy state is below the maximum threshold.
         """
-        energy_state: EnergyState = state.get("energy")
-        if not energy_state:
+        if not hasattr(state, 'energy'):
             return False
 
-        is_valid = energy_state.total_energy <= self.max_energy
         # Example of using the constraint solver
-        return self.solver.solve([f"energy <= {self.max_energy}"], {"energy": energy_state.total_energy})
+        return self.solver.solve([f"energy <= {self.max_energy}"], {"energy": state.energy})
 
 
 class LyapunovCondition(Condition):
@@ -69,15 +66,19 @@ class LyapunovCondition(Condition):
     def __init__(self, stability_func=is_lyapunov_stable):
         self.stability_func = stability_func
 
-    def check(self, state: State, action: Action) -> bool:
+    def check(self, state: State, action: Action, **kwargs) -> bool:
         """
         Verifies that the action does not violate system stability.
         This is typically a post-condition.
         """
+        if not state.quantum_state or not hasattr(state.quantum_state, 'state_vector'):
+            return False
+
         # The actual implementation would be more complex, involving system dynamics
         # and the proposed state transition from the action.
         # This is a simplified representation.
-        new_state_vector = state.get("system_vector") + action.get("delta_vector", 0)
+        delta_vector = action.result.get("delta_vector", [0] * len(state.quantum_state.state_vector)) if action.result else [0] * len(state.quantum_state.state_vector)
+        new_state_vector = [x + y for x, y in zip(state.quantum_state.state_vector, delta_vector)]
         return self.stability_func(new_state_vector)
 
 
@@ -88,7 +89,7 @@ class ClosureRuleCondition(Condition):
     def __init__(self, rule: ClosureRule):
         self.rule = rule
 
-    def check(self, state: State, action: Action) -> bool:
+    def check(self, state: State, action: Action, **kwargs) -> bool:
         """
         Verifies that the action complies with a given closure rule.
         This is typically a post-condition.

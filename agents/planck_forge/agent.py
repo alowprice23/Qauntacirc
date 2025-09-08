@@ -12,11 +12,11 @@ from typing import Dict, Any, Optional, List
 from agents.base.agent import QuantumAgent
 from core.state_space import StateSpace
 from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action, Status
-from monitoring.metrics import MetricsLogger
+from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
+from monitoring.metrics import QuantumMetrics as MetricsLogger
 from agents.base.policies import PolicyEngine
 from agents.base.memory import AgentMemory
-from llm.client import LLMClient  # Assuming this will exist as per llm/Plan.md
+from llm.client import LLMClient
 
 from . import prompts
 from . import ops
@@ -56,36 +56,36 @@ class PlanckForgeAgent(QuantumAgent):
         Analyzes a state containing a natural language requirement.
 
         Args:
-            state: The current state, expected to have a 'requirement_text' field.
+            state: The current state, expected to have a 'requirement_text' field in metadata.
 
         Returns:
             A proposal containing the decomposed tasks.
         """
-        requirement_text = state.get("requirement_text")
+        requirement_text = state.metadata.get("requirement_text")
         if not requirement_text:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.FAILED, reason="No requirement text found in state.")
+            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="No requirement text found in state.")
 
         # 1. Get the appropriate prompt
         prompt_spec = prompts.get_prompt("decompose_requirement", "latest")
         formatted_prompt = prompt_spec.format(requirement_text=requirement_text)
 
-        # 2. Call the LLM (coding against the interface in llm/Plan.md)
-        # In a real scenario, we would build a proper LLMRequest object
+        # 2. Call the LLM
         llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
 
         if not llm_response.get("content"):
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.FAILED, reason="LLM failed to provide content.")
+            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="LLM failed to provide content.")
 
         # 3. Parse the LLM output
         try:
             tasks = ops.parse_llm_output(llm_response["content"])
             return Proposal(
-                agent_id=self.agent_id,
-                data={"tasks": tasks, "requirement_text": requirement_text},
+                agent_name=self.name,
+                task_type="analysis",
+                payload={"tasks": tasks, "requirement_text": requirement_text},
                 status=Status.SUCCESS
             )
         except ops.TaskValidationError as e:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.FAILED, reason=f"Failed to parse or validate LLM output: {e}")
+            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason=f"Failed to parse or validate LLM output: {e}")
 
     def validate_proposal(self, proposal: Proposal) -> bool:
         """
@@ -97,11 +97,11 @@ class PlanckForgeAgent(QuantumAgent):
         Returns:
             True if the proposal is valid, False otherwise.
         """
-        if proposal.status != Status.SUCCESS or "tasks" not in proposal.data:
+        if proposal.status != Status.SUCCESS or "tasks" not in proposal.payload:
             return False
 
         try:
-            ops.validate_task_set(proposal.data["tasks"])
+            ops.validate_task_set(proposal.payload["tasks"])
             self.metrics_logger.increment_counter(f"agent_{self.name}_proposal_validation_success")
             return True
         except ops.TaskValidationError as e:
@@ -119,7 +119,7 @@ class PlanckForgeAgent(QuantumAgent):
         Returns:
             An action containing the task DAG and energy impact.
         """
-        tasks = proposal.data["tasks"]
+        tasks = proposal.payload["tasks"]
 
         # 1. Generate the final task DAG
         task_dag = ops.generate_task_dag(tasks)
@@ -138,14 +138,16 @@ class PlanckForgeAgent(QuantumAgent):
         # 3. Create the action
         action_data = {
             "task_dag": task_dag,
-            "original_requirement": proposal.data["requirement_text"],
+            "original_requirement": proposal.payload["requirement_text"],
             "energy_impact": {
                 "static": static_energy
             }
         }
 
         return Action(
-            agent_id=self.agent_id,
-            data=action_data,
-            status=Status.SUCCESS
+            task_id=proposal.id,
+            agent_name=self.name,
+            action_taken=True,
+            status=Status.SUCCESS,
+            result=action_data
         )

@@ -120,6 +120,27 @@ class StabilityAnalyzer:
         return True
 
 
+def is_lyapunov_stable(state_vector: np.ndarray) -> bool:
+    """
+    A simplified stability check using a default Lyapunov analyzer.
+    Assumes a simple quadratic Lyapunov function and linear dynamics.
+    """
+    if not isinstance(state_vector, np.ndarray):
+        state_vector = np.array(state_vector)
+
+    # Define a default positive definite matrix for V(x) = x.T * P * x
+    P = np.eye(len(state_vector))
+    lyapunov_func = LyapunovFunction(P=P)
+
+    # Define simple linear system dynamics, x_dot = -x, which is stable
+    def system_dynamics(x):
+        return -x
+
+    analyzer = StabilityAnalyzer(lyapunov_func, system_dynamics)
+    stability = analyzer.check_stability(state_vector)
+
+    return stability in ['stable', 'asymptotically stable']
+
 def estimate_lyapunov_exponent(trajectory: np.ndarray, dt: float = 1.0) -> float:
     """
     Estimates the largest Lyapunov exponent from a time series.

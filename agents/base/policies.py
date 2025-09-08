@@ -7,7 +7,7 @@ system-wide operational constraints and budgets.
 import abc
 from typing import List
 
-from core.types import Proposal
+from core.types import AgentTask as Proposal
 from core.error_budget import ErrorBudget
 
 
@@ -63,7 +63,8 @@ class RigorPolicy(Policy):
         """
         Checks if the proposal's rigor level meets the requirement.
         """
-        rigor = proposal.get("metadata", {}).get("rigor", 0.0)
+        metadata = proposal.payload.get("metadata", {})
+        rigor = metadata.get("rigor", 0.0)
         return rigor >= self.required_rigor
 
 
@@ -80,5 +81,6 @@ class EnergyBudgetPolicy(Policy):
         Checks if the estimated energy cost of the proposal is within the
         available error/energy budget.
         """
-        estimated_cost = proposal.get("metadata", {}).get("estimated_energy_cost", 0.0)
+        metadata = proposal.payload.get("metadata", {})
+        estimated_cost = metadata.get("estimated_energy_cost", 0.0)
         return self.error_budget.is_sufficient(estimated_cost)

@@ -4,8 +4,8 @@ Provides a dedicated metrics collection class for agents, building on top
 of the core monitoring framework.
 """
 
-from monitoring.metrics import MetricsLogger
-from core.types import State, Action
+from monitoring.metrics import QuantumMetrics as MetricsLogger
+from core.types import QCState as State, AgentResult as Action
 from core.energy_calculator import EnergyCalculator
 
 

@@ -12,8 +12,8 @@ from typing import Dict, Any, Optional, List
 
 from core.state_space import StateSpace
 from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action
-from monitoring.metrics import MetricsLogger
+from core.types import AgentTask as Proposal, AgentResult as Action, QCState as State
+from monitoring.metrics import QuantumMetrics as MetricsLogger
 
 from .contracts import Contract
 from .policies import PolicyEngine

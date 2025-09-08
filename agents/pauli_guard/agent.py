@@ -14,8 +14,8 @@ from typing import Dict, Any, Optional, List
 from agents.base.agent import QuantumAgent
 from core.state_space import StateSpace
 from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action, Status
-from monitoring.metrics import MetricsLogger
+from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
+from monitoring.metrics import QuantumMetrics as MetricsLogger
 from agents.base.policies import PolicyEngine
 from agents.base.memory import AgentMemory
 from llm.client import LLMClient
@@ -65,12 +65,12 @@ class PauliGuardAgent(QuantumAgent):
         Returns:
             A proposal containing refactoring plans for any detected duplicates.
         """
-        schrodinger_dev_output = state.get("schrodinger_dev_output", {})
+        schrodinger_dev_output = state.metadata.get("schrodinger_dev_output", {})
         files_to_check = schrodinger_dev_output.get("files_to_create", {})
 
         if not files_to_check:
             # No files to check, so no work to do.
-            return Proposal(agent_id=self.agent_id, data={"refactoring_plans": []}, status=Status.SUCCESS)
+            return Proposal(agent_name=self.name, task_type="refactor", payload={"refactoring_plans": []}, status=Status.SUCCESS)
 
         # 1. Detect duplicates
         duplicates = ops.detect_duplicates(
@@ -80,7 +80,7 @@ class PauliGuardAgent(QuantumAgent):
         )
 
         if not duplicates:
-            return Proposal(agent_id=self.agent_id, data={"refactoring_plans": []}, status=Status.SUCCESS, reason="No duplicates found.")
+            return Proposal(agent_name=self.name, task_type="refactor", payload={"refactoring_plans": []}, status=Status.SUCCESS, reason="No duplicates found.")
 
         # 2. Generate refactoring plans for each duplicate
         plan_coros = []
@@ -92,8 +92,9 @@ class PauliGuardAgent(QuantumAgent):
         valid_plans = [p for p in refactoring_plans if not isinstance(p, Exception)]
 
         return Proposal(
-            agent_id=self.agent_id,
-            data={"refactoring_plans": valid_plans, "duplicates_found": duplicates},
+            agent_name=self.name,
+            task_type="refactor",
+            payload={"refactoring_plans": valid_plans, "duplicates_found": duplicates},
             status=Status.SUCCESS
         )
 
@@ -121,7 +122,7 @@ class PauliGuardAgent(QuantumAgent):
         if proposal.status != Status.SUCCESS:
             return False
 
-        for plan in proposal.data.get("refactoring_plans", []):
+        for plan in proposal.payload.get("refactoring_plans", []):
             try:
                 # Re-run the parser to validate structure
                 ops.parse_refactoring_plan(json.dumps(plan))
@@ -135,8 +136,8 @@ class PauliGuardAgent(QuantumAgent):
         """
         Executes the proposal by calculating the energy impact of the refactoring.
         """
-        refactoring_plans = proposal.data.get("refactoring_plans", [])
-        duplicates = proposal.data.get("duplicates_found", [])
+        refactoring_plans = proposal.payload.get("refactoring_plans", [])
+        duplicates = proposal.payload.get("duplicates_found", [])
 
         # 1. Calculate the reduction in interaction energy
         # A simple model: energy reduction is proportional to the number and size of duplicates found.
@@ -167,7 +168,9 @@ class PauliGuardAgent(QuantumAgent):
         }
 
         return Action(
-            agent_id=self.agent_id,
-            data=action_data,
-            status=Status.SUCCESS
+            task_id=proposal.id,
+            agent_name=self.name,
+            action_taken=True,
+            status=Status.SUCCESS,
+            result=action_data,
         )
