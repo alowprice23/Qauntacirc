@@ -13,3 +13,6 @@ black
 requests
 numpy
 pandas
+jinja2
+PyYAML
+jsonschema
