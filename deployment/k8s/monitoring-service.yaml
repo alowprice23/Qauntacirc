@@ -1,0 +1,15 @@
+# Example Kubernetes Service manifest for monitoring
+# This would be created by the Helm chart
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: quantacirc-monitoring
+  namespace: quantacirc-dev
+spec:
+  selector:
+    app: quantacirc-monitoring
+  ports:
+    - protocol: TCP
+      port: 9090
+      targetPort: 9090

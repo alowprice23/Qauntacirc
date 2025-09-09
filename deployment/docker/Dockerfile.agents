@@ -1,0 +1,12 @@
+# Dockerfile for the QuantaCirc agents
+
+# Use the base image with common dependencies
+FROM quantacirc/quantacirc-base:latest
+
+WORKDIR /app
+
+# Copy the agent-specific code
+COPY ./agents /app/agents
+
+# Set the default command to run a specific agent, can be overridden
+CMD ["python", "-m", "agents.bose_boost.agent"]

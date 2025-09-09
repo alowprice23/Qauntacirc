@@ -1,0 +1,7 @@
+# Python dependencies for QuantaCirc
+
+requests
+numpy
+pandas
+prometheus-client
+pyyaml

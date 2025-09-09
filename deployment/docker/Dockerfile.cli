@@ -1,0 +1,22 @@
+# Multi-stage build for the QuantaCirc CLI
+
+# --- Build Stage ---
+FROM python:3.11-slim-bookworm as builder
+
+WORKDIR /app
+
+# Install build dependencies
+COPY . .
+RUN pip install .
+
+# --- Final Stage ---
+FROM python:3.11-slim-bookworm
+
+WORKDIR /app
+
+# Copy the installed CLI from the builder stage
+COPY --from=builder /usr/local/bin/quantacirc /usr/local/bin/quantacirc
+COPY --from=builder /app /app
+
+# Set the entrypoint
+ENTRYPOINT ["quantacirc"]

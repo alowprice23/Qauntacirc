@@ -1,0 +1,25 @@
+# Base image for QuantaCirc services
+# Using a specific version for reproducibility
+FROM python:3.11-slim-bookworm
+
+# Set the working directory
+WORKDIR /app
+
+# Install common dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install python packages
+# This is done in a separate step to leverage Docker layer caching
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Create a non-root user for security
+RUN useradd --create-home appuser
+USER appuser
+
+# Set default command
+CMD ["/bin/bash"]

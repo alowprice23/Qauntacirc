@@ -1,0 +1,9 @@
+# Staging environment specific values
+agents:
+  replicaCount: 5
+  image:
+    tag: staging
+
+database:
+  pvc:
+    size: 5Gi

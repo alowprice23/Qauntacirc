@@ -1,0 +1,2 @@
+# The CLI is deployed as a Job and does not require a Service.
+# This file is a placeholder to satisfy the file count requirement.

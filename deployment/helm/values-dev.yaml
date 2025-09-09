@@ -1,0 +1,9 @@
+# Development environment specific values
+agents:
+  replicaCount: 1
+  image:
+    tag: dev
+
+database:
+  pvc:
+    size: 1Gi

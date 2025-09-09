@@ -1,0 +1,15 @@
+# Example Kubernetes Service manifest for the agents
+# This would be created by the Helm chart
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: quantacirc-agents
+  namespace: quantacirc-dev
+spec:
+  selector:
+    app: quantacirc-agents
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080

@@ -1,0 +1,23 @@
+# Example Kubernetes Deployment manifest for monitoring
+# This would be created by the Helm chart
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quantacirc-monitoring
+  namespace: quantacirc-dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: quantacirc-monitoring
+  template:
+    metadata:
+      labels:
+        app: quantacirc-monitoring
+    spec:
+      containers:
+      - name: prometheus
+        image: quantacirc/quantacirc-monitoring:latest
+        ports:
+        - containerPort: 9090

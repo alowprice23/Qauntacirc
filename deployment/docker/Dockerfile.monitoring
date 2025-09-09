@@ -1,0 +1,16 @@
+# Dockerfile for the QuantaCirc monitoring components
+
+# Use a standard Prometheus image
+FROM prom/prometheus:v2.45.0
+
+# Copy custom Prometheus configuration
+COPY ./monitoring/dashboards/prometheus.yml /etc/prometheus/prometheus.yml
+
+# Copy custom alert rules
+COPY ./monitoring/dashboards/alert.rules.yml /etc/prometheus/alert.rules.yml
+
+# Expose the Prometheus port
+EXPOSE 9090
+
+# Set the command to run Prometheus with the custom config
+CMD ["--config.file=/etc/prometheus/prometheus.yml"]

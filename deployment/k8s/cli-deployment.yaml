@@ -1,0 +1,18 @@
+# Example Kubernetes Deployment manifest for the CLI
+# This is a placeholder as the CLI is not typically deployed as a long-running service.
+# This could be a Job or a CronJob for specific tasks.
+
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: quantacirc-cli-task
+  namespace: quantacirc-dev
+spec:
+  template:
+    spec:
+      containers:
+      - name: quantacirc-cli
+        image: quantacirc/quantacirc-cli:latest
+        command: ["quantacirc", "some-command"]
+      restartPolicy: Never
+  backoffLimit: 4

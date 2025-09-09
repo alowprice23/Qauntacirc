@@ -1,0 +1,23 @@
+# Example Kubernetes Deployment manifest for the agents
+# This would be created by the Helm chart
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: quantacirc-agents
+  namespace: quantacirc-dev
+spec:
+  replicas: 10
+  selector:
+    matchLabels:
+      app: quantacirc-agents
+  template:
+    metadata:
+      labels:
+        app: quantacirc-agents
+    spec:
+      containers:
+      - name: agent
+        image: quantacirc/quantacirc-agents:latest
+        ports:
+        - containerPort: 8080

@@ -1,0 +1,16 @@
+{{- /*
+This file contains notes that are displayed to the user after a successful chart installation.
+*/}}
+
+{{- define "quantacirc.notes" -}}
+The QuantaCirc system has been deployed to your Kubernetes cluster.
+
+To get the URL for the main service, run:
+  export SERVICE_PORT=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.spec.ports[0].port}" services {{ include "quantacirc.fullname" . }})
+  export SERVICE_IP=$(kubectl get --namespace {{ .Release.Namespace }} -o jsonpath="{.status.loadBalancer.ingress[0].ip}" services {{ include "quantacirc.fullname" . }})
+  echo "http://${SERVICE_IP}:${SERVICE_PORT}"
+
+You can also access the monitoring dashboard by port-forwarding the Prometheus service:
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "app.kubernetes.io/name={{ include "quantacirc.name" . }}" -o jsonpath="{.items[0].metadata.name}")
+  kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 9090
+{{- end -}}

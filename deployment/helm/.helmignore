@@ -1,0 +1,12 @@
+# Patterns to ignore when packaging Helm charts.
+# This prevents sensitive or unnecessary files from being packaged.
+
+.DS_Store
+.git/
+.gitignore
+.idea/
+.vscode/
+ci/
+README.md
+*~
+*.swp

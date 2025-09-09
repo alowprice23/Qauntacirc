@@ -1,0 +1,7 @@
+# Example Kubernetes Namespace manifest
+# This would be created by the Helm chart
+
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quantacirc-dev

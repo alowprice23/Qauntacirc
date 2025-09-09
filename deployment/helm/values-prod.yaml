@@ -1,0 +1,17 @@
+# Production environment specific values
+agents:
+  replicaCount: 10
+  image:
+    tag: latest
+
+database:
+  pvc:
+    size: 100Gi
+    storageClassName: "gp2" # Example of a production-grade storage class
+
+# Enable autoscaling for production
+autoscaling:
+  enabled: true
+  minReplicas: 10
+  maxReplicas: 50
+  targetCPUUtilizationPercentage: 80
