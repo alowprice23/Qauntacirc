@@ -1,9 +1,75 @@
-# Staging environment specific values
-agents:
-  replicaCount: 5
+# Staging environment specific values for quantacirc.
+# These values should be close to production.
+
+global:
+  serviceAccount:
+    name: "quantacirc-staging"
+
+cli:
   image:
-    tag: staging
+    tag: "staging"
+
+agents:
+  image:
+    tag: "staging"
+  # In staging, we run all agents, but maybe not at full scale.
+  deployments:
+    - name: planck-forge
+      replicaCount: 1
+    - name: schrodinger-dev
+      replicaCount: 1
+    - name: pauli-guard
+      replicaCount: 1
+    - name: uncertain-ai
+      replicaCount: 1
+    - name: tunnel-fix
+      replicaCount: 1
+    - name: bose-boost
+      replicaCount: 1
+    - name: phonon-flow
+      replicaCount: 1
+    - name: fluctua-test
+      replicaCount: 1
+    - name: hydro-spread
+      replicaCount: 1
+    - name: london-link
+      replicaCount: 1
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+
+monitoring:
+  enabled: true
+  persistence:
+    size: 10Gi
 
 database:
-  pvc:
-    size: 5Gi
+  internal:
+    enabled: true # Use internal DB for staging
+    persistence:
+      size: 5Gi
+  passwordSecret:
+    # In staging, the secret should be managed externally.
+    create: false
+    name: "staging-db-password"
+
+ingress:
+  enabled: true
+  hosts:
+    - host: staging.quantacirc.local
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+          # This should route to the main service, e.g., an API gateway
+          # or the agents service if it has an external endpoint.
+          # For now, we'll leave this as a placeholder.
+          # serviceName: quantacirc-gateway
+          # servicePort: 80
+  tls:
+   - secretName: staging-quantacirc-tls
+     hosts:
+       - staging.quantacirc.local

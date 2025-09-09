@@ -1,35 +1,170 @@
+{{- /*
+This template is for creating Deployments for the various components of QuantaCirc.
+It handles the CLI, the 10 agents, and the monitoring service.
+*/}}
+
+{{- /* CLI Deployment */}}
+{{- if .Values.cli.enabled }}
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "quantacirc.fullname" . }}
+  name: {{ include "quantacirc.fullname" . }}-cli
   labels:
     {{- include "quantacirc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: cli
 spec:
-  replicas: {{ .Values.replicaCount }}
+  replicas: {{ .Values.cli.replicaCount }}
   selector:
     matchLabels:
       {{- include "quantacirc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: cli
   template:
     metadata:
       labels:
         {{- include "quantacirc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: cli
     spec:
       serviceAccountName: {{ include "quantacirc.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.cli.podSecurityContext | nindent 8 }}
       containers:
-        - name: {{ .Chart.Name }}
-          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
-          imagePullPolicy: {{ .Values.image.pullPolicy }}
+        - name: cli
+          image: "{{ .Values.cli.image.repository }}:{{ .Values.cli.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.cli.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.cli.securityContext | nindent 12 }}
+          # The CLI container might not have a long-running process.
+          # A simple "sleep infinity" can keep the container running if needed.
+          command: ["sleep", "infinity"]
+          resources:
+            {{- toYaml .Values.cli.resources | nindent 12 }}
+---
+{{- end }}
+
+{{- /* Agent Deployments */}}
+{{- if .Values.agents.enabled }}
+{{- range .Values.agents.deployments }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "quantacirc.fullname" $ }}-{{ .name }}
+  labels:
+    {{- include "quantacirc.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ .name }}
+spec:
+  replicas: {{ .replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "quantacirc.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ .name }}
+  template:
+    metadata:
+      labels:
+        {{- include "quantacirc.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ .name }}
+        quantacirc.io/agent: "true"
+    spec:
+      serviceAccountName: {{ include "quantacirc.serviceAccountName" $ }}
+      securityContext:
+        {{- toYaml $.Values.agents.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .name }}
+          image: "{{ $.Values.agents.image.repository }}:{{ $.Values.agents.image.tag | default $.Chart.AppVersion }}"
+          imagePullPolicy: {{ $.Values.agents.image.pullPolicy }}
+          command: ["python", "-m", "agents.{{ .name | replace "-" "_" }}.agent"]
+          securityContext:
+            {{- toYaml $.Values.agents.securityContext | nindent 12 }}
           ports:
             - name: http
-              containerPort: 80
+              containerPort: {{ $.Values.agents.service.port }}
+              protocol: TCP
+          livenessProbe:
+            exec:
+              command:
+                - python
+                - -m
+                - monitoring.health.liveness
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec:
+              command:
+                - python
+                - -m
+                - monitoring.health.readiness
+            initialDelaySeconds: 15
+            periodSeconds: 5
+          env:
+            {{- toYaml $.Values.agents.env | nindent 12 }}
+          envFrom:
+          - secretRef:
+              name: {{ $.Values.database.passwordSecret.name }}
+          resources:
+            {{- toYaml $.Values.agents.resources | nindent 12 }}
+---
+{{- end }}
+{{- end }}
+
+{{- /* Monitoring Deployment */}}
+{{- if .Values.monitoring.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "quantacirc.fullname" . }}-monitoring
+  labels:
+    {{- include "quantacirc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+spec:
+  replicas: {{ .Values.monitoring.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "quantacirc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: monitoring
+  template:
+    metadata:
+      labels:
+        {{- include "quantacirc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: monitoring
+    spec:
+      serviceAccountName: {{ include "quantacirc.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.monitoring.podSecurityContext | nindent 8 }}
+      containers:
+        - name: prometheus
+          image: "{{ .Values.monitoring.image.repository }}:{{ .Values.monitoring.image.tag }}"
+          imagePullPolicy: {{ .Values.monitoring.image.pullPolicy }}
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus/"
+          ports:
+            - name: http
+              containerPort: {{ .Values.monitoring.service.port }}
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /
+              path: /-/healthy
               port: http
           readinessProbe:
             httpGet:
-              path: /
+              path: /-/ready
               port: http
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.monitoring.resources | nindent 12 }}
+          volumeMounts:
+            - name: prometheus-storage
+              mountPath: /prometheus/
+            - name: prometheus-config
+              mountPath: /etc/prometheus/
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: {{ include "quantacirc.fullname" . }}-prometheus-config
+        {{- if .Values.monitoring.persistence.enabled }}
+        - name: prometheus-storage
+          persistentVolumeClaim:
+            claimName: {{ include "quantacirc.fullname" . }}-monitoring
+        {{- else }}
+        - name: prometheus-storage
+          emptyDir: {}
+        {{- end }}
+{{- end }}

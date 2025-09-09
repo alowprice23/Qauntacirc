@@ -1,0 +1,79 @@
+{{- if .Values.monitoring.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "quantacirc.fullname" . }}-prometheus-config
+  labels:
+    {{- include "quantacirc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: 'quantacirc-agents'
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          # Scrape only pods with the 'quantacirc.io/scrape: "true"' annotation
+          - source_labels: [__meta_kubernetes_pod_annotation_quantacirc_io_scrape]
+            action: keep
+            regex: true
+          # Use the pod's component label for the job label
+          - source_labels: [__meta_kubernetes_pod_label_app_kubernetes_io_component]
+            target_label: job
+            replacement: quantacirc-${1}
+          # Use the pod's namespace and name for the instance label
+          - source_labels: [__meta_kubernetes_namespace, __meta_kubernetes_pod_name]
+            separator: /
+            target_label: instance
+
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+    rule_files:
+      - /etc/prometheus/alert.rules.yml
+
+  alert.rules.yml: |
+    groups:
+    - name: quantacirc_alerts
+      rules:
+      - alert: HighQuantumEnergyLevel
+        expr: quantacirc_energy_total > 1000 # Adjusted threshold
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "High quantum energy detected (instance {{ $labels.instance }})"
+          description: "The total system energy has exceeded the threshold of 1000."
+
+      - alert: AgentPerformanceDegradation
+        expr: histogram_quantile(0.95, sum(rate(quantacirc_agent_execution_duration_seconds_bucket[5m])) by (le, agent_name)) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Agent {{ $labels.agent_name }} is performing slowly"
+          description: "The 95th percentile of execution time for agent {{ $labels.agent_name }} is over 10 seconds."
+
+      - alert: LowAgentSuccessRate
+        expr: (sum(rate(quantacirc_agent_executions_total{result="success"}[5m])) by (agent_name) / sum(rate(quantacirc_agent_executions_total[5m])) by (agent_name)) < 0.90
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Low success rate for agent {{ $labels.agent_name }}"
+          description: "The success rate for agent {{ $labels.agent_name }} has dropped below 90% over the last 10 minutes."
+
+      - alert: LyapunovPotentialAnomalous
+        expr: abs(quantacirc_lyapunov_potential) > 100 # Adjusted threshold
+        for: 2m
+        labels:
+          severity: page
+        annotations:
+          summary: "System stability is anomalous"
+          description: "The Lyapunov potential is {{ $value }}, indicating potential instability."
+{{- end }}

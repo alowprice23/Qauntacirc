@@ -1,12 +1,54 @@
-# Dockerfile for the QuantaCirc agents
+# Multi-stage build for the QuantaCirc Agents
 
-# Use the base image with common dependencies
-FROM quantacirc/quantacirc-base:latest
+# --- Build Stage ---
+# This stage builds the python wheel for the application
+FROM python:3.11-slim-bookworm as builder
 
 WORKDIR /app
 
-# Copy the agent-specific code
-COPY ./agents /app/agents
+# Install build dependencies
+RUN pip install build
 
-# Set the default command to run a specific agent, can be overridden
-CMD ["python", "-m", "agents.bose_boost.agent"]
+# Copy all necessary files to build the wheel
+COPY pyproject.toml README.md LICENSE version.py ./
+COPY agents/ ./agents/
+COPY cli/ ./cli/
+COPY config/ ./config/
+COPY core/ ./core/
+COPY llm/ ./llm/
+COPY math_utils/ ./math_utils/
+COPY memory/ ./memory/
+COPY messaging/ ./messaging/
+COPY monitoring/ ./monitoring/
+COPY proofs/ ./proofs/
+COPY tools/ ./tools/
+
+# Build the wheel
+RUN python -m build --wheel --outdir /app/wheels
+
+
+# --- Final Stage ---
+# This stage creates the final slim image
+FROM quantacirc/quantacirc-base:latest
+
+# Switch to root to install the wheel
+USER root
+
+# Copy the built wheel from the builder stage
+COPY --from=builder /app/wheels /wheels
+
+# Install the wheel
+RUN pip install --no-cache-dir /wheels/*.whl && \
+    rm -rf /wheels
+
+# Switch back to the non-root user
+USER appuser
+
+# Set the working directory for the non-root user
+WORKDIR /home/appuser
+
+# Set a generic entrypoint. The agent to run will be specified in the CMD.
+ENTRYPOINT ["python", "-m"]
+
+# Default command can be overridden in Kubernetes manifests
+CMD ["agents.bose_boost.agent"]

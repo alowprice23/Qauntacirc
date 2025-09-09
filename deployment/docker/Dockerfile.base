@@ -14,8 +14,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy requirements and install python packages
 # This is done in a separate step to leverage Docker layer caching
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY deployment/docker/requirements.lock ./requirements.lock
+RUN pip install --no-cache-dir -r requirements.lock
 
 # Create a non-root user for security
 RUN useradd --create-home appuser

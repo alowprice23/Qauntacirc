@@ -1,22 +1,51 @@
 # Multi-stage build for the QuantaCirc CLI
 
 # --- Build Stage ---
+# This stage builds the python wheel for the application
 FROM python:3.11-slim-bookworm as builder
 
 WORKDIR /app
 
 # Install build dependencies
-COPY . .
-RUN pip install .
+RUN pip install build
+
+# Copy all necessary files to build the wheel
+COPY pyproject.toml README.md LICENSE version.py ./
+COPY agents/ ./agents/
+COPY cli/ ./cli/
+COPY config/ ./config/
+COPY core/ ./core/
+COPY llm/ ./llm/
+COPY math_utils/ ./math_utils/
+COPY memory/ ./memory/
+COPY messaging/ ./messaging/
+COPY monitoring/ ./monitoring/
+COPY proofs/ ./proofs/
+COPY tools/ ./tools/
+
+# Build the wheel
+RUN python -m build --wheel --outdir /app/wheels
+
 
 # --- Final Stage ---
-FROM python:3.11-slim-bookworm
+# This stage creates the final slim image
+FROM quantacirc/quantacirc-base:latest
 
-WORKDIR /app
+# Switch to root to install the wheel
+USER root
 
-# Copy the installed CLI from the builder stage
-COPY --from=builder /usr/local/bin/quantacirc /usr/local/bin/quantacirc
-COPY --from=builder /app /app
+# Copy the built wheel from the builder stage
+COPY --from=builder /app/wheels /wheels
 
-# Set the entrypoint
-ENTRYPOINT ["quantacirc"]
+# Install the wheel
+RUN pip install --no-cache-dir /wheels/*.whl && \
+    rm -rf /wheels
+
+# Switch back to the non-root user
+USER appuser
+
+# Set the working directory for the non-root user
+WORKDIR /home/appuser
+
+# Set the entrypoint for the CLI
+ENTRYPOINT ["qcli"]

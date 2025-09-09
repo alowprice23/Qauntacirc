@@ -1,117 +1,188 @@
-# Default values for quantacirc chart.
+# Default values for quantacirc helm chart.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
-replicaCount: 1
+# Global settings
+global:
+  # imagePullSecrets can be used if you are using a private registry
+  imagePullSecrets: []
+  # serviceAccount settings are global for all components unless overridden
+  serviceAccount:
+    create: true
+    name: "quantacirc" # A single service account for the application
+    annotations: {}
 
-image:
-  repository: nginx
-  pullPolicy: IfNotPresent
-  # Overrides the image tag whose default is the chart appVersion.
-  tag: ""
+# Configuration for each major component of the QuantaCirc system
+# Each component can be enabled/disabled individually.
 
-imagePullSecrets: []
-nameOverride: ""
-fullnameOverride: ""
-
-serviceAccount:
-  # Specifies whether a service account should be created
-  create: true
-  # Annotations to add to the service account
-  annotations: {}
-  # The name of the service account to use.
-  # If not set and create is true, a name is generated using the fullname template
-  name: ""
-
-podAnnotations: {}
-
-podSecurityContext: {}
-  # fsGroup: 2000
-
-securityContext: {}
-  # capabilities:
-  #   drop:
-  #   - ALL
-  # readOnlyRootFilesystem: true
-  # runAsNonRoot: true
-  # runAsUser: 1000
-
-service:
-  type: ClusterIP
-  port: 80
-
-ingress:
-  enabled: false
-  className: ""
-  annotations: {}
-    # kubernetes.io/ingress.class: nginx
-    # kubernetes.io/tls-acme: "true"
-  hosts:
-    - host: chart-example.local
-      paths:
-        - path: /
-          pathType: ImplementationSpecific
-  tls: []
-  #  - secretName: chart-example-tls
-  #    hosts:
-  #      - chart-example.local
-
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the
-  # following lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
-
-autoscaling:
-  enabled: false
-  minReplicas: 1
-  maxReplicas: 100
-  targetCPUUtilizationPercentage: 80
-  # targetMemoryUtilizationPercentage: 80
-
-nodeSelector: {}
-
-tolerations: []
-
-affinity: {}
-
-# Application-specific values
-agents:
-  replicaCount: 10
-  image:
-    repository: quantacirc/quantacirc-agents
-    tag: latest
-  service:
-    type: ClusterIP
-    port: 8080
-
-monitoring:
+cli:
+  enabled: true
+  # The CLI might be run as a one-off Job or a long-running Deployment.
+  # This chart will default to a Deployment for simplicity.
   replicaCount: 1
   image:
-    repository: quantacirc/quantacirc-monitoring
-    tag: latest
+    repository: quantacirc/quantacirc-cli
+    pullPolicy: IfNotPresent
+    tag: "latest" # It's recommended to pin this to a specific version in production values
+  resources:
+    # limits:
+    #   cpu: 200m
+    #   memory: 256Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+  securityContext:
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+  # No service for the CLI by default, as it's not a long-running service.
+
+agents:
+  # The agents are the core of the system.
+  # By default, this chart deploys 10 different agent deployments, one for each agent type.
+  enabled: true
+  # List of agents to deploy. Each item will create a new Deployment.
+  deployments:
+    - name: planck-forge
+      replicaCount: 1
+    - name: schrodinger-dev
+      replicaCount: 1
+    - name: pauli-guard
+      replicaCount: 1
+    - name: uncertain-ai
+      replicaCount: 1
+    - name: tunnel-fix
+      replicaCount: 1
+    - name: bose-boost
+      replicaCount: 1
+    - name: phonon-flow
+      replicaCount: 1
+    - name: fluctua-test
+      replicaCount: 1
+    - name: hydro-spread
+      replicaCount: 1
+    - name: london-link
+      replicaCount: 1
+  image:
+    repository: quantacirc/quantacirc-agents
+    pullPolicy: IfNotPresent
+    tag: "latest"
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+  podSecurityContext:
+    runAsNonRoot: true
+    runAsUser: 1001
+  securityContext:
+    capabilities:
+      drop:
+      - ALL
+    readOnlyRootFilesystem: true
+    allowPrivilegeEscalation: false
+  # Service for agents to communicate with each other or other services
+  service:
+    enabled: true
+    type: ClusterIP
+    port: 8080
+  # Environment variables for all agents
+  env:
+    - name: LOG_LEVEL
+      value: "INFO"
+    - name: NATS_URL
+      value: "nats://nats:4222"
+  # Secrets for all agents (e.g., LLM API keys)
+  # secretName should be the name of a Kubernetes secret
+  # secretKey should be the key within that secret
+  secrets: []
+    # - name: OPENAI_API_KEY
+    #   secretName: openai-secret
+    #   secretKey: apiKey
+
+monitoring:
+  # This component deploys Prometheus, configured for QuantaCirc
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: prom/prometheus
+    pullPolicy: IfNotPresent
+    tag: "v2.45.0"
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 4Gi
+  podSecurityContext: {} # Prometheus needs more privileges
+  securityContext: {}
   service:
     type: ClusterIP
     port: 9090
+  persistence:
+    enabled: true
+    size: 20Gi
+    storageClassName: "standard"
 
 database:
-  # Example for a PostgreSQL database
-  # For production, use a managed database service
-  enabled: true
-  image:
-    repository: postgres
-    tag: "14"
-  service:
-    type: ClusterIP
-    port: 5432
-  pvc:
-    # For quantum state preservation
+  # Configuration for the persistence layer (Quantum State Preservation)
+  # This can be an internal PostgreSQL instance (for dev/testing) or an external one.
+  internal:
+    # If enabled, a PostgreSQL StatefulSet will be deployed.
+    # Not recommended for production.
     enabled: true
-    size: 10Gi
-    storageClassName: "standard"
+    replicaCount: 1
+    image:
+      repository: postgres
+      tag: "14-alpine"
+    resources:
+      requests:
+        cpu: 200m
+        memory: 256Mi
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClassName: "standard"
+  external:
+    # If internal.enabled is false, these values will be used to connect to an external DB.
+    host: ""
+    port: "5432"
+    user: "postgres"
+    database: "quantacirc"
+  # The password should be stored in a secret and referenced here.
+  # secretName is the name of the Kubernetes secret.
+  # secretKey is the key in the secret that holds the password.
+  passwordSecret:
+    name: "db-password-secret"
+    key: "password"
+    # -- If true, a secret will be created. If false, you must provide an existing secret.
+    create: true
+    # -- The password for the database. **CHANGE THIS IN PRODUCTION!**
+    value: "changeme"
+
+# Ingress configuration is global for services that need to be exposed.
+ingress:
+  enabled: false
+  className: "nginx"
+  annotations: {}
+  # hosts:
+  #   - host: quantacirc.local
+  #     paths:
+  #       - path: /
+  #         pathType: ImplementationSpecific
+  #         serviceName: some-service
+  #         servicePort: 80
+  tls: []

@@ -1,33 +1,82 @@
 #!/bin/bash
-set -e
+set -eo pipefail
 
-# Default values
-ENV="staging"
+# --- Configuration ---
+DEFAULT_ENV="staging"
 RELEASE_NAME="quantacirc-release"
 
-# Parse command-line arguments
+# --- Helper Functions ---
+info() {
+  echo "[INFO] $1"
+}
+
+error() {
+  echo "[ERROR] $1" >&2
+  exit 1
+}
+
+# --- Argument Parsing ---
+ENV=$DEFAULT_ENV
+REVISION=""
+WAIT=false
+YES=false
+
 while [[ "$#" -gt 0 ]]; do
     case $1 in
         -e|--env) ENV="$2"; shift ;;
         -r|--revision) REVISION="$2"; shift ;;
+        --wait) WAIT=true ;;
+        -y|--yes) YES=true ;;
         *) echo "Unknown parameter passed: $1"; exit 1 ;;
     esac
     shift
 done
 
+# --- Pre-flight Checks ---
+if ! command -v helm &> /dev/null; then
+  error "Helm is not installed. Please install Helm to continue."
+fi
+if ! command -v jq &> /dev/null; then
+    error "jq is not installed. Please install jq to continue."
+fi
+
+# --- Main Script ---
+NAMESPACE="quantacirc-$ENV"
+info "Checking history for release '$RELEASE_NAME' in namespace '$NAMESPACE'..."
+
+HISTORY=$(helm history $RELEASE_NAME -n $NAMESPACE -o json)
+if [ -z "$HISTORY" ] || [ "$(echo $HISTORY | jq 'length')" -le 1 ]; then
+    error "No previous revisions found to roll back to."
+fi
+
 if [ -z "$REVISION" ]; then
-    echo "Getting latest revision..."
-    # Get the revision before the current one
-    REVISION=$(helm history $RELEASE_NAME --namespace quantacirc-$ENV -o json | jq 'if length > 1 then .[-2].revision else null end')
+    info "No revision specified. Please select a revision to roll back to:"
+    echo "$HISTORY" | jq -r '.[-10:] | .[] | "\(.revision)\t\(.updated)\t\(.status)\t\(.description)"'
+    read -p "Enter revision number: " REVISION
 fi
 
-if [ -z "$REVISION" ] || [ "$REVISION" == "null" ]; then
-    echo "No previous revision to roll back to."
-    exit 1
+if ! echo "$HISTORY" | jq -e ".[] | select(.revision==$REVISION)" > /dev/null; then
+    error "Revision '$REVISION' not found in the history."
 fi
 
-echo "Rolling back to revision: $REVISION"
+info "You are about to roll back '$RELEASE_NAME' to revision $REVISION."
+if [ "$YES" = false ]; then
+    read -p "Are you sure? (y/n) " -n 1 -r
+    echo
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        info "Rollback cancelled."
+        exit 0
+    fi
+fi
 
-helm rollback $RELEASE_NAME $REVISION --namespace quantacirc-$ENV
+HELM_CMD="helm rollback $RELEASE_NAME $REVISION -n $NAMESPACE"
+if [ "$WAIT" = true ]; then
+  HELM_CMD="$HELM_CMD --wait"
+  info "Will wait for all resources to be in a ready state after rollback."
+fi
 
-echo "Rollback successful."
+info "Executing Helm command:"
+echo "$HELM_CMD"
+$HELM_CMD
+
+info "Rollback to revision $REVISION completed successfully."

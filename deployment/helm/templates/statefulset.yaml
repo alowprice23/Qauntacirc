@@ -1,0 +1,79 @@
+{{- if .Values.database.internal.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "quantacirc.fullname" . }}-postgresql
+  labels:
+    {{- include "quantacirc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  replicas: {{ .Values.database.internal.replicaCount }}
+  serviceName: {{ include "quantacirc.fullname" . }}-postgresql-headless
+  selector:
+    matchLabels:
+      {{- include "quantacirc.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        {{- include "quantacirc.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: database
+    spec:
+      serviceAccountName: {{ include "quantacirc.serviceAccountName" . }}
+      securityContext:
+        runAsUser: 999 # PostgreSQL user
+        fsGroup: 999
+      containers:
+        - name: postgresql
+          image: "{{ .Values.database.internal.image.repository }}:{{ .Values.database.internal.image.tag }}"
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.database.external.user | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.database.external.database | quote }}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.passwordSecret.name }}
+                  key: {{ .Values.database.passwordSecret.key }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          livenessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.database.external.user }}
+            initialDelaySeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - -U
+                - {{ .Values.database.external.user }}
+            initialDelaySeconds: 5
+            timeoutSeconds: 1
+          resources:
+            {{- toYaml .Values.database.internal.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.database.internal.persistence.size }}
+        {{- if .Values.database.internal.persistence.storageClassName }}
+        storageClassName: {{ .Values.database.internal.persistence.storageClassName }}
+        {{- end }}
+{{- end }}

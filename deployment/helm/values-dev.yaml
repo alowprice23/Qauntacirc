@@ -1,9 +1,53 @@
-# Development environment specific values
+# Development environment specific values for quantacirc.
+# These values override the defaults in values.yaml.
+
+# For development, we might only run a few agents.
 agents:
-  replicaCount: 1
   image:
-    tag: dev
+    tag: "dev" # Use images tagged with 'dev'
+  deployments:
+    - name: planck-forge
+      replicaCount: 1
+    - name: schrodinger-dev
+      replicaCount: 1
+    # Disable other agents for a lightweight dev setup
+    - name: pauli-guard
+      replicaCount: 0
+    - name: uncertain-ai
+      replicaCount: 0
+    - name: tunnel-fix
+      replicaCount: 0
+    - name: bose-boost
+      replicaCount: 0
+    - name: phonon-flow
+      replicaCount: 0
+    - name: fluctua-test
+      replicaCount: 0
+    - name: hydro-spread
+      replicaCount: 0
+    - name: london-link
+      replicaCount: 0
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+monitoring:
+  # Disable monitoring in dev to save resources
+  enabled: false
 
 database:
-  pvc:
-    size: 1Gi
+  internal:
+    enabled: true # Use the internal DB for dev
+    persistence:
+      size: 1Gi # Use a smaller PVC for dev
+  # For dev, we might use a simpler password
+  passwordSecret:
+    create: true
+    value: "dev-password"
+
+ingress:
+  enabled: false

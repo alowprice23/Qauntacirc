@@ -1,17 +1,83 @@
-# Production environment specific values
-agents:
-  replicaCount: 10
+# Production environment specific values for quantacirc.
+# These values should be configured for high availability, scalability, and security.
+
+global:
+  serviceAccount:
+    name: "quantacirc-prod"
+
+cli:
   image:
-    tag: latest
+    tag: "1.0.0" # Use a specific, stable version for production
+
+agents:
+  image:
+    tag: "1.0.0" # Use a specific, stable version for production
+  # In production, all agents are enabled and may be scaled.
+  deployments:
+    - name: planck-forge
+      replicaCount: 2
+    - name: schrodinger-dev
+      replicaCount: 3 # This might be a heavier agent
+    - name: pauli-guard
+      replicaCount: 2
+    - name: uncertain-ai
+      replicaCount: 2
+    - name: tunnel-fix
+      replicaCount: 2
+    - name: bose-boost
+      replicaCount: 2
+    - name: phonon-flow
+      replicaCount: 2
+    - name: fluctua-test
+      replicaCount: 2
+    - name: hydro-spread
+      replicaCount: 2
+    - name: london-link
+      replicaCount: 2
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2
+      memory: 2Gi
+  autoscaling:
+    # Example of enabling autoscaling for a specific agent can be done here
+    # by overriding the values for that agent's deployment.
+    # For now, it's disabled globally for agents.
+    enabled: false
+
+monitoring:
+  enabled: true
+  replicaCount: 2 # Run Prometheus in HA mode
+  persistence:
+    size: 100Gi
+    storageClassName: "gp2" # Example for AWS
 
 database:
-  pvc:
-    size: 100Gi
-    storageClassName: "gp2" # Example of a production-grade storage class
+  internal:
+    enabled: false # NEVER use the internal database in production
+  external:
+    # These values MUST be configured for the production database.
+    host: "prod-db-host.example.com"
+    port: "5432"
+    user: "quantacirc_prod"
+    database: "quantacirc_prod"
+  passwordSecret:
+    # In production, the secret MUST be managed externally.
+    create: false
+    name: "prod-db-password"
 
-# Enable autoscaling for production
-autoscaling:
+ingress:
   enabled: true
-  minReplicas: 10
-  maxReplicas: 50
-  targetCPUUtilizationPercentage: 80
+  hosts:
+    - host: app.quantacirc.dev
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+          # serviceName: quantacirc-gateway
+          # servicePort: 80
+  tls:
+   - secretName: prod-quantacirc-tls
+     hosts:
+       - app.quantacirc.dev

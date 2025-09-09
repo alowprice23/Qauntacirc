@@ -1,15 +1,88 @@
+{{- /*
+This template is for creating Services for the various components of QuantaCirc.
+*/}}
+
+{{- /* Agents Service */}}
+{{- if .Values.agents.service.enabled }}
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "quantacirc.fullname" . }}
+  name: {{ include "quantacirc.fullname" . }}-agents
   labels:
     {{- include "quantacirc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: agents
 spec:
-  type: {{ .Values.service.type }}
+  type: {{ .Values.agents.service.type }}
   ports:
-    - port: {{ .Values.service.port }}
+    - port: {{ .Values.agents.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    quantacirc.io/agent: "true"
+---
+{{- end }}
+
+{{- /* Monitoring Service */}}
+{{- if .Values.monitoring.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "quantacirc.fullname" . }}-monitoring
+  labels:
+    {{- include "quantacirc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+spec:
+  type: {{ .Values.monitoring.service.type }}
+  ports:
+    - port: {{ .Values.monitoring.service.port }}
       targetPort: http
       protocol: TCP
       name: http
   selector:
     {{- include "quantacirc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+---
+{{- end }}
+
+{{- /* Database Services */}}
+{{- if .Values.database.internal.enabled }}
+# Headless service for StatefulSet peer discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "quantacirc.fullname" . }}-postgresql-headless
+  labels:
+    {{- include "quantacirc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - port: 5432
+      targetPort: postgresql
+      protocol: TCP
+      name: postgresql
+  selector:
+    {{- include "quantacirc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+---
+# Regular service for client connections
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "quantacirc.fullname" . }}-postgresql
+  labels:
+    {{- include "quantacirc.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: postgresql
+      protocol: TCP
+      name: postgresql
+  selector:
+    {{- include "quantacirc.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+{{- end }}
