@@ -1,0 +1,7 @@
+# This directory is intended to store generated proof certificates,
+# verification artifacts, and mathematical guarantees.
+#
+# These files are the output of the validation pipeline and provide
+# machine-checkable evidence of the system's correctness.
+#
+# This .gitkeep file ensures the directory is tracked by Git.
