@@ -1,0 +1,22 @@
+# cli/commands/{{ command_name }}.py
+"""
+CLI command for `{{ command_name }}`.
+"""
+import typer
+
+app = typer.Typer()
+
+@app.command()
+def {{ command_name }}(
+    ctx: typer.Context,
+    # Add command arguments and options here
+    # example: name: str = typer.Argument(..., help="An example argument.")
+):
+    """
+    A brief description of what this command does.
+    """
+    from rich.console import Console
+    console = Console()
+
+    console.print(f"Executing command: {{ command_name }}")
+    # TODO: Implement command logic here

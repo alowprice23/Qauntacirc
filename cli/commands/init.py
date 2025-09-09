@@ -10,7 +10,7 @@ import yaml
 # from core.types import AppContext, ProjectConfig
 # from core.energy_calculator import initialize_energy_function
 # from core.lyapunov_monitor import initialize_lyapunov_potential
-from artifacts.generator import ArtifactGenerator
+from tools.codegen import CodeGenerator
 from templates.project import PROJECT_TEMPLATES
 
 app = typer.Typer()
@@ -85,17 +85,15 @@ def create(
         project_path.mkdir(parents=True, exist_ok=True)
 
         # Generate from template
-        # I cannot instantiate ArtifactGenerator without a config.
-        # I will comment this part out for now.
-        # generator = ArtifactGenerator(app_context.config)
+        generator = CodeGenerator()
         template_config = PROJECT_TEMPLATES[template]
 
         progress.update(task1, description="Generating project files...")
-        # generator.generate_project(
-        #     template_config,
-        #     project_path,
-        #     {"project_name": project_name}
-        # )
+        generator.generate_project(
+            template_config,
+            project_path,
+            {"project_name": project_name}
+        )
 
         # Initialize quantum state
         progress.update(task1, description="Initializing quantum state...")

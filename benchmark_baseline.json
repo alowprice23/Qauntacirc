@@ -1,0 +1,14 @@
+{
+  "List Comprehension": {
+    "name": "List Comprehension",
+    "iterations": 100,
+    "total_time": 0.06887447300027816,
+    "avg_time_per_iteration": 0.0006887447300027816
+  },
+  "Map Function": {
+    "name": "Map Function",
+    "iterations": 100,
+    "total_time": 0.13793836300033036,
+    "avg_time_per_iteration": 0.0013793836300033035
+  }
+}

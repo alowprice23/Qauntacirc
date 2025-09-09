@@ -5,3 +5,17 @@ numpy
 pandas
 prometheus-client
 pyyaml
+jinja2
+typer
+rich
+jsonschema
+scipy
+pydantic
+networkx
+z3-solver
+matplotlib
+graphviz
+opentelemetry-api
+opentelemetry-sdk
+opentelemetry-propagator-b3
+scikit-learn

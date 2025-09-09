@@ -18,13 +18,16 @@ import io
 from functools import wraps
 from typing import Callable, Any
 
+import logging
+
 class Profiler:
     """
     A context manager and utility for profiling code execution.
     """
-    def __init__(self, sort_by='cumulative'):
+    def __init__(self, sort_by='cumulative', dump_path=None):
         self.pr = cProfile.Profile()
         self.sort_by = sort_by
+        self.dump_path = dump_path
         self.results = None
 
     def __enter__(self):
@@ -34,6 +37,8 @@ class Profiler:
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.pr.disable()
         self.generate_stats()
+        if self.dump_path:
+            self.dump_stats(self.dump_path)
 
     def generate_stats(self):
         """
@@ -43,6 +48,16 @@ class Profiler:
         ps = pstats.Stats(self.pr, stream=s).sort_stats(self.sort_by)
         ps.print_stats()
         self.results = s.getvalue()
+
+    def dump_stats(self, filepath: str):
+        """Dumps the raw profiling data to a file."""
+        if self.pr:
+            self.pr.dump_stats(filepath)
+            logging.info(f"Profiling data dumped to {filepath}")
+
+    def get_stats_string(self) -> str:
+        """Returns the profiling statistics as a string."""
+        return self.results or "No profiling data collected."
 
     def print_stats(self, line_limit=20):
         """
@@ -71,6 +86,7 @@ def profile_function(func: Callable) -> Callable:
 
 if __name__ == '__main__':
     # Example Usage
+    logging.basicConfig(level=logging.INFO)
 
     # 1. Using the context manager
     def example_calculation():
@@ -80,10 +96,12 @@ if __name__ == '__main__':
             total += i
         return total
 
-    print("Profiling with context manager...")
-    with Profiler() as p:
+    print("Profiling with context manager and dumping to file 'profile.prof'...")
+    with Profiler(dump_path="profile.prof") as p:
         example_calculation()
     p.print_stats(10)
+    print("To view stats, you can use: python -m pstats profile.prof")
+
 
     # 2. Using the decorator
     @profile_function
@@ -93,5 +111,13 @@ if __name__ == '__main__':
         time.sleep(0.1)
         [x*x for x in range(1000)]
 
-    print("Profiling with decorator...")
+    print("\nProfiling with decorator...")
     another_example_task()
+
+    # 3. Getting stats as a string
+    print("\nGetting stats as a string...")
+    with Profiler() as p:
+        example_calculation()
+    stats_string = p.get_stats_string()
+    print("First 5 lines of stats string:")
+    print("\n".join(stats_string.splitlines()[:5]))

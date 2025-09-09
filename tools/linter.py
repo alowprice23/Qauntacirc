@@ -48,6 +48,26 @@ class CustomLinter(ast.NodeVisitor):
                 self.add_error(node, "Numpy should be imported as 'np'.")
         self.generic_visit(node)
 
+    def visit_ClassDef(self, node: ast.ClassDef):
+        """
+        Rule: Check for QuantaCirc-specific class requirements.
+        """
+        # Check if the class inherits from QuantumAgent
+        is_quantum_agent = False
+        for base in node.bases:
+            if isinstance(base, ast.Name) and base.id == 'QuantumAgent':
+                is_quantum_agent = True
+                break
+
+        if is_quantum_agent:
+            required_methods = {'analyze_state', 'validate_proposal', 'execute'}
+            found_methods = {n.name for n in node.body if isinstance(n, ast.FunctionDef)}
+            missing_methods = required_methods - found_methods
+            if missing_methods:
+                self.add_error(node, f"Class '{node.name}' inherits from QuantumAgent but is missing methods: {', '.join(missing_methods)}")
+
+        self.generic_visit(node)
+
     def run(self) -> List[Tuple[int, int, str]]:
         """
         Runs the linter on the file.
@@ -81,8 +101,9 @@ def lint_file(file_path: str):
 
 if __name__ == '__main__':
     # Example Usage:
-    # Create a dummy file to lint
-    dummy_code = """
+
+    # --- Test Case 1: Original checks ---
+    dummy_code_1 = """
 import numpy
 print("This is a test")
 
@@ -90,12 +111,28 @@ def my_func():
     a = 1 + 1
     print(f"Result is {a}")
 """
-    dummy_filepath = "dummy_test_file.py"
-    with open(dummy_filepath, "w") as f:
-        f.write(dummy_code)
+    dummy_filepath_1 = "dummy_test_file_1.py"
+    with open(dummy_filepath_1, "w") as f:
+        f.write(dummy_code_1)
 
-    # Lint the dummy file
-    lint_file(dummy_filepath)
+    print("--- Running original checks ---")
+    lint_file(dummy_filepath_1)
+    os.remove(dummy_filepath_1)
 
-    # Clean up the dummy file
-    os.remove(dummy_filepath)
+    # --- Test Case 2: New QuantumAgent check ---
+    dummy_code_2 = """
+from agents.base.agent import QuantumAgent
+
+class MyTestAgent(QuantumAgent):
+    def analyze_state(self, state):
+        pass
+
+    # Missing validate_proposal and execute
+"""
+    dummy_filepath_2 = "dummy_test_file_2.py"
+    with open(dummy_filepath_2, "w") as f:
+        f.write(dummy_code_2)
+
+    print("--- Running QuantumAgent checks ---")
+    lint_file(dummy_filepath_2)
+    os.remove(dummy_filepath_2)
