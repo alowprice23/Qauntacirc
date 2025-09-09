@@ -174,19 +174,20 @@ class VerificationReport(BaseModel):
 from rich.console import Console
 
 class ProjectConfig(BaseModel):
-    pass
+    name: str = "default"
+    version: str = "0.0.0"
 
 class AgentConfig(BaseModel):
     pass
 
 class ExecutionConfig(BaseModel):
-    pass
+    default_mode: Optional[str] = None
 
 class MemoryConfig(BaseModel):
     pass
 
 class SecurityConfig(BaseModel):
-    pass
+    api_key_path: Optional[str] = None
 
 class QuantaCircConfig(BaseModel):
     project: ProjectConfig = Field(default_factory=ProjectConfig)
