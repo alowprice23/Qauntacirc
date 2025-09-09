@@ -36,11 +36,11 @@ To get started with development, you will need Python 3.11+ and `pip`.
     ```
 
 3.  **Install dependencies:**
-    The project uses `pip` for dependency management. Install the required packages, including development dependencies:
+    The project uses `pyproject.toml` to manage dependencies. Install all the required packages for development, including optional dependencies for formal verification and monitoring, using the following command:
     ```bash
-    pip install -r requirements.txt
-    pip install -r requirements-dev.txt # Or similar
+    pip install -e .[dev,formal,monitoring]
     ```
+    This command installs the project in "editable" mode (`-e`) and includes the optional dependency groups `dev`, `formal`, and `monitoring`, which are defined in the `pyproject.toml` file.
 
 ## 3. Running Tests
 
