@@ -112,12 +112,18 @@ class TestEnergyCalculator:
             
             # Test basic energy calculation
             mock_state = Mock()
+            mock_state.code = "def f(): pass"
+            mock_state.module_dependencies = {}
+            mock_state.modules = []
+            mock_state.type_errors = []
+            mock_state.proof_obligations = []
+            mock_state.policy_violations = []
             mock_state.complexity = 10.0
             mock_state.coupling = 5.0
             mock_state.constraints = 0.0
             mock_state.debt = 2.0
             
-            energy = calculator.compute_energy(mock_state)
+            energy, _ = calculator.calculate_energy(mock_state)
             assert energy >= 0, "Total energy must be non-negative"
             assert isinstance(energy, (int, float)), "Energy must be numeric"
             
@@ -262,14 +268,14 @@ class TestEnergyCalculator:
         
         try:
             from core.dependency_graph import DependencyGraph
-            from math_utils.laplacian import LaplacianAnalyzer
+            from math_utils.laplacian_analyzer import LaplacianAnalyzer
             
             # Create sample dependency structure
             modules = ["auth", "user", "database", "api"]
             dependencies = [("auth", "user"), ("user", "database"), ("api", "auth"), ("api", "user")]
             
             graph = DependencyGraph(modules, dependencies)
-            analyzer = LaplacianAnalyzer(graph)
+            analyzer = LaplacianAnalyzer(graph.graph)
             
             # Test Laplacian properties
             L = analyzer.laplacian_matrix()
@@ -428,7 +434,7 @@ class TestEnergyCalculator:
                 "complexity_measurement": "Cyclomatic complexity ≥ 1",
                 "duplication_detection": "0 ≤ duplication_ratio ≤ 1",
                 "coverage_bounds": "0 ≤ coverage ≤ 1",
-                "decay_monotonic": "Debt decreases over time without changes"
+                "aging_effect": "Debt increases over time without changes"
             },
             physics_principle="Statistical mechanics: Exponential decay processes",
             related_components=["core/metrics.py", "tests/"]
@@ -450,7 +456,7 @@ class TestEnergyCalculator:
             fresh_debt = calculator.calculate_debt(fresh_module)
             assert fresh_debt > 0, "Fresh code should have some debt"
             
-            # Test debt calculation for old code (should have higher debt)
+            # Test debt calculation for old code (should have lower debt due to decay)
             old_module = Mock()
             old_module.cyclomatic_complexity = 5
             old_module.duplication_ratio = 0.1
@@ -458,13 +464,13 @@ class TestEnergyCalculator:
             old_module.last_modified = datetime.datetime.now() - datetime.timedelta(days=90)
             
             old_debt = calculator.calculate_debt(old_module)
-            assert old_debt > fresh_debt, "Older code should accumulate more debt"
+            assert old_debt > fresh_debt, "Older code should have MORE debt due to aging"
             
-            # Test decay function properties
-            decay_factor_fresh = calculator.decay_factor(0)  # 0 days old
-            decay_factor_old = calculator.decay_factor(90)   # 90 days old
+            # Test aging function properties
+            aging_factor_fresh = calculator.aging_factor(0)  # 0 days old
+            aging_factor_old = calculator.aging_factor(90)   # 90 days old
             
-            assert 0 <= decay_factor_old <= decay_factor_fresh <= 1, "Decay factor bounds"
+            assert aging_factor_old > aging_factor_fresh >= 1, "Aging factor should increase with time"
             
         except ImportError as e:
             pytest.fail(diagnostic.format_failure_message(f"ImportError: {str(e)}"))
@@ -540,10 +546,10 @@ class TestEnergyCalculator:
             # Test gradient computation
             gradient = calculator.compute_gradient(state)
             
-            assert hasattr(gradient, 'complexity'), "Gradient should have complexity component"
-            assert hasattr(gradient, 'coupling'), "Gradient should have coupling component"
-            assert hasattr(gradient, 'constraint'), "Gradient should have constraint component"
-            assert hasattr(gradient, 'debt'), "Gradient should have debt component"
+            assert 'complexity' in gradient, "Gradient should have complexity component"
+            assert 'coupling' in gradient, "Gradient should have coupling component"
+            assert 'constraint' in gradient, "Gradient should have constraint component"
+            assert 'debt' in gradient, "Gradient should have debt component"
             
             # Test gradient properties
             grad_norm = calculator.gradient_norm(gradient)

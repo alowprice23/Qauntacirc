@@ -1,20 +1,37 @@
+from __future__ import annotations
 import numpy as np
+from collections import Counter
+from typing import List, Any
 
-def shannon_entropy(prob_dist):
+def shannon_entropy(data: List[Any] | np.ndarray) -> float:
     """
-    Calculates the Shannon entropy of a probability distribution.
+    Calculates the Shannon entropy of a list of data points or a probability distribution.
 
-    H(X) = - sum(p(x) * log2(p(x)))
+    H(X) = -Σᵢ p(xᵢ) log₂(p(xᵢ))
 
     Args:
-        prob_dist (np.ndarray): A 1D array representing the probability distribution.
+        data: A list of data points or a numpy array representing a probability distribution.
 
     Returns:
-        float: The Shannon entropy in bits.
+        The Shannon entropy of the data in bits.
     """
-    prob_dist = np.asarray(prob_dist)
-    prob_dist = prob_dist[prob_dist > 0] # Remove zero probabilities
-    return -np.sum(prob_dist * np.log2(prob_dist))
+    if isinstance(data, np.ndarray):
+        prob_dist = data[data > 0]
+        return -np.sum(prob_dist * np.log2(prob_dist))
+
+    if not data:
+        return 0.0
+
+    n = len(data)
+    counts = Counter(data)
+
+    entropy = 0.0
+    for count in counts.values():
+        p_x = count / n
+        if p_x > 0:
+            entropy -= p_x * np.log2(p_x)
+
+    return entropy
 
 def mutual_information(joint_prob_dist):
     """

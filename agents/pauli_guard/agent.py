@@ -12,6 +12,7 @@ import json
 from typing import Dict, Any, Optional, List
 
 from agents.base.agent import QuantumAgent
+from agents.base.contracts import Contract, Condition
 from core.state_space import StateSpace
 from core.energy_calculator import EnergyCalculator
 from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
@@ -43,6 +44,17 @@ class PauliGuardAgent(QuantumAgent):
         config: Optional[Dict[str, Any]] = None,
         agent_id: Optional[str] = None,
     ):
+        class ModuleCountCondition(Condition):
+            def check(self, state: State, **kwargs) -> bool:
+                return len(state.modules) >= 2
+
+        contracts = [
+            Contract(
+                name="module_count",
+                preconditions=[ModuleCountCondition()],
+                postconditions=[],
+            )
+        ]
         super().__init__(
             name="pauli_guard",
             state_space=state_space,
@@ -50,6 +62,7 @@ class PauliGuardAgent(QuantumAgent):
             metrics_logger=metrics_logger,
             policy_engine=policy_engine,
             agent_memory=agent_memory,
+            contracts=contracts,
             agent_id=agent_id,
         )
         self.llm_client = llm_client

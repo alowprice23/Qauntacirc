@@ -229,7 +229,7 @@ class TestSchrodingerDevCodeGeneration:
         pytest.skip(diagnostic.format_failure_message("Verification integration framework ready"))
 
 
-class TestSchrodingerDevUnitary Evolution:
+class TestSchrodingerDevUnitaryEvolution:
     """
     Test unitary evolution properties of code transformations.
     """

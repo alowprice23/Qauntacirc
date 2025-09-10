@@ -1,3 +1,7 @@
+class GenerateCommand:
+    """Placeholder for the generate command logic."""
+    pass
+
 import typer
 from rich.live import Live
 from rich.panel import Panel

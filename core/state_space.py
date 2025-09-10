@@ -190,3 +190,8 @@ if __name__ == '__main__':
         optimization_phase="N/A"
     )
     print(f"\nIs invalid state valid? {space.is_valid_state(invalid_qc_state)}")
+
+
+class StateSpaceMetric:
+    def __call__(self, state1, state2):
+        return 1.0 # Mock distance

@@ -592,6 +592,29 @@ def risk_calculator():
     }
 
 # =====================================================================
+# ENERGY CALCULATION FIXTURES
+# =====================================================================
+
+@pytest.fixture
+def energy_weights() -> Dict[str, float]:
+    """Provides standard weights for energy calculation tests."""
+    return {"alpha": 1.0, "beta": 1.5, "gamma": 2.0, "delta": 0.5}
+
+
+@pytest.fixture
+def sample_energy_landscape(energy_weights: Dict[str, float]) -> EnergyLandscape:
+    """
+    Provides a sample EnergyLandscape object for testing.
+    """
+    return EnergyLandscape(
+        complexity_energy=50.0,
+        coupling_energy=25.0,
+        constraint_energy=10.0,
+        debt_energy=5.0,
+        **energy_weights
+    )
+
+# =====================================================================
 # INTEGRATION TEST FIXTURES
 # =====================================================================
 

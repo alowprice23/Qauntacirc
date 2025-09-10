@@ -96,6 +96,14 @@ class LLMClient(abc.ABC):
         """Generate a chat response from a list of messages."""
         pass
 
+    def complete(self, messages: List[Dict[str, str]], **kwargs: Any) -> Dict[str, Any]:
+        """A simplified chat method for compatibility."""
+        chat_response = self.chat(messages, **kwargs)
+        return {
+            "response": chat_response["choices"][0]["message"]["content"],
+            "usage": chat_response.get("usage"),
+        }
+
     @abc.abstractmethod
     def embed(
         self,

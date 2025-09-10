@@ -17,6 +17,32 @@ from typing import List, Optional, Dict, Any
 
 from .types import QCState
 
+class MetropolisAcceptor:
+    """
+    Implements the Metropolis-Hastings acceptance criterion.
+    """
+    def __init__(self, seed: Optional[int] = None):
+        self._rng = np.random.default_rng(seed)
+
+    def acceptance_probability(self, delta_energy: float, temperature: float) -> float:
+        """
+        Calculates the acceptance probability.
+        P(accept) = min(1, exp(-ΔE/T))
+        """
+        if delta_energy <= 0:
+            return 1.0
+        if temperature < 1e-9:
+            return 0.0
+        return math.exp(-delta_energy / temperature)
+
+    def should_accept(self, delta_energy: float, temperature: float) -> bool:
+        """
+        Decides whether to accept a new state.
+        """
+        prob = self.acceptance_probability(delta_energy, temperature)
+        return self._rng.random() < prob
+
+
 class TwoPhaseAnnealer:
     """
     Manages a two-phase simulated annealing process. This class is designed

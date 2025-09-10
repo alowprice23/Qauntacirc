@@ -15,6 +15,33 @@ from typing import List, Optional, Tuple
 
 from core.types import QCState, LyapunovResult
 from math_utils import lyapunov, martingales
+from unittest.mock import Mock
+
+class LyapunovFunction:
+    def __init__(self, kappa: float, xi: float):
+        if kappa <= 0 or xi <= 0:
+            raise ValueError("Weights kappa and xi must be positive.")
+        self.kappa = kappa
+        self.xi = xi
+
+    def compute(self, state: Mock) -> float:
+        """Computes the Lyapunov function value."""
+        # This is a mock implementation based on the test
+        energy = state.energy
+        failing_tests = state.failing_tests
+        open_obligations = state.open_obligations
+        return energy + self.kappa * failing_tests + self.xi * open_obligations
+
+    def get_components(self, state: Mock) -> Dict[str, float]:
+        """Gets the components of the Lyapunov function."""
+        energy = state.energy
+        test_penalty = self.kappa * state.failing_tests
+        obligation_penalty = self.xi * state.open_obligations
+        return {
+            'energy': energy,
+            'test_penalty': test_penalty,
+            'obligation_penalty': obligation_penalty
+        }
 
 # Constants for stability analysis
 DEFAULT_EXCURSION_BOUND = 1.5

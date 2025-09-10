@@ -77,6 +77,14 @@ class AnthropicClient(LLMClient):
 
         return self._handle_request(api_call)
 
+    def complete(self, messages: List[Dict[str, str]], **kwargs: Any) -> Dict[str, Any]:
+        """A simplified chat method for compatibility."""
+        chat_response = self.chat(messages, **kwargs)
+        return {
+            "response": chat_response["choices"][0]["message"]["content"],
+            "usage": chat_response.get("usage"),
+        }
+
     def embed(
         self,
         texts: List[str],

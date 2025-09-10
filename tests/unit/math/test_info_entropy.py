@@ -93,13 +93,13 @@ class TestShannonEntropy:
             from math_utils.info_entropy import shannon_entropy
             
             # Test uniform distribution (maximum entropy)
-            uniform_probs = [0.25, 0.25, 0.25, 0.25]
+            uniform_probs = np.array([0.25, 0.25, 0.25, 0.25])
             uniform_entropy = shannon_entropy(uniform_probs)
             expected_uniform = 2.0  # log₂(4)
             assert abs(uniform_entropy - expected_uniform) < 1e-10, "Uniform entropy incorrect"
             
             # Test deterministic distribution (zero entropy)
-            deterministic_probs = [1.0, 0.0, 0.0, 0.0]
+            deterministic_probs = np.array([1.0, 0.0, 0.0, 0.0])
             deterministic_entropy = shannon_entropy(deterministic_probs)
             assert abs(deterministic_entropy) < 1e-10, "Deterministic entropy should be zero"
             

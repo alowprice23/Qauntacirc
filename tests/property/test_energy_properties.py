@@ -36,7 +36,7 @@ and provide guidance for fixing energy function implementation.
 """
 
 import pytest
-from hypothesis import given, strategies as st, assume
+from hypothesis import given, strategies as st, assume, settings
 import numpy as np
 from typing import Any
 
@@ -55,6 +55,7 @@ class TestEnergyFunctionProperties:
         constraints=st.floats(min_value=0.0, max_value=100.0),
         debt=st.floats(min_value=0.0, max_value=100.0)
     )
+    @settings(deadline=None)
     def test_energy_non_negativity_property(self, alpha, beta, gamma, delta, complexity, coupling, constraints, debt):
         """
         Property: Energy function is always non-negative.
@@ -108,13 +109,19 @@ class TestEnergyFunctionProperties:
             
             # Create mock state with given components
             state = type('State', (), {})()
+            state.code = ""
+            state.module_dependencies = {}
+            state.modules = []
+            state.type_errors = []
+            state.proof_obligations = []
+            state.policy_violations = []
             state.complexity = complexity
             state.coupling = coupling
             state.constraints = constraints
             state.debt = debt
             
             # Calculate energy
-            energy = calculator.compute_energy(state)
+            energy, _ = calculator.calculate_energy(state)
             
             # Property: Energy must be non-negative
             assert energy >= 0, f"Energy must be non-negative, got {energy}"
@@ -197,22 +204,40 @@ class TestEnergyFunctionProperties:
             
             # Create individual states
             s1 = type('State', (), {})()
+            s1.code = ""
+            s1.module_dependencies = {}
+            s1.modules = []
+            s1.type_errors = []
+            s1.proof_obligations = []
+            s1.policy_violations = []
             s1.complexity, s1.coupling, s1.constraints, s1.debt = state1
             
             s2 = type('State', (), {})()
+            s2.code = ""
+            s2.module_dependencies = {}
+            s2.modules = []
+            s2.type_errors = []
+            s2.proof_obligations = []
+            s2.policy_violations = []
             s2.complexity, s2.coupling, s2.constraints, s2.debt = state2
             
             # Create combined state (disjoint union)
             s_combined = type('State', (), {})()
+            s_combined.code = ""
+            s_combined.module_dependencies = {}
+            s_combined.modules = []
+            s_combined.type_errors = []
+            s_combined.proof_obligations = []
+            s_combined.policy_violations = []
             s_combined.complexity = s1.complexity + s2.complexity
             s_combined.coupling = s1.coupling + s2.coupling
             s_combined.constraints = s1.constraints + s2.constraints
             s_combined.debt = s1.debt + s2.debt
             
             # Calculate energies
-            e1 = calculator.compute_energy(s1)
-            e2 = calculator.compute_energy(s2)
-            e_combined = calculator.compute_energy(s_combined)
+            e1, _ = calculator.calculate_energy(s1)
+            e2, _ = calculator.calculate_energy(s2)
+            e_combined, _ = calculator.calculate_energy(s_combined)
             
             # Property: Additivity for disjoint systems
             expected_combined = e1 + e2

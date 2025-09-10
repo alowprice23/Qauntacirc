@@ -22,14 +22,28 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 class EnergyComponents(BaseModel):
     """Energy function decomposition."""
-    static: float = Field(..., description="Static component of the energy.")
-    dynamic: float = Field(..., description="Dynamic component of the energy.")
-    interaction: float = Field(..., description="Interaction component of the energy.")
+    static: Optional[float] = Field(None, description="Static component of the energy.")
+    dynamic: Optional[float] = Field(None, description="Dynamic component of the energy.")
+    interaction: Optional[float] = Field(None, description="Interaction component of the energy.")
+    complexity: Optional[float] = Field(None, description="Complexity component of the energy.")
+    coupling: Optional[float] = Field(None, description="Coupling component of the energy.")
+    constraint: Optional[float] = Field(None, description="Constraint component of the energy.")
+    debt: Optional[float] = Field(None, description="Technical debt component of the energy.")
+    total: Optional[float] = Field(None, description="Total energy.")
 
-    @property
-    def total(self) -> float:
-        """Computed total energy."""
-        return self.static + self.dynamic + self.interaction
+    @model_validator(mode='after')
+    def check_total(self) -> 'EnergyComponents':
+        """Calculates total if not provided."""
+        if self.total is None:
+            total = 0
+            if self.static is not None:
+                total += self.static
+            if self.dynamic is not None:
+                total += self.dynamic
+            if self.interaction is not None:
+                total += self.interaction
+            self.total = total
+        return self
 
 class SoftwareState(BaseModel):
     """Represents the state of various software components."""
