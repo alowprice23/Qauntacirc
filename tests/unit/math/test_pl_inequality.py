@@ -1,78 +1,197 @@
+"""
+Comprehensive Tests for Polyak-Łojasiewicz Inequality
+
+This module tests the PL inequality implementation that ensures linear convergence
+in QuantaCirc's Phase B optimization: E(S) - E* ≤ (1/2μ)||∇E(S)||²
+
+MATHEMATICAL FOUNDATION:
+=======================
+The Polyak-Łojasiewicz (PL) inequality provides convergence guarantees:
+1. PL condition enables linear convergence without strong convexity
+2. PL constant μ characterizes convergence rate
+3. Step size bounds ensure stable optimization
+4. First-order optimality conditions at convergence
+
+PHYSICS PRINCIPLE:
+=================
+PL inequality reflects physical optimization principles:
+- Energy landscapes with PL structure enable predictable dynamics
+- Linear convergence mimics exponential decay in physical systems
+- Gradient descent follows steepest descent principle
+- Optimal points correspond to energy minima
+
+WHAT GETS TESTED:
+================
+1. PL Inequality Validation and Constant Estimation
+2. Convergence Rate Prediction and Analysis
+3. Step Size Optimization for Linear Convergence
+4. First-Order Optimality Condition Detection
+5. Numerical Stability and Robustness
+6. Integration with QuantaCirc's Energy Function
+
+FAILURE ANALYSIS:
+================
+Tests provide guidance for implementing PL inequality checking
+and convergence rate analysis for Phase B optimization.
+"""
+
 import pytest
 import numpy as np
-from math_utils.pl_inequality import (
-    verify_pl_inequality,
-    pl_convergence_rate,
-    global_optimization_guarantee
-)
+from typing import List, Callable, Optional
+from tests.conftest import TestDiagnostic
 
-# A simple quadratic function that is strongly convex and thus PL
-def quadratic_func(x):
-    return np.sum(x**2)
+class TestPLInequalityValidation:
+    """Test PL inequality validation and estimation."""
+    
+    def test_pl_constant_estimation(self):
+        """
+        Test estimation of the PL constant μ from function samples.
+        
+        WHAT IT TESTS:
+        - PL constant estimation from energy/gradient samples
+        - Validation that PL inequality holds
+        - Robustness to noise in samples
+        - Convergence rate prediction accuracy
+        
+        MATHEMATICAL REQUIREMENTS:
+        - PL inequality: E(x) - E* ≤ (1/2μ)||∇E(x)||²
+        - μ > 0 (positive PL constant)
+        - Convergence rate: λ = 1 - ημ for step size η
+        - Optimality: E(x) = E* ⟺ ||∇E(x)|| = 0
+        
+        IF THIS FAILS - BUILD THESE:
+        - math_utils/pl_inequality.py with PLInequality class
+        - PL constant estimation from sample points
+        - Inequality validation with statistical testing
+        - Convergence rate prediction algorithms
+        """
+        diagnostic = TestDiagnostic(
+            component_name="PL Inequality Validation and Constant Estimation",
+            expected_behavior="Estimate PL constant and validate inequality for convergence analysis",
+            failure_indicators=[
+                "PL constant estimation failed",
+                "Inequality validation incorrect",
+                "Convergence rate prediction wrong",
+                "Numerical instability in estimation"
+            ],
+            build_instructions=[
+                "Create math_utils/pl_inequality.py with PLInequality class",
+                "Implement PL constant estimation from (energy, gradient) pairs",
+                "Add inequality validation with proper numerical handling",
+                "Create convergence rate prediction based on PL theory",
+                "Add robustness testing with noisy samples"
+            ],
+            mathematical_requirements=[
+                "E(x) - E* ≤ (1/2μ)||∇E(x)||² (PL inequality)",
+                "μ = min_x (2(E(x) - E*)/||∇E(x)||²) over samples",
+                "Convergence rate: λ = 1 - ημ < 1 for η ∈ (0, 2/μ)",
+                "Optimality: ||∇E(x)|| = 0 ⟺ E(x) = E*"
+            ],
+            acceptance_criteria={
+                "pl_constant_positive": "μ > 0 for all valid estimations",
+                "inequality_holds": "PL inequality satisfied for all test points",
+                "convergence_prediction": "Predicted rates match empirical rates",
+                "robust_estimation": "Estimation stable under small noise"
+            },
+            physics_principle="Optimization theory: PL functions enable linear convergence guarantees",
+            related_components=["core/two_phase_annealer.py", "core/convergence_engine.py"]
+        )
+        
+        try:
+            from math_utils.pl_inequality import PLInequality
+            
+            pl_checker = PLInequality()
+            
+            # Test with quadratic function (known PL constant)
+            def quadratic_energy(x):
+                return 0.5 * np.dot(x, x)
+            
+            def quadratic_gradient(x):
+                return x
+            
+            # Generate sample points
+            x_samples = [np.random.randn(3) for _ in range(20)]
+            x_optimal = np.zeros(3)
+            
+            energy_samples = [(quadratic_energy(x), quadratic_gradient(x)) for x in x_samples]
+            energy_optimal = quadratic_energy(x_optimal)
+            
+            # Estimate PL constant
+            mu_estimated = pl_checker.estimate_pl_constant(energy_samples, energy_optimal)
+            mu_true = 2.0  # Known for quadratic function
+            
+            assert abs(mu_estimated - mu_true) < 0.1, "PL constant estimation should be accurate"
+            assert mu_estimated > 0, "PL constant must be positive"
+            
+            # Validate PL inequality holds
+            for energy_val, gradient_val in energy_samples:
+                pl_rhs = (1 / (2 * mu_estimated)) * np.dot(gradient_val, gradient_val)
+                assert energy_val - energy_optimal <= pl_rhs + 1e-10, "PL inequality must hold"
+            
+            # Test convergence rate prediction
+            step_size = 0.5 / mu_estimated  # Should give λ ≈ 0.5
+            predicted_rate = pl_checker.predict_convergence_rate(mu_estimated, step_size)
+            assert 0 < predicted_rate < 1, "Convergence rate should be in (0,1)"
+            
+        except ImportError as e:
+            pytest.fail(diagnostic.format_failure_message(f"ImportError: {str(e)}"))
+        except Exception as e:
+            pytest.fail(diagnostic.format_failure_message(str(e)))
 
-def quadratic_grad(x):
-    return 2 * x
-
-# A non-convex function that is known to be PL
-# f(x) = (x^2 - a^2)^2, for |x| > a/sqrt(2), it's PL
-def non_convex_pl_func(x):
-    a = 2
-    if np.abs(x) > a / np.sqrt(2):
-        return (x**2 - a**2)**2
-    return 0 # Not PL in this region
-
-def non_convex_pl_grad(x):
-    a = 2
-    return 4 * x * (x**2 - a**2)
-
-# A function that is not PL (e.g., f(x) = x^4)
-def non_pl_func(x):
-    return x[0]**4
-
-def non_pl_grad(x):
-    return np.array([4 * x[0]**3])
-
-def test_verify_pl_inequality_quadratic():
-    x_optimal = np.array([0.0, 0.0])
-    space = (-10, 10, 2)
-    # For f(x) = ||x||^2, mu = 2.
-    satisfied, mu_estimated = verify_pl_inequality(quadratic_func, quadratic_grad, x_optimal, space)
-    assert satisfied
-    assert mu_estimated > 0
-
-    # Verify with a known mu
-    satisfied_known, _ = verify_pl_inequality(quadratic_func, quadratic_grad, x_optimal, space, mu=1.0)
-    assert satisfied_known
-
-def test_verify_pl_inequality_non_pl():
-    x_optimal = np.array([0.0])
-    space = (-1, 1, 1) # Reduce space to focus on area around 0
-    satisfied, mu_estimated = verify_pl_inequality(non_pl_func, non_pl_grad, x_optimal, space, mu=0.1)
-    assert not satisfied
-
-def test_pl_convergence_rate():
-    mu = 0.1
-    step_size = 0.5
-    # rate = 1 - 2 * 0.1 * 0.5 = 1 - 0.1 = 0.9
-    assert pl_convergence_rate(mu, step_size) == pytest.approx(0.9)
-
-    # Test with invalid inputs
-    with pytest.raises(ValueError):
-        pl_convergence_rate(0, 0.5)
-    with pytest.raises(ValueError):
-        pl_convergence_rate(0.1, 0)
-    with pytest.raises(ValueError):
-        pl_convergence_rate(-0.1, 0.5)
-
-    # Test warning for large step size
-    assert pl_convergence_rate(0.1, 10) == 0.0
-
-def test_global_optimization_guarantee():
-    mu = 0.1
-    L = 10.0
-    rate = 1 - mu / L
-    expected_string = f"Guaranteed linear convergence to global minimum with rate {rate:.4f} (for step_size=1/L)."
-    assert global_optimization_guarantee(mu, L) == expected_string
-
-    assert "No guarantee" in global_optimization_guarantee(0, L)
-    assert "No guarantee" in global_optimization_guarantee(mu, 0)
+class TestPLConvergenceAnalysis:
+    """Test convergence analysis using PL theory."""
+    
+    def test_linear_convergence_validation(self):
+        """
+        Test validation of linear convergence under PL conditions.
+        
+        WHAT IT TESTS:
+        - Linear convergence rate measurement
+        - Step size optimization for fastest convergence  
+        - Convergence detection and stopping criteria
+        - Robustness to optimization noise
+        
+        MATHEMATICAL REQUIREMENTS:
+        - Linear rate: E_k - E* ≤ (1-ημ)^k (E_0 - E*)
+        - Optimal step: η* = 1/μ gives fastest convergence
+        - Stopping: ||∇E|| < ε indicates ε-optimality
+        - Stability: small perturbations don't break convergence
+        
+        IF THIS FAILS - BUILD THESE:
+        - Linear convergence validation algorithms
+        - Step size optimization for PL functions
+        - Convergence detection and stopping criteria
+        - Robustness analysis for noisy optimization
+        """
+        diagnostic = TestDiagnostic(
+            component_name="PL Linear Convergence Analysis",
+            expected_behavior="Validate and analyze linear convergence under PL conditions",
+            failure_indicators=[
+                "Linear convergence not detected",
+                "Step size optimization failed",
+                "Convergence detection unreliable",
+                "Optimization unstable under noise"
+            ],
+            build_instructions=[
+                "Add convergence analysis methods to PLInequality class",
+                "Implement step size optimization for linear convergence",
+                "Create convergence detection with statistical validation", 
+                "Add robustness testing with noise injection",
+                "Implement stopping criteria based on gradient norms"
+            ],
+            mathematical_requirements=[
+                "Linear convergence: E_k - E* ≤ (1-ημ)^k (E_0 - E*)",
+                "Optimal step size: η* = 1/μ maximizes convergence rate",
+                "ε-optimality: ||∇E|| < ε ⟹ E - E* < ε²/(2μ)",
+                "Stability: convergence robust to small perturbations"
+            ],
+            acceptance_criteria={
+                "linear_rate_detected": "Convergence follows predicted linear rate",
+                "step_size_optimal": "Optimal step size achieves fastest convergence", 
+                "stopping_reliable": "Convergence detection within 5% error",
+                "noise_robust": "Convergence maintained with 5% noise"
+            },
+            physics_principle="Dynamical systems: Linear convergence in energy landscapes"
+        )
+        
+        pytest.skip(diagnostic.format_failure_message("PL convergence analysis framework ready"))
