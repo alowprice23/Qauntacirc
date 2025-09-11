@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 from . import __version__
-from .commands import init, generate, verify, deploy, demo, status, memory
+from .commands import init, generate, verify, deploy, demo, status, memory, chat
 from core.types import AppContext, QuantaCircConfig
 from core.config_loader import load_config
 from core.exceptions import QuantaCircError
@@ -76,9 +76,6 @@ def main(
         # Setup structured logging first
         setup_logging(level=log_level)
 
-        # Initialize metrics collection
-        initialize_metrics()
-
         # Load configuration
         if config_path and not config_path.exists():
             console.print(f"[error]Configuration file not found: {config_path}[/error]")
@@ -86,7 +83,8 @@ def main(
 
         config = load_config(config_path)
 
-        # Create application context
+        # Initialize metrics collection
+        initialize_metrics(config=config)
         app_context = AppContext(
             config=config,
             console=console,
@@ -122,6 +120,7 @@ app.add_typer(deploy.app, name="deploy", help="Deploy to target environment")
 app.add_typer(demo.app, name="demo", help="Run demonstration scenarios")
 app.add_typer(status.app, name="status", help="Display system quantum state")
 app.add_typer(memory.app, name="memory", help="Interact with Constellation memory")
+app.add_typer(chat.app, name="chat", help="Start a conversational session")
 
 if __name__ == "__main__":
     app()
