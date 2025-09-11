@@ -45,3 +45,11 @@ class ConvergenceError(OptimizationError):
 class BudgetError(QuantaCircError):
     """Error related to exhausted budgets (e.g., error budget)."""
     pass
+
+class MessagingError(QuantaCircError):
+    """Error related to the messaging system."""
+    pass
+
+class QuantumStateError(StateError):
+    """Error related to an invalid quantum state."""
+    pass

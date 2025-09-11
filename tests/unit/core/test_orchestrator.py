@@ -13,6 +13,7 @@ def test_orchestrator_instantiation():
     mock_annealer = Mock()
     mock_functor = Mock()
     mock_closure_rules = Mock()
+    mock_agent_router = Mock()
 
     # Instantiate the Orchestrator
     orchestrator = Orchestrator(
@@ -22,6 +23,7 @@ def test_orchestrator_instantiation():
         annealer=mock_annealer,
         functor=mock_functor,
         closure_rules=mock_closure_rules,
+        agent_router=mock_agent_router,
     )
 
     # Assert that the object was created and is of the correct type
@@ -33,3 +35,4 @@ def test_orchestrator_instantiation():
     assert orchestrator.annealer is mock_annealer
     assert orchestrator.functor is mock_functor
     assert orchestrator.closure_rules is mock_closure_rules
+    assert orchestrator.agent_router is mock_agent_router
