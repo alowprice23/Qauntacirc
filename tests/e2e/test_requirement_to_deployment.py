@@ -39,7 +39,7 @@ comprehensive guidance for resolving end-to-end pipeline problems.
 import pytest
 import asyncio
 from typing import Dict, List, Any
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock, AsyncMock, MagicMock
 from dataclasses import dataclass
 
 from tests.conftest import TestDiagnostic
@@ -161,6 +161,7 @@ class TestCompleteQuantaCircPipeline:
             from core.orchestrator import Orchestrator
             from core.energy_calculator import EnergyCalculator
             from core.lyapunov_monitor import LyapunovMonitor
+            from core.lyapunov_function import LyapunovFunction
             from core.two_phase_annealer import TwoPhaseAnnealer
             from core.functor import Functor
             from core.closure_rules import ClosureRuleSet
@@ -180,6 +181,8 @@ class TestCompleteQuantaCircPipeline:
 
             # Configure the mock agent to return a result with energy impact
             mock_agent = PlanckForgeAgent(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), AsyncMock())
+            mock_agent.id = "planck_forge_agent"
+            mock_agent.get_contract = MagicMock()
             # The proposal needs an ID that the result can reference.
             mock_proposal = AgentTask(agent_name="planck_forge", task_type="generate", payload={})
             mock_agent.analyze_state = AsyncMock(return_value=mock_proposal)
@@ -195,10 +198,17 @@ class TestCompleteQuantaCircPipeline:
                 result={"energy_impact": {"static": -100.0}}
             ))
 
+            from agents.base.router import AgentRouter
+            mock_agent_router = MagicMock(spec=AgentRouter)
+            mock_agent_router.route = MagicMock(return_value=[mock_agent])
+            mock_agent_router.publish = AsyncMock()
+
+            lyapunov_function = LyapunovFunction(kappa=1.0, xi=1.0)
             orchestrator = Orchestrator(
                 agents=[mock_agent],
+                agent_router=mock_agent_router,
                 energy_calculator=EnergyCalculator(1,1,1,1),
-                lyapunov_monitor=LyapunovMonitor(),
+                lyapunov_monitor=LyapunovMonitor(lyapunov_function),
                 annealer=annealer,
                 functor=Functor(),
                 closure_rules=ClosureRuleSet([]),

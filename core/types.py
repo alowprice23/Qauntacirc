@@ -33,6 +33,8 @@ class QCState(BaseModel):
     energy_components: EnergyComponents
     lyapunov_potential: float
     contraction_factor: float
+    failing_tests: int = 0
+    open_obligations: int = 0
     optimization_phase: str = "initialization"
     metadata: Dict[str, Any] = Field(default_factory=dict)
 

@@ -1,15 +1,16 @@
-"""
-Lyapunov Monitor
-"""
+# core/lyapunov_monitor.py
+
 from typing import List, Tuple
 import numpy as np
 from core.types import QCState, LyapunovResult
+from core.lyapunov_function import LyapunovFunction
 
 class LyapunovMonitor:
     """
     A class to monitor the Lyapunov stability of the system.
     """
-    def __init__(self, excursion_bound: float = 1.5, convergence_threshold: float = 1e-4, min_history_for_stability: int = 10):
+    def __init__(self, lyapunov_function: LyapunovFunction, excursion_bound: float = 1.5, convergence_threshold: float = 1e-4, min_history_for_stability: int = 10):
+        self.lyapunov_function = lyapunov_function
         self.excursion_bound = excursion_bound
         self.convergence_threshold = convergence_threshold
         self.min_history_for_stability = min_history_for_stability
@@ -23,10 +24,12 @@ class LyapunovMonitor:
         self.min_potential = None
 
     def track_state(self, state: QCState):
-        self.potential_history.append(state.lyapunov_potential)
+        potential = self.lyapunov_function.compute(state)
+        state.lyapunov_potential = potential
+        self.potential_history.append(potential)
         self.state_history.append(state)
-        if self.min_potential is None or state.lyapunov_potential < self.min_potential:
-            self.min_potential = state.lyapunov_potential
+        if self.min_potential is None or potential < self.min_potential:
+            self.min_potential = potential
 
     def track_excursion(self) -> Tuple[bool, float]:
         if not self.potential_history or self.min_potential is None:
@@ -91,20 +94,3 @@ class LyapunovMonitor:
         # Supermartingale: E[X_{n+1} | F_n] <= X_n
         # We check the average drift
         return drift <= 0, drift
-
-class LyapunovFunction:
-    def __init__(self, kappa: float, xi: float):
-        if kappa <= 0 or xi <= 0:
-            raise ValueError("Weights kappa and xi must be positive.")
-        self.kappa = kappa
-        self.xi = xi
-
-    def compute(self, state: QCState) -> float:
-        return state.energy + self.kappa * state.failing_tests + self.xi * state.open_obligations
-
-    def get_components(self, state: QCState) -> dict:
-        return {
-            "energy": state.energy,
-            "test_penalty": self.kappa * state.failing_tests,
-            "obligation_penalty": self.xi * state.open_obligations,
-        }
