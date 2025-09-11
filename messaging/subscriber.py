@@ -11,7 +11,7 @@ import asyncio
 import logging
 from typing import Any, Awaitable, Callable, Dict, Optional
 
-from circuitbreaker import circuit
+from pybreaker import CircuitBreaker as circuit
 from nats.aio.msg import Msg
 
 from core.exceptions import QuantumStateError
@@ -98,7 +98,7 @@ class MessageSubscriber:
             log.warning(f"Already subscribed to subject '{subject}'. Ignoring request.")
             return
 
-        @circuit(failure_threshold=breaker_fail_max, recovery_timeout=breaker_reset_timeout)
+        @circuit(fail_max=breaker_fail_max, reset_timeout=breaker_reset_timeout)
         async def process_message_with_breaker(msg: Msg, quantum_context: Optional[QCState]):
             """The core logic for processing a single message, wrapped in a circuit breaker."""
             try:
