@@ -53,3 +53,7 @@ class MessagingError(QuantaCircError):
 class QuantumStateError(StateError):
     """Error related to an invalid quantum state."""
     pass
+
+class SchemaValidationError(ValidationError):
+    """Error during schema validation."""
+    pass
