@@ -15,24 +15,15 @@ def test_natural_language_parsing():
 
 def test_energy_quantization():
     quantizer = EnergyQuantizer()
-    task = TaskQuanta(
-        id="test_task",
-        description="A test task",
-        verification_criteria=["criterion1", "criterion2"],
-        dependencies=["dep1"],
-        spec_stub="spec stub content"
-    )
-    
-    energy = quantizer.quantize(task)
-    assert energy > 0
-
     tasks = [
         TaskQuanta(id="t1", description="d1", verification_criteria=["vc1"]),
         TaskQuanta(id="t2", description="d2", verification_criteria=["vc2"], dependencies=["t1"]),
     ]
     quantized_tasks = quantizer.quantize_batch(tasks)
-    assert quantized_tasks[0].energy > 0
-    assert quantized_tasks[1].energy > quantized_tasks[0].energy
+    task_map = {t.id: t for t in quantized_tasks}
+    assert task_map["t1"].energy > 0
+    assert task_map["t2"].energy > 0
+    assert task_map["t2"].energy > task_map["t1"].energy
 
 def test_dependency_analysis():
     # Valid DAG

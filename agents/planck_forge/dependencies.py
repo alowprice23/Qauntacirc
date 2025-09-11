@@ -69,3 +69,38 @@ def generate_task_dag(tasks: List[TaskQuanta]) -> Dict[str, List[str]]:
         An adjacency list representing the DAG.
     """
     return {task.id: task.dependencies for task in tasks}
+
+
+def calculate_node_levels(adj_list: Dict[str, List[str]]) -> Dict[str, int]:
+    """
+    Calculates the level of each node in a DAG.
+    The level is the length of the longest path from a source node (level 1).
+
+    Args:
+        adj_list: The adjacency list of the DAG.
+
+    Returns:
+        A dictionary mapping each node to its level.
+    """
+    levels: Dict[str, int] = {}
+
+    def get_level(node: str) -> int:
+        if node in levels:
+            return levels[node]
+
+        if not adj_list.get(node):
+            # Node with no dependencies is a source node, level 1
+            levels[node] = 1
+            return 1
+
+        max_dep_level = 0
+        for dep in adj_list[node]:
+            max_dep_level = max(max_dep_level, get_level(dep))
+
+        levels[node] = 1 + max_dep_level
+        return levels[node]
+
+    for node in adj_list:
+        get_level(node)
+
+    return levels

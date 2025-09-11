@@ -1,5 +1,5 @@
 import pytest
-from agents.planck_forge.dependencies import validate_dag, generate_task_dag, TaskValidationError
+from agents.planck_forge.dependencies import validate_dag, generate_task_dag, TaskValidationError, calculate_node_levels
 from core.types import TaskQuanta
 
 @pytest.fixture
@@ -52,3 +52,34 @@ def test_generate_task_dag(valid_dag_tasks):
         "task4": ["task2", "task3"],
     }
     assert generate_task_dag(valid_dag_tasks) == expected_dag
+
+def test_calculate_node_levels_linear_chain():
+    adj_list = {"a": [], "b": ["a"], "c": ["b"]}
+    expected_levels = {"a": 1, "b": 2, "c": 3}
+    assert calculate_node_levels(adj_list) == expected_levels
+
+def test_calculate_node_levels_multiple_dependencies():
+    adj_list = {"a": [], "b": [], "c": ["a", "b"]}
+    expected_levels = {"a": 1, "b": 1, "c": 2}
+    assert calculate_node_levels(adj_list) == expected_levels
+
+def test_calculate_node_levels_complex_graph():
+    adj_list = {
+        "a": [],
+        "b": ["a"],
+        "c": ["a"],
+        "d": ["b", "c"],
+        "e": ["d"],
+    }
+    expected_levels = {"a": 1, "b": 2, "c": 2, "d": 3, "e": 4}
+    assert calculate_node_levels(adj_list) == expected_levels
+
+def test_calculate_node_levels_multiple_sources():
+    adj_list = {"a": [], "b": [], "c": ["a"], "d": ["b"]}
+    expected_levels = {"a": 1, "b": 1, "c": 2, "d": 2}
+    assert calculate_node_levels(adj_list) == expected_levels
+
+def test_calculate_node_levels_empty_graph():
+    adj_list = {}
+    expected_levels = {}
+    assert calculate_node_levels(adj_list) == expected_levels
