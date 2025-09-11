@@ -4,7 +4,7 @@ from agents.pauli_guard.prompts import get_prompt, GENERATE_REFACTORING_PLAN_V1
 def test_get_prompt_latest():
     prompt = get_prompt("generate_refactoring_plan", "latest")
     assert prompt is not None
-    assert prompt.version == "1.0"
+    assert prompt.version == "2.0"
     assert prompt.name == "pauli_guard_generate_refactoring_plan"
 
 def test_get_prompt_specific_version():

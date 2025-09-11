@@ -154,3 +154,20 @@ def parse_refactoring_plan(llm_output: str) -> Dict[str, Any]:
         return plan
     except json.JSONDecodeError:
         raise RefactoringPlanError("Failed to decode LLM output as JSON.")
+
+def parse_cluster_refactoring_plan(llm_output: str) -> Dict[str, Any]:
+    """
+    Parses the JSON output from the LLM for a cluster refactoring plan.
+    """
+    try:
+        plan = json.loads(llm_output)
+        required_keys = ["shared_component_path", "refactored_code", "replacement_plan"]
+        if not all(key in plan for key in required_keys):
+            raise RefactoringPlanError("LLM output is missing required keys for the refactoring plan.")
+
+        if not isinstance(plan["replacement_plan"], list) or len(plan["replacement_plan"]) < 2:
+            raise RefactoringPlanError("Replacement plan must be a list of at least two items.")
+
+        return plan
+    except json.JSONDecodeError:
+        raise RefactoringPlanError("Failed to decode LLM output as JSON.")
