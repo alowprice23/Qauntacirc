@@ -35,6 +35,7 @@ class QuantumState:
 
 from .rate_limiter import RateLimiter
 from .validators import ResponseValidator
+from .prompt_security import InjectionDetector
 
 logger = logging.getLogger(__name__)
 
@@ -68,15 +69,16 @@ class LLMClient(abc.ABC):
         budget_manager: Optional[Any] = None,
         rate_limiter: Optional[RateLimiter] = None,
         validator: Optional[ResponseValidator] = None,
+        injection_detector: Optional[InjectionDetector] = None,
     ):
         self.api_key = api_key
         self.model = model
         self.budget_manager = budget_manager
         self.rate_limiter = rate_limiter or RateLimiter()
         self.validator = validator or ResponseValidator()
+        self.injection_detector = injection_detector or InjectionDetector()
         self.total_cost = 0.0
 
-    @abc.abstractmethod
     def generate(
         self,
         prompt: str,
@@ -84,9 +86,20 @@ class LLMClient(abc.ABC):
         **kwargs: Any,
     ) -> str:
         """Generate a text completion from a prompt."""
-        pass
+        if self.injection_detector.detect(prompt):
+            raise ValueError("Prompt injection detected")
+        return self._do_generate(prompt, quantum_context, **kwargs)
 
     @abc.abstractmethod
+    def _do_generate(
+        self,
+        prompt: str,
+        quantum_context: Optional[QuantumState] = None,
+        **kwargs: Any,
+    ) -> str:
+        """Abstract method for generating a text completion."""
+        pass
+
     def chat(
         self,
         messages: List[Dict[str, str]],
@@ -94,6 +107,17 @@ class LLMClient(abc.ABC):
         **kwargs: Any,
     ) -> StandardChatResponse:
         """Generate a chat response from a list of messages."""
+        sanitized_messages = self.injection_detector.sanitize(messages)
+        return self._do_chat(sanitized_messages, quantum_context, **kwargs)
+
+    @abc.abstractmethod
+    def _do_chat(
+        self,
+        messages: List[Dict[str, str]],
+        quantum_context: Optional[QuantumState] = None,
+        **kwargs: Any,
+    ) -> StandardChatResponse:
+        """Abstract method for generating a chat response."""
         pass
 
     def complete(self, messages: List[Dict[str, str]], **kwargs: Any) -> Dict[str, Any]:

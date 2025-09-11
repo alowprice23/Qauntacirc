@@ -25,7 +25,7 @@ class GeminiClient(LLMClient):
         genai.configure(api_key=self.api_key)
         self.client = genai.GenerativeModel(self.model)
 
-    def generate(
+    def _do_generate(
         self,
         prompt: str,
         quantum_context: Optional[QuantumState] = None,
@@ -33,10 +33,10 @@ class GeminiClient(LLMClient):
     ) -> str:
         """Generate a text completion from a prompt."""
         messages = [{"role": "user", "content": prompt}]
-        chat_completion = self.chat(messages, quantum_context, **kwargs)
+        chat_completion = self._do_chat(messages, quantum_context, **kwargs)
         return chat_completion["choices"][0]["message"]["content"]
 
-    def chat(
+    def _do_chat(
         self,
         messages: List[Dict[str, str]],
         quantum_context: Optional[QuantumState] = None,

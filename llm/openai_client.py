@@ -24,7 +24,7 @@ class OpenAIClient(LLMClient):
             raise ValueError("OpenAI API key is required.")
         self.client = openai.OpenAI(api_key=self.api_key)
 
-    def generate(
+    def _do_generate(
         self,
         prompt: str,
         quantum_context: Optional[QuantumState] = None,
@@ -32,10 +32,10 @@ class OpenAIClient(LLMClient):
     ) -> str:
         """Generate a text completion from a prompt."""
         messages = [{"role": "user", "content": prompt}]
-        chat_completion = self.chat(messages, quantum_context, **kwargs)
+        chat_completion = self._do_chat(messages, quantum_context, **kwargs)
         return chat_completion["choices"][0]["message"]["content"]
 
-    def chat(
+    def _do_chat(
         self,
         messages: List[Dict[str, str]],
         quantum_context: Optional[QuantumState] = None,
