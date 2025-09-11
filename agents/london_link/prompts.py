@@ -1,51 +1,41 @@
-# agents/london_link/prompts.py
 """
-Prompts for the LondonLink Agent, which manages and optimizes the
-system's external dependencies.
+Prompts for the LondonLink Agent, which optimizes internal module dependencies
+based on the principles of London dispersion forces.
 """
 
 from agents.base.prompts import PromptSpec
 
-# V1 for optimizing a set of dependencies.
-OPTIMIZE_DEPENDENCIES_V1 = PromptSpec(
-    name="london_link_optimize_dependencies",
+REFACTOR_COUPLED_MODULES_V1 = PromptSpec(
+    name="london_link_refactor_coupled_modules",
     version="1.0",
     template="""\
-You are a security researcher and expert in software supply chain management. Your task is to analyze a list of project dependencies and recommend optimizations to improve security, stability, and performance.
+You are a senior software architect focused on creating modular and maintainable systems. Your task is to resolve a problematic coupling between two modules.
 
-Project Dependencies:
-```
-{dependency_list}
-```
+Analysis:
+- Module A: `{module_a}`
+- Module B: `{module_b}`
+- These two modules have been identified as having a strong "attraction" (high coupling potential) but are far apart in the codebase's dependency graph. This suggests they might contain related logic that should be centralized or that their interface is too chatty.
 
-Known Vulnerabilities:
-```
-{vulnerability_report}
-```
+Refactoring Task:
+Propose a refactoring to address this issue. You can either:
+1.  **Centralize Logic**: Extract the shared or related logic into a new, shared module that both modules can depend on.
+2.  **Decouple**: Introduce a proper interface (e.g., using an abstract base class or a message bus) to reduce the direct, "improper" coupling between them.
 
-Optimization Guidelines:
-1.  **Update Vulnerable Packages**: For any package with a known vulnerability, suggest updating to the minimum safe version.
-2.  **Update Outdated Packages**: Suggest updating packages that are significantly behind the latest stable version, as long as the update is not a major breaking change.
-3.  **Remove Unused Dependencies**: If a dependency is identified as unused (this information would be provided in a real analysis), recommend its removal.
-4.  **Consolidate Redundancy**: If multiple packages serve the same purpose (e.g., two different HTTP clients), suggest consolidating to one.
+Provide the refactored code for ONE of the modules, and explain your reasoning.
 
 Output Format:
-Provide the output as a JSON object with a single key "optimization_actions". This should be a list of objects, where each object has:
-- "package": The name of the dependency.
-- "current_version": The current version.
-- "recommended_version": The suggested new version (or "remove" if it should be removed).
-- "reason": A brief justification for the change.
+Provide the output as a JSON object with the following structure:
+- "refactored_module_path": The full path of the module you chose to refactor (e.g., "src/module/a.py").
+- "refactored_code": The complete, refactored Python code for that module.
+- "explanation": A brief explanation of your change and how it resolves the long-distance coupling.
 
-Example:
-... (Example is omitted for brevity, the structure is defined above)
-
-Now, generate the dependency optimization plan.
+Now, generate the refactoring plan for the modules described above.
 """,
-    variables=["dependency_list", "vulnerability_report"]
+    variables=["module_a", "module_b"]
 )
 
 PROMPT_REGISTRY = {
-    "optimize_dependencies": { "1.0": OPTIMIZE_DEPENDENCIES_V1 }
+    "refactor_coupled_modules": { "1.0": REFACTOR_COUPLED_MODULES_V1 }
 }
 
 def get_prompt(name: str, version: str = "latest") -> PromptSpec:

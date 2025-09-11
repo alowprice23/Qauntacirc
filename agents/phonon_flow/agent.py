@@ -1,14 +1,13 @@
 # agents/phonon_flow/agent.py
 """
-PhononFlow Agent: Optimizes data flow and communication patterns.
+PhononFlow Agent: Optimizes code structure to improve information flow.
 
-This agent analyzes the interactions between system components and proposes
-architectural changes to improve data flow efficiency, such as introducing
-caches, message queues, or asynchronous processing.
+This agent analyzes the structural properties of the codebase, such as
+coupling and complexity, and proposes refactorings to improve the "speed of
+sound" (maintainability) of the code.
 """
-import asyncio
-import re
-from typing import Dict, Any, Optional, List
+import json
+from typing import Dict, Any, Optional
 
 from agents.base.agent import QuantumAgent
 from core.state_space import StateSpace
@@ -24,11 +23,11 @@ from . import ops
 
 class PhononFlowAgent(QuantumAgent):
     """
-    The PhononFlow Agent is a distributed systems architect.
+    The PhononFlow Agent is a software architect focused on structural quality.
 
-    It looks at the macro-level communication patterns and suggests
-    refactorings to improve the overall efficiency and scalability of the system,
-    targeting the interaction energy component.
+    It uses the physics of phonons (lattice vibrations) as an analogy for how
+    changes propagate through a codebase. Its goal is to refactor code to
+    increase the "speed of sound" (v_s), making the code more maintainable.
     """
     def __init__(
         self,
@@ -53,89 +52,88 @@ class PhononFlowAgent(QuantumAgent):
 
     async def analyze_state(self, state: State) -> Proposal:
         """
-        Analyzes the system's communication patterns and proposes optimizations.
-
-        Args:
-            state: The current state, containing a map of all source code files.
-
-        Returns:
-            A proposal containing a data flow optimization plan.
+        Analyzes the codebase to find the component with the worst "speed of
+        sound" and proposes a refactoring to improve it.
         """
         all_source_files = state.metadata.get("source_code_map", {})
         if not all_source_files:
-            return Proposal(agent_name=self.name, task_type="optimization", payload={}, status=Status.SUCCESS, reason="No source code to analyze.")
+            return Proposal(agent_name=self.name, task_type="refactoring", payload={}, reason="No source code to analyze.")
 
-        # 1. Analyze data flow to find a pattern (simulated)
-        data_flow_description = ops.analyze_data_flow(all_source_files)
+        # 1. Build dependency graph
+        dep_graph = ops.build_dependency_graph(all_source_files)
 
-        if "No clear" in data_flow_description:
-            return Proposal(agent_name=self.name, task_type="optimization", payload={}, status=Status.SUCCESS, reason="No optimizable data flow pattern found.")
+        # 2. Find the "slowest" file in the codebase
+        slowest_file = None
+        lowest_vs = float('inf')
 
-        # 2. Generate an optimization plan using the LLM
-        prompt_spec = prompts.get_prompt("optimize_data_flow")
-        formatted_prompt = prompt_spec.format(data_flow_description=data_flow_description)
+        for file_path, code in all_source_files.items():
+            module_name = file_path.replace('/', '.').replace('.py', '')
+            if module_name not in dep_graph.graph:
+                continue
 
+            coupling = dep_graph.graph.in_degree(module_name) + dep_graph.graph.out_degree(module_name)
+            density = ops.calculate_complexity_density(code)
+            vs = ops.calculate_speed_of_sound(coupling, density)
+
+            if vs < lowest_vs:
+                lowest_vs = vs
+                slowest_file = {"path": file_path, "code": code}
+
+        if not slowest_file:
+            return Proposal(agent_name=self.name, task_type="refactoring", payload={}, reason="Could not identify a file to refactor.")
+
+        # 3. Generate a refactoring proposal for the slowest file
+        prompt_spec = prompts.get_prompt("refactor_for_decoupling")
+        formatted_prompt = prompt_spec.format(file_path=slowest_file["path"], code_block=slowest_file["code"])
         llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
 
         try:
-            plan = ops.parse_optimization_plan(llm_response["content"])
+            proposal_data = ops.parse_refactoring_proposal(llm_response["content"])
+            proposal_data["file_to_update"] = slowest_file["path"]
+
             return Proposal(
                 agent_name=self.name,
-                task_type="optimization",
-                payload={"optimization_plan": plan},
+                task_type="refactoring",
+                payload=proposal_data,
                 status=Status.SUCCESS,
             )
-        except ops.DataFlowError as e:
-            return Proposal(agent_name=self.name, task_type="optimization", payload={}, status=Status.FAILED, reason=f"Failed to generate optimization plan: {e}")
+        except ops.PhononFlowError as e:
+            return Proposal(agent_name=self.name, task_type="refactoring", payload={}, status=Status.FAILED, reason=f"Failed to generate refactoring plan: {e}")
 
     def validate_proposal(self, proposal: Proposal) -> bool:
-        """
-        Validates the optimization plan.
-
-        For now, we just check the structure of the plan. A real system might
-        have formal models to verify the proposed architecture.
-        """
+        """Validates the refactoring proposal."""
         if proposal.status != Status.SUCCESS:
             return False
+        if not proposal.payload:
+            return True # No-op is valid
 
-        if "optimization_plan" not in proposal.payload:
-            return True # An empty proposal is a valid one (no-op)
-
-        try:
-            ops.parse_optimization_plan(json.dumps(proposal.payload["optimization_plan"]))
-            return True
-        except ops.DataFlowError as e:
-            print(f"Data flow optimization plan validation failed: {e}")
-            return False
+        return "refactored_code" in proposal.payload and "file_to_update" in proposal.payload
 
     def execute(self, proposal: Proposal) -> Action:
         """
-        Executes the proposal by calculating the interaction energy reduction.
+        Executes the proposal by calculating the interaction energy reduction based
+        on the quality of the proposed refactoring.
         """
-        if "optimization_plan" not in proposal.payload:
-            return Action(agent_id=self.agent_id, data={}, status=Status.SUCCESS)
+        if not proposal.payload:
+            return Action(task_id=proposal.id, agent_name=self.name, action_taken=False, status=Status.SUCCESS, result={})
 
-        plan = proposal.payload["optimization_plan"]
+        refactored_code = proposal.payload["refactored_code"]
 
-        # 1. Calculate the reduction in interaction energy.
-        # This is a heuristic based on the LLM's stated expected outcome.
-        # E.g., "Reduces API response time by 50%"
-        outcome_text = plan.get("expected_outcome", "")
+        # Heuristic: Interaction energy reduction is proportional to the "quality"
+        # (speed of sound) of the newly proposed code.
+        # We assume coupling remains similar for this heuristic, and just measure density.
+        new_density = ops.calculate_complexity_density(refactored_code)
 
-        # Simple regex to extract a percentage improvement
-        match = re.search(r'(\d+)%', outcome_text)
-        if match:
-            percent_improvement = float(match.group(1))
-        else:
-            percent_improvement = 0.0
+        # Assume average coupling for the heuristic calculation of v_s
+        new_vs = ops.calculate_speed_of_sound(coupling=5.0, density=new_density)
 
-        # The reduction in interaction energy is proportional to the improvement.
-        # The weight `w_data_flow_efficiency` would be defined in the calculator's config.
-        energy_reduction = self.energy_calculator.config.get("w_data_flow_efficiency", 1.0) * percent_improvement
+        # The energy of the change is analogous to h-bar * omega = h-bar * v_s * k
+        # We'll treat "k" (wavenumber) as a constant, so energy is proportional to v_s.
+        w_maintainability = self.energy_calculator.config.get("w_maintainability", 5.0)
+        energy_reduction = w_maintainability * new_vs
 
-        # 2. Create the action
         action_data = {
-            "optimization_plan": plan,
+            "refactoring_plan": proposal.payload,
             "energy_impact": {
                 "interaction": -energy_reduction
             }

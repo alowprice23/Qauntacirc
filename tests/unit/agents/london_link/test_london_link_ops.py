@@ -1,45 +1,43 @@
 import pytest
 from agents.london_link.ops import (
-    analyze_dependencies,
-    scan_for_vulnerabilities,
-    generate_sbom,
-    parse_optimization_plan,
-    DependencyError,
+    build_dependency_graph,
+    calculate_attraction_potential,
+    parse_refactoring_proposal,
+    LondonLinkError,
 )
 
-def test_analyze_dependencies():
-    content = "requests==2.25.0\n# comment\npydantic>=1.8"
-    deps = analyze_dependencies(content)
-    assert len(deps) == 2
-    assert deps[0]["name"] == "requests"
-    assert deps[1]["name"] == "pydantic"
+def test_build_dependency_graph():
+    file_map = {
+        "src/main.py": "import src.utils\nimport src.services.api",
+        "src/utils.py": "import os",
+        "src/services/api.py": "import src.utils"
+    }
+    graph = build_dependency_graph(file_map)
+    assert "src.main" in graph.graph
+    assert "src.utils" in graph.graph
+    assert "src.services.api" in graph.graph
+    assert graph.graph.has_edge("src.main", "src.utils")
+    assert graph.graph.has_edge("src.main", "src.services.api")
+    assert graph.graph.has_edge("src.services.api", "src.utils")
 
-def test_scan_for_vulnerabilities():
-    deps = [{"name": "requests", "version": "2.25.0"}]
-    report = scan_for_vulnerabilities(deps)
-    assert "CVE-2023-1234" in report
+def test_calculate_attraction_potential():
+    # High distance -> low attraction
+    low_attraction = calculate_attraction_potential(r=10, c6=100)
+    # Low distance -> high attraction
+    high_attraction = calculate_attraction_potential(r=2, c6=100)
+    assert low_attraction > high_attraction # Potential is negative
+    assert calculate_attraction_potential(r=1, c6=100) == -100.0
 
-    deps_safe = [{"name": "requests", "version": "2.26.0"}]
-    report_safe = scan_for_vulnerabilities(deps_safe)
-    assert "No known vulnerabilities found" in report_safe
+def test_parse_refactoring_proposal_success():
+    llm_output = '{"refactored_code": "new code", "explanation": "because", "refactored_module_path": "src/a.py"}'
+    proposal = parse_refactoring_proposal(llm_output)
+    assert proposal["refactored_code"] == "new code"
+    assert proposal["explanation"] == "because"
 
-def test_generate_sbom():
-    deps = [{"name": "requests", "version": "2.25.0"}]
-    sbom = generate_sbom(deps)
-    assert sbom["bomFormat"] == "CycloneDX"
-    assert len(sbom["components"]) == 1
-    assert sbom["components"][0]["name"] == "requests"
+def test_parse_refactoring_proposal_invalid_json():
+    with pytest.raises(LondonLinkError, match="Failed to decode"):
+        parse_refactoring_proposal("not json")
 
-def test_parse_optimization_plan_success():
-    llm_output = '{"optimization_actions": [{"package": "requests"}]}'
-    plan = parse_optimization_plan(llm_output)
-    assert len(plan) == 1
-    assert plan[0]["package"] == "requests"
-
-def test_parse_optimization_plan_invalid_json():
-    with pytest.raises(DependencyError, match="Failed to decode"):
-        parse_optimization_plan("not json")
-
-def test_parse_optimization_plan_missing_keys():
-    with pytest.raises(DependencyError, match="missing 'optimization_actions' list"):
-        parse_optimization_plan('{"other_key": []}')
+def test_parse_refactoring_proposal_missing_keys():
+    with pytest.raises(LondonLinkError, match="missing required keys"):
+        parse_refactoring_proposal('{"refactored_code": ""}')

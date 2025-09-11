@@ -1,57 +1,52 @@
 # agents/phonon_flow/prompts.py
 """
-Prompts for the PhononFlow Agent, which optimizes data flow and
-communication patterns between system components.
+Prompts for the PhononFlow Agent, which optimizes code structure to improve
+the "speed of sound" in the codebase, enhancing maintainability.
 """
 
 from agents.base.prompts import PromptSpec
 
-# V1 for generating a data flow optimization plan.
-OPTIMIZE_DATA_FLOW_V1 = PromptSpec(
-    name="phonon_flow_optimize_data_flow",
+# V1 for refactoring a file to reduce coupling and complexity.
+REFACTOR_FOR_DECOUPLING_V1 = PromptSpec(
+    name="phonon_flow_refactor_for_decoupling",
     version="1.0",
     template="""\
-You are a principal engineer specializing in distributed systems and high-performance data pipelines. Your task is to analyze the communication pattern between system components and propose an optimization.
+You are an expert software architect who specializes in creating clean, maintainable, and loosely-coupled code. Your task is to refactor the following Python code to improve its structure.
 
-System Components and Data Flow Description:
-"{data_flow_description}"
+File to Refactor: `{file_path}`
 
-Optimization Guidelines:
-1.  **Efficiency**: Suggest changes that reduce latency, minimize data transfer, or decrease resource consumption.
-2.  **Patterns**: Consider patterns like caching, message queues (e.g., RabbitMQ, Kafka), asynchronous communication, batching, or using more efficient data serialization formats (e.g., Protobuf, Avro).
-3.  **Reliability**: The proposed solution should be reliable and include considerations for error handling and retries.
-4.  **Trade-offs**: Clearly state the trade-offs of your proposed solution (e.g., increased complexity, eventual consistency).
+Code Block:
+```python
+{code_block}
+```
+
+Refactoring Goals:
+1.  **Reduce Coupling**: Minimize dependencies on other modules. Can you extract interfaces, use dependency injection, or introduce events to decouple this component?
+2.  **Increase Cohesion / Reduce Complexity**: Ensure the code in this file has a single, well-defined responsibility. If it's doing too much, suggest how it could be broken down into smaller, more focused components.
+3.  **No Semantic Changes**: The public API and behavior of the refactored code must remain the same.
 
 Output Format:
 Provide the output as a JSON object with the following structure:
-- "analysis": A brief analysis of the current data flow's weaknesses.
-- "proposed_pattern": The name of the new pattern you are suggesting (e.g., "Asynchronous Message Queue with RabbitMQ").
-- "implementation_plan": A high-level, step-by-step plan to implement the change.
-- "expected_outcome": The expected performance improvement (e.g., "Reduces API response time by 50% for this operation").
+- "refactored_code": The complete, refactored Python code for the file.
+- "explanation": A brief explanation of the changes you made and how they improve the code's structure (specifically addressing coupling and complexity).
 
 Example:
-Description: "Component A makes a synchronous HTTP GET request to Component B for user data every time a user logs in. Component B fetches this data from a slow legacy database. This is causing high login latency."
+File: `src/processing.py`
+Code: `import db; import api; def process_data(): data = db.fetch(); api.send(data)`
 
 Output:
 {{
-  "analysis": "The synchronous HTTP call coupled with a slow database lookup creates a major performance bottleneck at login.",
-  "proposed_pattern": "Introduce a Redis cache between Component B and the database.",
-  "implementation_plan": [
-    "Deploy a Redis instance.",
-    "Modify Component B to first check the Redis cache for user data.",
-    "If data is not in the cache, fetch from the database and populate the cache.",
-    "Set a reasonable TTL (e.g., 1 hour) for the cached data."
-  ],
-  "expected_outcome": "Reduces P95 login latency by over 80% by serving most requests from the fast in-memory cache."
+  "refactored_code": "class DataProcessor:\\n  def __init__(self, fetcher, sender):\\n    self.fetcher = fetcher\\n    self.sender = sender\\n\\n  def process(self):\\n    data = self.fetcher.fetch()\\n    self.sender.send(data)",
+  "explanation": "I used dependency injection to decouple the DataProcessor from the concrete `db` and `api` modules. It now depends on abstractions (a fetcher and a sender), making it more reusable and easier to test."
 }}
 
-Now, generate the optimization plan for the provided data flow description.
+Now, refactor the provided code block.
 """,
-    variables=["data_flow_description"]
+    variables=["file_path", "code_block"]
 )
 
 PROMPT_REGISTRY = {
-    "optimize_data_flow": { "1.0": OPTIMIZE_DATA_FLOW_V1 }
+    "refactor_for_decoupling": { "1.0": REFACTOR_FOR_DECOUPLING_V1 }
 }
 
 def get_prompt(name: str, version: str = "latest") -> PromptSpec:

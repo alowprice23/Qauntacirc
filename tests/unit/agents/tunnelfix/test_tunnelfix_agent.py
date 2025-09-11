@@ -47,12 +47,26 @@ def initial_state():
 
 @pytest.mark.asyncio
 async def test_analyze_state_success(tunnelfix_agent, initial_state):
+    # Mock the benchmark to return deterministic values, ensuring perf_improvement > 0
+    tunnelfix_agent.benchmark = MagicMock()
+    tunnelfix_agent.benchmark.run.side_effect = [
+        0.02,  # Baseline performance
+        0.01   # Optimized performance
+    ]
+
     proposal = await tunnelfix_agent.analyze_state(initial_state)
+
     assert proposal.status == "SUCCESS"
     assert "optimizations" in proposal.payload
-    # This is tricky to assert because of the random noise in the benchmark
-    # but we can check that the structure is correct.
-    assert isinstance(proposal.payload["optimizations"], dict)
+    assert len(proposal.payload["optimizations"]) == 1, "Should find exactly one optimization"
+
+    opt_key = list(proposal.payload["optimizations"].keys())[0]
+    assert opt_key == "src/a.py"
+
+    opt_data = proposal.payload["optimizations"][opt_key]
+    assert opt_data["performance_improvement"] == pytest.approx(0.01)
+    assert "tunneling_probability" in opt_data
+    assert 0 <= opt_data["tunneling_probability"] <= 1.0
 
 def test_execute(tunnelfix_agent):
     proposal = AgentTask(
@@ -61,7 +75,8 @@ def test_execute(tunnelfix_agent):
         payload={
             "optimizations": {
                 "src/a.py": {
-                    "performance_improvement": 0.01
+                    "performance_improvement": 0.01,
+                    "tunneling_probability": 0.5
                 }
             }
         },

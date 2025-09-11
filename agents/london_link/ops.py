@@ -1,83 +1,58 @@
-# agents/london_link/ops.py
-"""
-Operations for the LondonLink Agent.
-
-This module provides utilities for parsing dependency files, simulating
-vulnerability scans, generating SBOMs, and parsing optimization plans.
-"""
-
+import ast
 import json
-import re
-from typing import Dict, List, Any
+import math
+import networkx as nx
+from typing import Dict, List, Tuple, Any
 
-class DependencyError(Exception):
-    """Custom exception for errors during dependency analysis."""
+from core.dependency_graph import DependencyGraph
+from agents.base import ops as base_ops
+
+class LondonLinkError(Exception):
     pass
 
-def analyze_dependencies(requirements_content: str) -> List[Dict[str, str]]:
-    """
-    Parses a requirements.txt-style file content into a structured list.
-    """
-    dependencies = []
-    lines = requirements_content.splitlines()
-    for line in lines:
-        line = line.strip()
-        if line and not line.startswith('#'):
-            match = re.match(r'([a-zA-Z0-9_-]+)\s*([<>=!~]+)\s*([a-zA-Z0-9_.-]+)', line)
-            if match:
-                name, spec, version = match.groups()
-                dependencies.append({"name": name, "version": version, "specifier": spec})
-            else:
-                dependencies.append({"name": line, "version": "any", "specifier": ""})
-    return dependencies
+# Copied from PhononFlow - in a real system, this would be in a shared location.
+class ImportVisitor(ast.NodeVisitor):
+    def __init__(self):
+        self.imports = set()
+    def visit_Import(self, node: ast.Import):
+        for alias in node.names:
+            self.imports.add(alias.name)
+    def visit_ImportFrom(self, node: ast.ImportFrom):
+        if node.module:
+            self.imports.add(node.module)
 
-_VULNERABILITY_DB = {
-    "requests": {
-        "2.25.0": {"id": "CVE-2023-1234", "severity": "High", "summary": "Request smuggling vulnerability"},
-    }
-}
+def build_dependency_graph(file_map: Dict[str, str]) -> DependencyGraph:
+    dependencies: List[Tuple[str, str]] = []
+    path_to_module = {path: path.replace('/', '.').replace('.py', '') for path in file_map}
+    all_modules = set(path_to_module.values())
+    for file_path, code in file_map.items():
+        try:
+            tree = ast.parse(code)
+            visitor = ImportVisitor()
+            visitor.visit(tree)
+            current_module = path_to_module[file_path]
+            for imp in visitor.imports:
+                if imp in all_modules:
+                    if current_module != imp:
+                        dependencies.append((current_module, imp))
+        except SyntaxError:
+            continue
+    return DependencyGraph(list(all_modules), dependencies)
 
-def scan_for_vulnerabilities(dependencies: List[Dict[str, str]]) -> str:
+def calculate_attraction_potential(r, c6):
     """
-    Scans a list of dependencies for known vulnerabilities.
+    Calculates the London dispersion force potential V(r) = -C6 / r^6.
     """
-    vulnerabilities = []
-    for dep in dependencies:
-        if dep["name"] in _VULNERABILITY_DB:
-            for version, vuln in _VULNERABILITY_DB[dep["name"]].items():
-                if dep["version"] == version:
-                    vulnerabilities.append(
-                        f"- Package: {dep['name']}, Version: {dep['version']}, ID: {vuln['id']}, "
-                        f"Severity: {vuln['severity']}, Summary: {vuln['summary']}"
-                    )
+    if r == 0:
+        return -float('inf') # Infinite attraction at zero distance
+    return -c6 / (r**6)
 
-    if not vulnerabilities:
-        return "No known vulnerabilities found."
-
-    return "\n".join(vulnerabilities)
-
-def generate_sbom(dependencies: List[Dict[str, str]]) -> Dict[str, Any]:
-    """
-    Generates a Software Bill of Materials (SBOM) in a simplified format.
-    """
-    return {
-        "bomFormat": "CycloneDX",
-        "specVersion": "1.4",
-        "version": 1,
-        "components": [
-            {"type": "library", "name": d["name"], "version": d["version"]}
-            for d in dependencies
-        ]
-    }
-
-def parse_optimization_plan(llm_output: str) -> List[Dict[str, str]]:
-    """
-    Parses the JSON output from the LLM into a list of optimization actions.
-    """
+def parse_refactoring_proposal(llm_output: str) -> Dict[str, str]:
+    """Parses the JSON output from the refactoring prompt."""
     try:
         data = json.loads(llm_output)
-        if "optimization_actions" not in data or not isinstance(data["optimization_actions"], list):
-            raise DependencyError("LLM output is missing 'optimization_actions' list.")
-        return data["optimization_actions"]
+        if "refactored_code" not in data or "explanation" not in data:
+            raise LondonLinkError("LLM output is missing required keys.")
+        return data
     except json.JSONDecodeError:
-        raise DependencyError("Failed to decode LLM output as JSON.")
+        raise LondonLinkError("Failed to decode LLM output as JSON.")

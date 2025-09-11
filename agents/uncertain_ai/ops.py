@@ -15,42 +15,36 @@ class RiskAnalysisError(Exception):
     """Custom exception for errors during risk analysis."""
     pass
 
-def calculate_risk_bound(num_tests: int, epsilon: float = 0.05) -> float:
-    """
-    Calculates an upper bound on the failure probability using a Chernoff-like bound.
-    """
-    if num_tests == 0:
-        return 1.0 # Maximum uncertainty
-
-    # P(error) <= exp(-2 * n * epsilon^2)
-    bound = math.exp(-2 * num_tests * epsilon**2)
-    return bound
-
 def quantify_uncertainty(metrics: Dict[str, float], num_tests: int) -> float:
     """
-    Quantifies the uncertainty of a code artifact based on various metrics
-    and the number of tests.
+    Quantifies the uncertainty of a code artifact using an analogy to the
+    Heisenberg Uncertainty Principle (Δx * Δp >= h_bar / 2), where h_bar is
+    the reduced Planck constant.
+
+    In this analogy:
+    - Δx (uncertainty in "position") represents structural uncertainty,
+      proxied by cyclomatic complexity.
+    - Δp (uncertainty in "momentum") represents behavioral uncertainty,
+      which is inversely related to the number of tests.
     """
-    # Base uncertainty from risk bound
-    risk_bound = calculate_risk_bound(num_tests)
+    # Δx: Structural uncertainty, modeled using cyclomatic complexity.
+    # We use a logarithmic scale to dampen the effect of very high complexity
+    # values, preventing them from dominating the score.
+    complexity = metrics.get('cyclomatic_complexity', 1.0)
+    delta_x = math.log1p(complexity)
 
-    # Other metrics can modulate the score
-    w_complexity = 0.2
-    w_confidence = 0.2
+    # Δp: Behavioral uncertainty, modeled as being inversely proportional to the
+    # number of tests. Adding 1 to num_tests avoids division by zero.
+    delta_p = 1.0 / (1.0 + num_tests)
 
-    complexity = metrics.get('cyclomatic_complexity', 0)
-    llm_confidence = metrics.get('llm_confidence', 1.0)
+    # The uncertainty score is modeled as the product of the two uncertainties,
+    # scaled by a constant factor to keep it within a typical [0, 1] range.
+    # This product, Δx * Δp, is our analog for the uncertainty principle.
+    scaling_factor = 0.25
+    uncertainty_score = scaling_factor * delta_x * delta_p
 
-    norm_complexity = min(complexity / 20.0, 1.0)
-    inv_confidence = 1.0 - llm_confidence
-
-    # Combine risk bound with other metrics
-    uncertainty_score = (
-        0.6 * risk_bound +
-        w_complexity * norm_complexity +
-        w_confidence * inv_confidence
-    )
-
+    # The final score is clamped to the [0, 1] range to ensure it's a
+    # well-behaved metric.
     return max(0.0, min(1.0, uncertainty_score))
 
 

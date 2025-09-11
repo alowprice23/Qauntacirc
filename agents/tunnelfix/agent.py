@@ -53,35 +53,50 @@ class TunnelFixAgent(QuantumAgent):
         if not code_files:
             return Proposal(agent_name=self.name, task_type="optimization", payload={}, status=Status.SUCCESS, reason="No code files to analyze.")
 
-        optimizations = {}
+        proposals = []
         for file_path, content in code_files.items():
-            if file_path.startswith("src/"):
-                # 1. Get baseline performance
-                baseline_perf = self.benchmark.run(content)
+            if not file_path.startswith("src/"):
+                continue
 
-                # 2. Propose optimization
-                prompt = prompts.get_prompt("generate_optimization").format(code_block=content)
-                response = await self.llm_client.complete({"prompt": prompt})
+            # 1. Propose an optimization via LLM
+            prompt = prompts.get_prompt("generate_optimization").format(code_block=content)
+            response = await self.llm_client.complete({"prompt": prompt})
 
-                try:
-                    refactored_code = ops.parse_optimization_proposal(response["content"])
-                except ops.OptimizationError:
-                    continue
+            try:
+                refactored_code = ops.parse_optimization_proposal(response["content"])
+            except ops.OptimizationError:
+                continue
 
-                # 3. "Verify" optimization
-                optimized_perf = self.benchmark.run(refactored_code)
+            # 2. Calculate the physics-based properties of the proposal
+            barrier_width = ops.calculate_barrier_width(content)
+            kappa = ops.calculate_kappa(content, refactored_code)
+            tunneling_prob = ops.calculate_tunneling_probability(kappa, barrier_width)
 
-                if optimized_perf < baseline_perf:
-                    optimizations[file_path] = {
-                        "original_code": content,
-                        "refactored_code": refactored_code,
-                        "performance_improvement": baseline_perf - optimized_perf,
-                    }
+            # 3. Benchmark the performance to see if the optimization is valid
+            baseline_perf = self.benchmark.run(content)
+            optimized_perf = self.benchmark.run(refactored_code)
+            perf_improvement = baseline_perf - optimized_perf
+
+            # We only consider successful optimizations
+            if perf_improvement > 0:
+                proposals.append({
+                    "file_path": file_path,
+                    "original_code": content,
+                    "refactored_code": refactored_code,
+                    "performance_improvement": perf_improvement,
+                    "tunneling_probability": tunneling_prob,
+                })
+
+        # 4. Select the best proposal based on tunneling probability
+        if not proposals:
+            return Proposal(agent_name=self.name, task_type="optimization", payload={}, status=Status.SUCCESS, reason="No viable optimizations found.")
+
+        best_proposal = max(proposals, key=lambda p: p["tunneling_probability"])
 
         return Proposal(
             agent_name=self.name,
             task_type="optimization",
-            payload={"optimizations": optimizations},
+            payload={"optimizations": {best_proposal["file_path"]: best_proposal}},
             status=Status.SUCCESS
         )
 
@@ -96,12 +111,20 @@ class TunnelFixAgent(QuantumAgent):
     def execute(self, proposal: Proposal) -> Action:
         """
         Executes the proposal by calculating the energy impact of the optimization.
+        The energy reduction is scaled by the performance improvement and the
+        tunneling probability, rewarding high-risk, high-reward optimizations.
         """
         optimizations = proposal.payload.get("optimizations", {})
-        total_perf_improvement = sum(opt["performance_improvement"] for opt in optimizations.values())
+        if not optimizations:
+            return Action(task_id=proposal.id, agent_name=self.name, action_taken=False, status=Status.SUCCESS, result={})
 
-        # Debt energy reduction is proportional to performance improvement
-        debt_energy_reduction = -total_perf_improvement * self.energy_calculator.config.get("w_performance", 100.0)
+        # Since we only have one optimization, we can get it directly
+        best_optimization = list(optimizations.values())[0]
+        perf_improvement = best_optimization.get("performance_improvement", 0)
+        tunneling_prob = best_optimization.get("tunneling_probability", 0)
+
+        # Debt energy reduction is scaled by performance and probability
+        debt_energy_reduction = -1 * perf_improvement * tunneling_prob * self.energy_calculator.config.get("w_performance", 100.0)
 
         action_data = {
             "optimizations": optimizations,
