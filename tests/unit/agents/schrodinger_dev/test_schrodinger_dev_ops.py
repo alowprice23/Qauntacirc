@@ -37,8 +37,8 @@ def test_create_code_and_proof_files():
 
     expected_paths = [
         "src/generated/t01_code.py",
-        "tests/generated/test_t01_code.py"
+        "proofs/generated/prove_t01_code.py"
     ]
     assert set(file_map.keys()) == set(expected_paths)
-    assert file_map[expected_paths[0]] == code
-    assert file_map[expected_paths[1]] == proof
+    assert file_map["src/generated/t01_code.py"] == code
+    assert file_map["proofs/generated/prove_t01_code.py"] == proof

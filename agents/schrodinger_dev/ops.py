@@ -35,6 +35,31 @@ def load_code_template(template_name: str) -> Optional[str]:
     with open(template_file, "r") as f:
         return f.read()
 
+def extract_multiple_python_code(llm_output: str) -> list[str]:
+    """
+    Extracts multiple Python code blocks from the LLM's markdown-formatted output.
+
+    Args:
+        llm_output: The raw string output from the LLM.
+
+    Returns:
+        A list of extracted Python code strings.
+    """
+    # Regex to find all python markdown blocks
+    pattern = re.compile(r"```python\n(.*?)```", re.DOTALL)
+    matches = pattern.findall(llm_output)
+    if matches:
+        return [match.strip() for match in matches]
+
+    # Fallback for simple code blocks
+    pattern = re.compile(r"```\n(.*?)```", re.DOTALL)
+    matches = pattern.findall(llm_output)
+    if matches:
+        return [match.strip() for match in matches]
+
+    return []
+
+
 def extract_python_code(llm_output: str) -> str:
     """
     Extracts a Python code block from the LLM's markdown-formatted output.
@@ -85,7 +110,7 @@ def create_code_and_proof_files(code_skeleton: str, proof_skeleton: str, task_id
 
     Args:
         code_skeleton: The generated Python code for the implementation.
-        proof_skeleton: The generated Python code for the tests.
+        proof_skeleton: The generated Python code for the formal proof.
         task_id: The ID of the task, used for naming files.
 
     Returns:
@@ -94,6 +119,6 @@ def create_code_and_proof_files(code_skeleton: str, proof_skeleton: str, task_id
     # A real implementation might have a more sophisticated file naming strategy.
     file_map = {
         f"src/generated/{task_id.lower()}_code.py": code_skeleton,
-        f"tests/generated/test_{task_id.lower()}_code.py": proof_skeleton,
+        f"proofs/generated/prove_{task_id.lower()}_code.py": proof_skeleton,
     }
     return file_map
