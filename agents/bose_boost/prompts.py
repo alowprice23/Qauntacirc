@@ -1,50 +1,39 @@
-# agents/bose_boost/prompts.py
 """
-Prompts for the BoseBoost Agent, which optimizes code performance by
-refactoring identified bottlenecks.
+Prompts for the BoseBoost Agent.
 """
-
 from agents.base.prompts import PromptSpec
 
-# V1 for generating an optimized version of a code block.
-OPTIMIZE_CODE_V1 = PromptSpec(
-    name="bose_boost_optimize_code",
+GENERATE_SCALING_PLAN_V1 = PromptSpec(
+    name="bose_boost_generate_scaling_plan",
     version="1.0",
     template="""\
-You are a world-class expert in high-performance computing and Python optimization. Your task is to refactor the given code block to improve its performance, based on the provided profiling data.
+You are an expert DevOps engineer. Your task is to analyze the following deployment plan and provide a summary of the scaling strategy.
 
-Original Code Block (`{file_path}`):
-```python
-{code_block}
+Deployment Manifest:
+```yaml
+{deployment_manifest}
 ```
 
-Profiling Data / Bottleneck Description:
-"{profiling_summary}"
-
-Optimization Rules:
-1.  **Algorithmic Improvement**: Prioritize improvements to the underlying algorithm (e.g., changing from O(n^2) to O(n log n)).
-2.  **Efficient Data Structures**: Use more efficient data structures where appropriate (e.g., sets for fast lookups, deques for fast appends/pops).
-3.  **Resource Awareness**: Consider both CPU and memory performance. The new code should not use excessively more memory unless it provides a significant speedup.
-4.  **Preserve Functionality**: The optimized code must produce the exact same output as the original code for all valid inputs.
-5.  **Clarity**: The refactored code should remain clear and readable. Add comments to explain complex optimizations.
+Analysis Guidelines:
+1.  **Summarize the Replica Count**: State the number of replicas for the deployment.
+2.  **Explain the Rationale**: Briefly explain that the replica count was determined by a model based on the task's energy (complexity).
+3.  **Suggest Monitoring**: Recommend key metrics to monitor for this deployment (e.g., CPU, memory, latency).
 
 Output Format:
-Provide the output as a JSON object with the following structure:
-- "file_to_modify": The path of the file that should be changed.
-- "original_code": The exact code block to be replaced.
-- "optimized_code": The new, high-performance version of the code.
-- "explanation": A brief explanation of the optimization strategy you used.
+Provide the output as a JSON object with the following keys: "summary", "rationale", "monitoring_recommendations".
 
 Example:
-... (A full JSON example would be too verbose, but the structure is defined above)
+...
 
-Now, generate the optimized code and refactoring plan.
+Now, analyze the provided deployment manifest.
 """,
-    variables=["file_path", "code_block", "profiling_summary"]
+    variables=["deployment_manifest"]
 )
 
 PROMPT_REGISTRY = {
-    "optimize_code": { "1.0": OPTIMIZE_CODE_V1 }
+    "generate_scaling_plan": {
+        "1.0": GENERATE_SCALING_PLAN_V1
+    }
 }
 
 def get_prompt(name: str, version: str = "latest") -> PromptSpec:

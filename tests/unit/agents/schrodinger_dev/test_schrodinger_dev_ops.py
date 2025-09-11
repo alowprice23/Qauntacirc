@@ -9,7 +9,7 @@ from agents.schrodinger_dev.ops import (
 
 def test_load_code_template():
     template = load_code_template("default_function")
-    assert template == "def {function_name}():\n    ..."
+    assert template == "def {{function_name}}():\n    \"\"\"\n    {{docstring}}\n    \"\"\"\n    ...\n"
     assert load_code_template("nonexistent") is None
 
 @pytest.mark.parametrize("llm_output, expected_code", [

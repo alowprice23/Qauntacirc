@@ -12,7 +12,7 @@ from agents.base.agent import QuantumAgent
 from core.state_space import StateSpace
 from core.energy_calculator import EnergyCalculator
 from core.types import Proposal, State, Action, Status
-from monitoring.metrics import MetricsLogger
+from monitoring.metrics import QuantumMetrics as MetricsLogger
 from agents.base.policies import PolicyEngine
 from agents.base.memory import AgentMemory
 from llm.client import LLMClient
@@ -59,9 +59,9 @@ class LondonLinkAgent(QuantumAgent):
         Returns:
             A proposal containing a dependency optimization plan.
         """
-        dependency_content = state.get("dependency_file_content")
+        dependency_content = state.metadata.get("dependency_file_content")
         if not dependency_content:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.SUCCESS, reason="No dependency file content found.")
+            return Proposal(agent_name=self.name, task_type="dependency_optimization", payload={}, status=Status.SUCCESS, reason="No dependency file content found.")
 
         # 1. Analyze the dependency file
         dependencies = ops.analyze_dependencies(dependency_content)
@@ -81,24 +81,25 @@ class LondonLinkAgent(QuantumAgent):
         try:
             plan = ops.parse_optimization_plan(llm_response["content"])
             return Proposal(
-                agent_id=self.agent_id,
-                data={"optimization_plan": plan, "dependencies": dependencies},
-                status=Status.SUCCESS
+                agent_name=self.name,
+                task_type="dependency_optimization",
+                payload={"optimization_plan": plan, "dependencies": dependencies},
+                status=Status.SUCCESS,
             )
         except ops.DependencyError as e:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.FAILED, reason=f"Failed to generate optimization plan: {e}")
+            return Proposal(agent_name=self.name, task_type="dependency_optimization", payload={}, status=Status.FAILED, reason=f"Failed to generate optimization plan: {e}")
 
     def validate_proposal(self, proposal: Proposal) -> bool:
         """Validates the dependency optimization plan."""
         if proposal.status != Status.SUCCESS:
             return False
 
-        if "optimization_plan" not in proposal.data:
+        if "optimization_plan" not in proposal.payload:
             return True
 
         try:
             # Check the structure of the plan
-            plan = proposal.data["optimization_plan"]
+            plan = proposal.payload["optimization_plan"]
             for item in plan:
                 if not all(k in item for k in ["package", "current_version", "recommended_version", "reason"]):
                     return False
@@ -111,11 +112,11 @@ class LondonLinkAgent(QuantumAgent):
         """
         Executes the proposal by generating an SBOM and calculating energy impact.
         """
-        if "optimization_plan" not in proposal.data:
+        if "optimization_plan" not in proposal.payload:
             return Action(agent_id=self.agent_id, data={}, status=Status.SUCCESS)
 
-        plan = proposal.data["optimization_plan"]
-        dependencies = proposal.data["dependencies"]
+        plan = proposal.payload["optimization_plan"]
+        dependencies = proposal.payload["dependencies"]
 
         # 1. Generate an SBOM
         sbom = ops.generate_sbom(dependencies)
@@ -139,7 +140,9 @@ class LondonLinkAgent(QuantumAgent):
         }
 
         return Action(
-            agent_id=self.agent_id,
-            data=action_data,
+            task_id=proposal.id,
+            agent_name=self.name,
+            action_taken=True,
+            result=action_data,
             status=Status.SUCCESS
         )

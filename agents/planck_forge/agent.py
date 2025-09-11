@@ -18,7 +18,7 @@ from agents.base.policies import PolicyEngine
 from agents.base.memory import AgentMemory
 from llm.client import LLMClient
 
-from . import prompts
+from .nl_parser import NLParser
 from . import ops
 
 class PlanckForgeAgent(QuantumAgent):
@@ -50,6 +50,7 @@ class PlanckForgeAgent(QuantumAgent):
             agent_id=agent_id,
         )
         self.llm_client = llm_client
+        self.nl_parser = NLParser(llm_client)
 
     async def analyze_state(self, state: State) -> Proposal:
         """
@@ -65,27 +66,22 @@ class PlanckForgeAgent(QuantumAgent):
         if not requirement_text:
             return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="No requirement text found in state.")
 
-        # 1. Get the appropriate prompt
-        prompt_spec = prompts.get_prompt("decompose_requirement", "latest")
-        formatted_prompt = prompt_spec.format(requirement_text=requirement_text)
-
-        # 2. Call the LLM
-        llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
-
-        if not llm_response.get("content"):
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="LLM failed to provide content.")
-
-        # 3. Parse the LLM output
         try:
-            tasks = ops.parse_llm_output(llm_response["content"])
+            # 1. Use the NLParser to get the structured task data
+            llm_output_str = await self.nl_parser.parse_requirement(requirement_text)
+
+            # 2. Parse the LLM output into TaskQuanta objects
+            tasks = ops.parse_llm_output(llm_output_str)
+
+            # 3. Create a success proposal
             return Proposal(
                 agent_name=self.name,
                 task_type="analysis",
                 payload={"tasks": tasks, "requirement_text": requirement_text},
                 status=Status.SUCCESS
             )
-        except ops.TaskValidationError as e:
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason=f"Failed to parse or validate LLM output: {e}")
+        except (ValueError, ops.TaskValidationError) as e:
+            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason=f"Failed to parse requirement: {e}")
 
     def validate_proposal(self, proposal: Proposal) -> bool:
         """
@@ -126,7 +122,7 @@ class PlanckForgeAgent(QuantumAgent):
 
         # 2. Calculate the static energy impact
         num_tasks = len(tasks)
-        num_dependencies = sum(len(task.get('dependencies', [])) for task in tasks)
+        num_dependencies = sum(len(task.dependencies) for task in tasks)
 
         static_metrics = {
             'cyclomatic_complexity': float(num_tasks),
@@ -140,7 +136,7 @@ class PlanckForgeAgent(QuantumAgent):
             "task_dag": task_dag,
             "original_requirement": proposal.payload["requirement_text"],
             "energy_impact": {
-                "static": static_energy
+                "static": -static_energy
             }
         }
 

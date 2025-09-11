@@ -43,6 +43,8 @@ def levenshtein_distance(s1: str, s2: str) -> int:
 
 class _IdentifierVisitor(ast.NodeTransformer):
     def visit_Name(self, node: ast.Name) -> ast.Name:
+        if node.id in __builtins__:
+            return node
         return ast.Name(id='_var_', ctx=node.ctx)
 
     def visit_arg(self, node: ast.arg) -> ast.arg:
@@ -60,11 +62,9 @@ def normalize_code(code: str) -> str:
     """
     try:
         tree = ast.parse(code)
-        # Replace all identifiers with a placeholder
         tree = _IdentifierVisitor().visit(tree)
         return ast.unparse(tree)
     except (SyntaxError, TypeError):
-        # Fallback for non-python code or code snippets
         code = re.sub(r'#.*', '', code)
         code = re.sub(r'\"\"\"(.*?)\"\"\"', '', code, flags=re.DOTALL)
         code = re.sub(r"'''(.*?)'''", '', code, flags=re.DOTALL)

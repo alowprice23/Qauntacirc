@@ -1,149 +1,79 @@
-# core/energy_calculator.py
-
 """
-Computes the energy of the quantum-mechanical system representation.
-
-The energy function E(S) = α·E_complexity + β·E_coupling + γ·E_constraint + δ·E_debt
-serves as the Hamiltonian for the system, guiding the optimization process.
+Energy Calculator
 """
-
-from __future__ import annotations
-
-import numpy as np
-from typing import Dict, Any, Optional, Tuple
-from functools import lru_cache
-
-from core.types import QCState, EnergyComponents
-from math_utils import annealing, lyapunov
-from core.complexity import ComplexityCalculator
-from core.dependency_graph import DependencyGraph
-from core.constraints import ConstraintValidator
-from core.technical_debt import TechnicalDebtCalculator
-
+from typing import Tuple, Dict
 
 class EnergyCalculator:
-    """
-    Calculates the total energy of a software system's quantum representation.
-
-    This class implements the core energy function, which is a weighted sum of
-    complexity, coupling, constraint, and technical debt components.
-    """
-
-    def __init__(self, alpha: float, beta: float, gamma: float, delta: float):
-        """
-        Initializes the EnergyCalculator with weights for each energy component.
-
-        Args:
-            alpha: Weight for the complexity component.
-            beta: Weight for the coupling component.
-            gamma: Weight for the constraint component.
-            delta: Weight for the debt component.
-        """
+    def __init__(self, alpha: float, beta: float, gamma: float, delta: float, w_code_quality: float = 1.0, w_uncertainty: float = 10.0, w_performance: float = 100.0, w_replicas: float = 1.0, w_data_flow_efficiency: float = 1.0, stability_threshold: float = 50.0, w_vulnerability_fix: float = 20.0):
+        if not all(w >= 0 for w in [alpha, beta, gamma, delta, w_code_quality, w_uncertainty, w_performance, w_replicas, w_data_flow_efficiency, stability_threshold, w_vulnerability_fix]):
+            raise ValueError("Energy weights must be non-negative.")
         self.alpha = alpha
         self.beta = beta
         self.gamma = gamma
         self.delta = delta
-        self.complexity_calculator = ComplexityCalculator()
-        self.constraint_validator = ConstraintValidator()
-        self.debt_calculator = TechnicalDebtCalculator(decay_constant=30)
+        self.w_code_quality = w_code_quality
+        self.w_uncertainty = w_uncertainty
+        self.w_performance = w_performance
+        self.w_replicas = w_replicas
+        self.w_data_flow_efficiency = w_data_flow_efficiency
+        self.stability_threshold = stability_threshold
+        self.w_vulnerability_fix = w_vulnerability_fix
+        self.config = {
+            "alpha": alpha,
+            "beta": beta,
+            "gamma": gamma,
+            "delta": delta,
+            "w_code_quality": w_code_quality,
+            "w_uncertainty": w_uncertainty,
+            "w_performance": w_performance,
+            "w_replicas": w_replicas,
+            "w_data_flow_efficiency": w_data_flow_efficiency,
+            "stability_threshold": stability_threshold,
+            "w_vulnerability_fix": w_vulnerability_fix,
+        }
 
-    def calculate_energy(self, state: QCState) -> Tuple[float, EnergyComponents]:
-        """
-        Computes the total energy and its components for a given system state.
-
-        E(S) = α·E_complexity + β·E_coupling + γ·E_constraint + δ·E_debt
-
-        Args:
-            state: The QCState for which to calculate the energy.
-
-        Returns:
-            A tuple containing the total energy and an EnergyComponents object.
-        """
-        # These will be replaced with actual calculations in later steps
-        e_complexity = getattr(state, 'complexity', self.complexity_calculator.calculate(state.code))
-
-        if hasattr(state, 'coupling'):
-            e_coupling = state.coupling
-        else:
-            modules = list(state.module_dependencies.keys())
-            dependencies = []
-            for mod, deps in state.module_dependencies.items():
-                for dep in deps:
-                    dependencies.append((mod, dep))
-
-            dependency_graph = DependencyGraph(modules, dependencies)
-            e_coupling = dependency_graph.calculate_coupling()
-
-        e_constraint = getattr(state, 'constraints', self.constraint_validator.constraint_energy(state))
-
-        if hasattr(state, 'debt'):
-            e_debt = state.debt
-        else:
-            e_debt = 0
-            for module in state.modules:
-                e_debt += self.debt_calculator.calculate_debt(module)
-
-        total_energy = (self.alpha * e_complexity +
-                        self.beta * e_coupling +
-                        self.gamma * e_constraint +
-                        self.delta * e_debt)
-
-        e_static = e_complexity + e_coupling
-        e_dynamic = 0.0
-        e_interaction = e_constraint + e_debt
-
-        components = EnergyComponents(
-            static=e_static,
-            dynamic=e_dynamic,
-            interaction=e_interaction,
-            complexity=e_complexity,
-            coupling=e_coupling,
-            constraint=e_constraint,
-            debt=e_debt,
-            total=total_energy
+    def calculate_energy(self, state) -> Tuple[float, Dict[str, float]]:
+        components = {
+            "complexity": state.complexity,
+            "coupling": state.coupling,
+            "constraints": state.constraints,
+            "debt": state.debt,
+        }
+        total_energy = (
+            self.alpha * components["complexity"]
+            + self.beta * components["coupling"]
+            + self.gamma * components["constraints"]
+            + self.delta * components["debt"]
         )
         return total_energy, components
 
-    def compute_gradient(self, state: QCState) -> Dict[str, float]:
-        """
-        Computes the gradient of the energy function at a given state.
-        This is a placeholder implementation.
-        """
-        # This is a mock implementation. A real implementation would require
-        # calculating partial derivatives of each energy component.
+    def compute_gradient(self, state) -> Dict[str, float]:
+        # This is a simplified gradient calculation.
+        # A real implementation would involve more complex partial derivatives.
         return {
-            'complexity': self.alpha,
-            'coupling': self.beta,
-            'constraint': self.gamma,
-            'debt': self.delta,
+            "complexity": self.alpha,
+            "coupling": self.beta,
+            "constraint": self.gamma,
+            "debt": self.delta,
         }
 
     def gradient_norm(self, gradient: Dict[str, float]) -> float:
-        """Computes the L2 norm of the gradient."""
-        return np.linalg.norm(list(gradient.values()))
+        return sum(v**2 for v in gradient.values())**0.5
 
     def descent_direction(self, gradient: Dict[str, float]) -> Dict[str, float]:
-        """Computes the descent direction (-gradient)."""
         return {k: -v for k, v in gradient.items()}
 
-    def energy_gradient(self, state: QCState, delta: float = 1e-5) -> np.ndarray:
+    def compute_static_energy(self, static_metrics: Dict[str, float]) -> float:
         """
-        Computes the gradient of the energy function at a given state.
-        This is a simplified version for now.
+        Computes the static energy component based on metrics that do not
+        require a full state simulation (e.g., complexity, coupling).
         """
-        _, components = self.calculate_energy(state)
-        params = np.array([
-            components.complexity,
-            components.coupling,
-            components.constraint,
-            components.debt
-        ])
+        complexity = static_metrics.get('cyclomatic_complexity', 0.0)
+        coupling = static_metrics.get('coupling', 0.0)
 
-        grad = np.zeros_like(params)
-        # This is a mock implementation.
-        grad[0] = self.alpha
-        grad[1] = self.beta
-        grad[2] = self.gamma
-        grad[3] = self.delta
-
-        return grad
+        # Static energy only considers complexity and coupling components.
+        static_energy = (
+            self.alpha * complexity
+            + self.beta * coupling
+        )
+        return static_energy

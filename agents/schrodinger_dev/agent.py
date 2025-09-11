@@ -94,15 +94,20 @@ class SchrodingerDevAgent(QuantumAgent):
 
     async def _generate_for_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
         """Helper to generate code and proof for a single task."""
-        task_id = task["task_id"]
+        task_id = task["id"]
         desc = task["description"]
         ver_criteria = task["verification_criteria"]
+
+        # Determine template based on task description
+        template_name = "default_function"
+        if "class" in desc.lower():
+            template_name = "default_class"
 
         # Generate code skeleton
         code_prompt = prompts.get_prompt("generate_code").format(
             task_description=desc,
             verification_criteria=ver_criteria,
-            template_name="default" # Placeholder
+            template_name=template_name
         )
         code_response = await self.llm_client.complete({"prompt": code_prompt})
         code_skeleton = ops.extract_python_code(code_response["content"])
@@ -183,6 +188,6 @@ class SchrodingerDevAgent(QuantumAgent):
             task_id=proposal.id,
             agent_name=self.name,
             action_taken=True,
-            status=Status.SUCCESS,
-            result=action_data
+            result=action_data,
+            status=Status.SUCCESS
         )

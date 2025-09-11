@@ -13,8 +13,8 @@ from agents.base.agent import QuantumAgent
 from agents.base import ops as base_ops
 from core.state_space import StateSpace
 from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action, Status
-from monitoring.metrics import MetricsLogger
+from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
+from monitoring.metrics import QuantumMetrics as MetricsLogger
 from agents.base.policies import PolicyEngine
 from agents.base.memory import AgentMemory
 from llm.client import LLMClient
@@ -61,11 +61,11 @@ class UncertainAIAgent(QuantumAgent):
         Returns:
             A proposal containing new test cases to reduce uncertainty.
         """
-        schrodinger_dev_output = state.get("schrodinger_dev_output", {})
+        schrodinger_dev_output = state.metadata.get("schrodinger_dev_output", {})
         code_files = schrodinger_dev_output.get("files_to_create", {})
 
         if not code_files:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.SUCCESS, reason="No code files to analyze.")
+            return Proposal(agent_name=self.name, task_type="analysis", payload={}, reason="No code files to analyze.")
 
         analysis_coros = []
         for file_path, content in code_files.items():
@@ -86,8 +86,9 @@ class UncertainAIAgent(QuantumAgent):
             total_uncertainty_reduction += result["uncertainty_reduction"]
 
         return Proposal(
-            agent_id=self.agent_id,
-            data={
+            agent_name=self.name,
+            task_type="analysis",
+            payload={
                 "newly_generated_tests": all_new_tests,
                 "total_uncertainty_reduction": total_uncertainty_reduction
             },
@@ -98,8 +99,8 @@ class UncertainAIAgent(QuantumAgent):
         """Helper to analyze a single code file for risks and generate tests."""
         # 1. Quantify initial uncertainty
         complexity = base_ops.calculate_cyclomatic_complexity(base_ops.parse_to_ast(code_content))
-        initial_metrics = {'cyclomatic_complexity': float(complexity), 'llm_confidence': 0.9} # Assume confidence
-        initial_uncertainty = ops.quantify_uncertainty(initial_metrics)
+        initial_metrics = {'cyclomatic_complexity': float(complexity), 'llm_confidence': 0.9}
+        initial_uncertainty = ops.quantify_uncertainty(initial_metrics, num_tests=0)
 
         # 2. Identify risks with the LLM
         risk_prompt = prompts.get_prompt("identify_risks").format(
@@ -119,14 +120,15 @@ class UncertainAIAgent(QuantumAgent):
 
         new_tests = await asyncio.gather(*test_gen_coros)
 
+        # MOCK: Assume all generated tests pass
+        num_new_tests = len(new_tests)
+
         # 4. Quantify new uncertainty
-        # The new uncertainty is lower because we now have more tests (implicitly)
         final_metrics = {
             'cyclomatic_complexity': float(complexity),
             'llm_confidence': 0.9,
-            'num_identified_risks': 0 # The risks are now covered
         }
-        final_uncertainty = ops.quantify_uncertainty(final_metrics)
+        final_uncertainty = ops.quantify_uncertainty(final_metrics, num_tests=num_new_tests)
 
         return {
             "new_tests": new_tests,
@@ -147,7 +149,7 @@ class UncertainAIAgent(QuantumAgent):
         if proposal.status != Status.SUCCESS:
             return False
 
-        for test_code in proposal.data.get("newly_generated_tests", []):
+        for test_code in proposal.payload.get("newly_generated_tests", []):
             try:
                 base_ops.parse_to_ast(test_code)
             except Exception as e:
@@ -159,21 +161,23 @@ class UncertainAIAgent(QuantumAgent):
         """
         Executes the proposal by calculating the dynamic energy reduction.
         """
-        uncertainty_reduction = proposal.data.get("total_uncertainty_reduction", 0)
+        uncertainty_reduction = proposal.payload.get("total_uncertainty_reduction", 0)
 
         # Dynamic energy change is the reduction in uncertainty.
         # A positive reduction in uncertainty leads to a negative change in energy.
         dynamic_energy_change = -uncertainty_reduction * self.energy_calculator.config.get("w_uncertainty", 10.0)
 
         action_data = {
-            "new_test_cases": proposal.data["newly_generated_tests"],
+            "new_test_cases": proposal.payload["newly_generated_tests"],
             "energy_impact": {
                 "dynamic": dynamic_energy_change
             }
         }
 
         return Action(
-            agent_id=self.agent_id,
-            data=action_data,
-            status=Status.SUCCESS
+            task_id=proposal.id,
+            agent_name=self.name,
+            action_taken=True,
+            status=Status.SUCCESS,
+            result=action_data
         )

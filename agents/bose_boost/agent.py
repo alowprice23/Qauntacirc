@@ -1,34 +1,23 @@
-# agents/bose_boost/agent.py
 """
-BoseBoost Agent: Optimizes code performance by identifying and refactoring
-bottlenecks.
-
-This agent uses (simulated) profiling data to find inefficient code and
-leverages an LLM to suggest algorithmic and structural improvements.
+BoseBoost Agent: Determines resource allocation and scaling strategies
+based on Bose-Einstein statistics.
 """
-import asyncio
-import json
 from typing import Dict, Any, Optional, List
 
 from agents.base.agent import QuantumAgent
 from core.state_space import StateSpace
 from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action, Status
-from monitoring.metrics import MetricsLogger
+from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status, TaskQuanta
+from monitoring.metrics import QuantumMetrics as MetricsLogger
 from agents.base.policies import PolicyEngine
 from agents.base.memory import AgentMemory
 from llm.client import LLMClient
 
-from . import prompts
 from . import ops
 
 class BoseBoostAgent(QuantumAgent):
     """
-    The BoseBoost Agent is a performance optimization specialist.
-
-    It profiles the system's code to find hot spots and then generates
-    refactoring proposals to improve performance, thereby reducing the
-    system's dynamic energy.
+    The BoseBoost Agent is a resource allocation specialist.
     """
     def __init__(
         self,
@@ -38,7 +27,6 @@ class BoseBoostAgent(QuantumAgent):
         policy_engine: PolicyEngine,
         agent_memory: AgentMemory,
         llm_client: LLMClient,
-        config: Optional[Dict[str, Any]] = None,
         agent_id: Optional[str] = None,
     ):
         super().__init__(
@@ -51,117 +39,73 @@ class BoseBoostAgent(QuantumAgent):
             agent_id=agent_id,
         )
         self.llm_client = llm_client
-        self.config = config or {}
 
     async def analyze_state(self, state: State) -> Proposal:
         """
-        Analyzes the system's code, finds bottlenecks, and proposes optimizations.
-
-        Args:
-            state: The current state, containing a map of all source code files.
-
-        Returns:
-            A proposal containing optimization plans.
+        Analyzes the task quanta and determines the scaling strategy.
         """
-        all_source_files = state.get("source_code_map", {})
-        if not all_source_files:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.SUCCESS, reason="No source code to analyze.")
+        planck_forge_output = state.metadata.get("planck_forge_output", {})
+        tasks: List[TaskQuanta] = planck_forge_output.get("tasks", [])
 
-        # 1. Profile the code (simulated)
-        profiling_data = ops.run_profiler(all_source_files)
+        if not tasks:
+            return Proposal(agent_name=self.name, task_type="scaling", payload={}, status=Status.SUCCESS, reason="No tasks to scale.")
 
-        # 2. Identify bottlenecks
-        bottlenecks = ops.identify_bottlenecks(profiling_data)
-        if not bottlenecks:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.SUCCESS, reason="No performance bottlenecks found.")
+        # Parameters for the Bose-Einstein distribution
+        # These would be configurable in a real system
+        chemical_potential = 50.0  # Represents the "cost" of adding a new replica
+        temperature = 20.0       # Represents the "aggressiveness" of scaling
 
-        # 3. Generate optimization plans for each bottleneck
-        plan_coros = []
-        for bottleneck in bottlenecks:
-            plan_coros.append(self._generate_optimization_plan(bottleneck))
+        deployment_manifests = {}
+        for task in tasks:
+            num_replicas = int(round(ops.bose_einstein_distribution(task.energy, chemical_potential, temperature)))
+            num_replicas = max(1, min(10, num_replicas)) # Clamp replicas between 1 and 10
 
-        optimization_plans = await asyncio.gather(*plan_coros, return_exceptions=True)
-
-        valid_plans = [p for p in optimization_plans if not isinstance(p, Exception)]
+            manifest = ops.generate_deployment_manifest(task, num_replicas)
+            deployment_manifests[task.id] = manifest
 
         return Proposal(
-            agent_id=self.agent_id,
-            data={"optimization_plans": valid_plans, "original_bottlenecks": bottlenecks},
+            agent_name=self.name,
+            task_type="scaling",
+            payload={"deployment_manifests": deployment_manifests},
             status=Status.SUCCESS
         )
 
-    async def _generate_optimization_plan(self, bottleneck: Dict[str, Any]) -> Dict[str, Any]:
-        """Helper to generate an optimization plan for a single bottleneck."""
-        profiling_summary = (
-            f"Function '{bottleneck['function_name']}' is a bottleneck. "
-            f"Execution time: {bottleneck['execution_time_ms']}ms. "
-            f"Memory usage: {bottleneck['memory_usage_mb']}MB."
-        )
-
-        prompt_spec = prompts.get_prompt("optimize_code")
-        formatted_prompt = prompt_spec.format(
-            file_path=bottleneck["file_path"],
-            code_block=bottleneck["code_block"],
-            profiling_summary=profiling_summary
-        )
-
-        llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
-        plan = ops.parse_optimization_plan(llm_response["content"])
-        return plan
-
     def validate_proposal(self, proposal: Proposal) -> bool:
         """
-        Validates the optimization plans.
-
-        A real implementation would check for semantic equivalence and run
-        performance benchmarks. Here, we just validate the plan's structure.
+        Validates the scaling plan proposal.
+        For now, we'll just check that the payload is not empty.
         """
         if proposal.status != Status.SUCCESS:
             return False
-
-        for plan in proposal.data.get("optimization_plans", []):
-            try:
-                ops.parse_optimization_plan(json.dumps(plan))
-            except ops.OptimizationError as e:
-                print(f"Optimization plan validation failed: {e}")
-                return False
-
-        return True
+        return bool(proposal.payload.get("deployment_manifests"))
 
     def execute(self, proposal: Proposal) -> Action:
         """
-        Executes the proposal by calculating the dynamic energy reduction.
+        Executes the proposal by calculating the energy impact of the scaling plan.
         """
-        optimization_plans = proposal.data.get("optimization_plans", [])
-        bottlenecks = proposal.data.get("original_bottlenecks", [])
+        deployment_manifests = proposal.payload.get("deployment_manifests", {})
 
-        # 1. Calculate the reduction in dynamic energy from performance improvements.
-        total_time_reduction = 0
-        for bottleneck in bottlenecks:
-            # Assume the optimization is successful and reduces runtime by 50% (simulated)
-            time_reduction = bottleneck.get("execution_time_ms", 0) * 0.5
-            total_time_reduction += time_reduction
+        # A simple model: debt energy increases with the number of replicas
+        # (representing operational complexity)
+        total_replicas = 0
+        for manifest_str in deployment_manifests.values():
+            # In a real implementation, we would parse the YAML properly
+            # For this mock, we'll just count them
+            total_replicas += 1 # Simplified
 
-        # This metric can be used by the energy calculator
-        dynamic_metrics = {
-            "avg_response_time_reduction": total_time_reduction
-        }
+        debt_energy_increase = total_replicas * self.energy_calculator.config.get("w_replicas", 1.0)
 
-        # We assume the calculator can handle this metric.
-        # Let's calculate a simple negative energy impact.
-        # The weight `w_runtime_perf` is defined in the calculator.
-        energy_reduction = self.energy_calculator.config.get("w_runtime_perf", 2.0) * total_time_reduction
-
-        # 2. Create the action
         action_data = {
-            "optimization_plans": optimization_plans,
+            "deployment_manifests": deployment_manifests,
             "energy_impact": {
-                "dynamic": -energy_reduction
+                "debt": debt_energy_increase
             }
         }
 
         return Action(
-            agent_id=self.agent_id,
-            data=action_data,
-            status=Status.SUCCESS
+            task_id=proposal.id,
+            agent_name=self.name,
+            action_taken=True,
+            status=Status.SUCCESS,
+            result=action_data
         )

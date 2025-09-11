@@ -1,27 +1,27 @@
+from llm.client import LLMClient
+from . import prompts
+
 class NLParser:
-    AMBIGUOUS_KEYWORDS = {"secure", "fast", "better", "easy", "user-friendly", "scalable", "robust"}
+    def __init__(self, llm_client: LLMClient):
+        self.llm_client = llm_client
 
-    def parse_to_cnl(self, requirement):
-        # A simple heuristic for ambiguity detection.
-        # It checks for the presence of common vague/non-functional adjectives.
-        words = set(requirement.lower().replace(",", "").replace(".", "").split())
-        is_ambiguous = any(keyword in words for keyword in self.AMBIGUOUS_KEYWORDS)
+    async def parse_requirement(self, requirement_text: str) -> str:
+        """
+        Uses the LLM to parse a natural language requirement into a structured
+        JSON string of tasks.
 
-        # The original implementation used a check for the word "ambiguous" itself,
-        # which is not a robust way to detect ambiguity. This new logic is more
-        # aligned with the intent of the test.
-        if is_ambiguous:
-            return type('obj', (object,), {
-                'bleu_score': 0.8,
-                'cnl_valid': False,
-                'extracted_tasks': [],
-                'needs_clarification': True
-            })()
-        else:
-            # This branch handles clear, specific requirements.
-            return type('obj', (object,), {
-                'bleu_score': 0.95,
-                'cnl_valid': True,
-                'extracted_tasks': ['task1'],
-                'needs_clarification': False
-            })()
+        Args:
+            requirement_text: The natural language requirement.
+
+        Returns:
+            A JSON string representing the list of tasks.
+        """
+        prompt_spec = prompts.get_prompt("decompose_requirement", "latest")
+        formatted_prompt = prompt_spec.format(requirement_text=requirement_text)
+
+        llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
+
+        if not llm_response.get("content"):
+            raise ValueError("LLM failed to provide content.")
+
+        return llm_response["content"]

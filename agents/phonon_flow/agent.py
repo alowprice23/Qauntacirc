@@ -14,7 +14,7 @@ from agents.base.agent import QuantumAgent
 from core.state_space import StateSpace
 from core.energy_calculator import EnergyCalculator
 from core.types import Proposal, State, Action, Status
-from monitoring.metrics import MetricsLogger
+from monitoring.metrics import QuantumMetrics as MetricsLogger
 from agents.base.policies import PolicyEngine
 from agents.base.memory import AgentMemory
 from llm.client import LLMClient
@@ -61,15 +61,15 @@ class PhononFlowAgent(QuantumAgent):
         Returns:
             A proposal containing a data flow optimization plan.
         """
-        all_source_files = state.get("source_code_map", {})
+        all_source_files = state.metadata.get("source_code_map", {})
         if not all_source_files:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.SUCCESS, reason="No source code to analyze.")
+            return Proposal(agent_name=self.name, task_type="optimization", payload={}, status=Status.SUCCESS, reason="No source code to analyze.")
 
         # 1. Analyze data flow to find a pattern (simulated)
         data_flow_description = ops.analyze_data_flow(all_source_files)
 
         if "No clear" in data_flow_description:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.SUCCESS, reason="No optimizable data flow pattern found.")
+            return Proposal(agent_name=self.name, task_type="optimization", payload={}, status=Status.SUCCESS, reason="No optimizable data flow pattern found.")
 
         # 2. Generate an optimization plan using the LLM
         prompt_spec = prompts.get_prompt("optimize_data_flow")
@@ -80,12 +80,13 @@ class PhononFlowAgent(QuantumAgent):
         try:
             plan = ops.parse_optimization_plan(llm_response["content"])
             return Proposal(
-                agent_id=self.agent_id,
-                data={"optimization_plan": plan},
-                status=Status.SUCCESS
+                agent_name=self.name,
+                task_type="optimization",
+                payload={"optimization_plan": plan},
+                status=Status.SUCCESS,
             )
         except ops.DataFlowError as e:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.FAILED, reason=f"Failed to generate optimization plan: {e}")
+            return Proposal(agent_name=self.name, task_type="optimization", payload={}, status=Status.FAILED, reason=f"Failed to generate optimization plan: {e}")
 
     def validate_proposal(self, proposal: Proposal) -> bool:
         """
@@ -97,11 +98,11 @@ class PhononFlowAgent(QuantumAgent):
         if proposal.status != Status.SUCCESS:
             return False
 
-        if "optimization_plan" not in proposal.data:
+        if "optimization_plan" not in proposal.payload:
             return True # An empty proposal is a valid one (no-op)
 
         try:
-            ops.parse_optimization_plan(json.dumps(proposal.data["optimization_plan"]))
+            ops.parse_optimization_plan(json.dumps(proposal.payload["optimization_plan"]))
             return True
         except ops.DataFlowError as e:
             print(f"Data flow optimization plan validation failed: {e}")
@@ -111,10 +112,10 @@ class PhononFlowAgent(QuantumAgent):
         """
         Executes the proposal by calculating the interaction energy reduction.
         """
-        if "optimization_plan" not in proposal.data:
+        if "optimization_plan" not in proposal.payload:
             return Action(agent_id=self.agent_id, data={}, status=Status.SUCCESS)
 
-        plan = proposal.data["optimization_plan"]
+        plan = proposal.payload["optimization_plan"]
 
         # 1. Calculate the reduction in interaction energy.
         # This is a heuristic based on the LLM's stated expected outcome.
@@ -141,7 +142,9 @@ class PhononFlowAgent(QuantumAgent):
         }
 
         return Action(
-            agent_id=self.agent_id,
-            data=action_data,
+            task_id=proposal.id,
+            agent_name=self.name,
+            action_taken=True,
+            result=action_data,
             status=Status.SUCCESS
         )

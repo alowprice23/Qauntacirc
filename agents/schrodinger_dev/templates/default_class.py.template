@@ -1,0 +1,6 @@
+class {{class_name}}:
+    """
+    {{docstring}}
+    """
+    def __init__(self):
+        ...

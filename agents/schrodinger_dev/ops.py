@@ -10,13 +10,7 @@ generated code skeletons.
 import re
 import ast
 from typing import Dict, Any, Optional
-
-# In a real implementation, this would interact with a more robust
-# template management system that loads templates from the `templates/` dir.
-_TEMPLATE_CACHE: Dict[str, str] = {
-    "default_function": "def {function_name}():\n    ...",
-    "default_class": "class {class_name}:\n    def __init__(self):\n        ...\n"
-}
+import os
 
 class CodeGenerationError(Exception):
     """Custom exception for errors during code generation or parsing."""
@@ -24,10 +18,7 @@ class CodeGenerationError(Exception):
 
 def load_code_template(template_name: str) -> Optional[str]:
     """
-    Loads a code template by name.
-
-    NOTE: This is a placeholder implementation. A real version would load
-    from the `templates/` directory on the filesystem.
+    Loads a code template by name from the templates directory.
 
     Args:
         template_name: The name of the template to load.
@@ -35,8 +26,14 @@ def load_code_template(template_name: str) -> Optional[str]:
     Returns:
         The template content as a string, or None if not found.
     """
-    print(f"Attempting to load placeholder template: {template_name}")
-    return _TEMPLATE_CACHE.get(template_name)
+    template_dir = os.path.join(os.path.dirname(__file__), "templates")
+    template_file = os.path.join(template_dir, f"{template_name}.py.template")
+
+    if not os.path.exists(template_file):
+        return None
+
+    with open(template_file, "r") as f:
+        return f.read()
 
 def extract_python_code(llm_output: str) -> str:
     """

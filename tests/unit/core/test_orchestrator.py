@@ -16,6 +16,7 @@ def test_orchestrator_instantiation():
 
     # Instantiate the Orchestrator
     orchestrator = Orchestrator(
+        agents=[Mock()],
         energy_calculator=mock_energy_calculator,
         lyapunov_monitor=mock_lyapunov_monitor,
         annealer=mock_annealer,

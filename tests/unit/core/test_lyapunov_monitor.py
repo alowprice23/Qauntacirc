@@ -106,7 +106,7 @@ def test_predict_convergence_stable():
         monitor.track_state(MockQCState(p))
 
     # Mock the stability result to be predictable
-    monitor.verify_stability = lambda: LyapunovResult(exponent=-0.2, convergence_status="stable", iterations=4)
+    monitor.verify_stability = lambda: LyapunovResult(is_stable=True, exponent=-0.2, convergence_status="stable", iterations=4)
 
     time_to_converge = monitor.predict_convergence(target_potential=1.0)
     assert time_to_converge is not None

@@ -1,149 +1,56 @@
-# core/lyapunov_monitor.py
-
 """
-Monitors the stability of the system using Lyapunov analysis.
-
-This module provides the LyapunovMonitor class, which is responsible for
-tracking the system's state trajectory and assessing its stability based on
-the principles of Lyapunov stability theory.
+Lyapunov Monitor
 """
-
-from __future__ import annotations
-
+from typing import List, Tuple
 import numpy as np
-from typing import List, Optional, Tuple
-
 from core.types import QCState, LyapunovResult
-from math_utils import lyapunov, martingales
-from unittest.mock import Mock
-
-class LyapunovFunction:
-    def __init__(self, kappa: float, xi: float):
-        if kappa <= 0 or xi <= 0:
-            raise ValueError("Weights kappa and xi must be positive.")
-        self.kappa = kappa
-        self.xi = xi
-
-    def compute(self, state: Mock) -> float:
-        """Computes the Lyapunov function value."""
-        # This is a mock implementation based on the test
-        energy = state.energy
-        failing_tests = state.failing_tests
-        open_obligations = state.open_obligations
-        return energy + self.kappa * failing_tests + self.xi * open_obligations
-
-    def get_components(self, state: Mock) -> Dict[str, float]:
-        """Gets the components of the Lyapunov function."""
-        energy = state.energy
-        test_penalty = self.kappa * state.failing_tests
-        obligation_penalty = self.xi * state.open_obligations
-        return {
-            'energy': energy,
-            'test_penalty': test_penalty,
-            'obligation_penalty': obligation_penalty
-        }
-
-# Constants for stability analysis
-DEFAULT_EXCURSION_BOUND = 1.5
-DEFAULT_CONVERGENCE_THRESHOLD = 1e-6
-MAX_HISTORY_SIZE = 1000
 
 class LyapunovMonitor:
     """
-    Monitors system stability by computing Lyapunov exponents and tracking excursions.
-
-    The monitor maintains a history of system states (or their Lyapunov potentials)
-    to analyze the trajectory's stability, convergence, and boundedness. It integrates
-    with mathematical utilities for formal stability verification.
+    A class to monitor the Lyapunov stability of the system.
     """
-
-    def __init__(self, excursion_bound: float = DEFAULT_EXCURSION_BOUND,
-                 convergence_threshold: float = DEFAULT_CONVERGENCE_THRESHOLD):
-        """
-        Initializes the LyapunovMonitor.
-
-        Args:
-            excursion_bound: The maximum allowable ratio of current potential to
-                             the minimum potential observed so far.
-            convergence_threshold: The threshold on the Lyapunov exponent below
-                                   which the system is considered converged.
-        """
+    def __init__(self, excursion_bound: float = 1.5, convergence_threshold: float = 1e-4, min_history_for_stability: int = 10):
         self.excursion_bound = excursion_bound
         self.convergence_threshold = convergence_threshold
+        self.min_history_for_stability = min_history_for_stability
         self.potential_history: List[float] = []
         self.state_history: List[QCState] = []
-        self.min_potential: Optional[float] = None
+        self.min_potential: float | None = None
+
+    def reset(self):
+        self.potential_history = []
+        self.state_history = []
+        self.min_potential = None
 
     def track_state(self, state: QCState):
-        """
-        Adds a new state to the monitor's history.
-
-        Args:
-            state: The new QCState to track.
-        """
-        potential = state.lyapunov_potential
-        self.potential_history.append(potential)
+        self.potential_history.append(state.lyapunov_potential)
         self.state_history.append(state)
-
-        if len(self.potential_history) > MAX_HISTORY_SIZE:
-            self.potential_history.pop(0)
-            self.state_history.pop(0)
-
-        if self.min_potential is None or potential < self.min_potential:
-            self.min_potential = potential
+        if self.min_potential is None or state.lyapunov_potential < self.min_potential:
+            self.min_potential = state.lyapunov_potential
 
     def track_excursion(self) -> Tuple[bool, float]:
-        """
-        Checks if the system state has made a significant excursion from its
-        most stable point observed so far.
-
-        An excursion occurs if the current Lyapunov potential exceeds a defined
-        multiple of the minimum potential seen. This can be an indicator of
-
-        destabilization.
-
-        Returns:
-            A tuple containing:
-            - bool: True if an excursion is detected, False otherwise.
-            - float: The current excursion ratio.
-        """
-        if self.min_potential is None or len(self.potential_history) < 1:
+        if not self.potential_history or self.min_potential is None:
             return False, 0.0
 
-        current_potential = self.potential_history[-1]
-
-        # Avoid division by zero if min_potential is close to zero
-        if abs(self.min_potential) < 1e-9:
-             # If both are near zero, no excursion. If current is not, it's a large excursion.
-            return (current_potential > 1e-9), float('inf') if current_potential > 1e-9 else 0.0
-
-        excursion_ratio = current_potential / self.min_potential
-
-        is_excursion = excursion_ratio > self.excursion_bound
-        return is_excursion, excursion_ratio
+        ratio = self.potential_history[-1] / self.min_potential
+        return ratio > self.excursion_bound, ratio
 
     def verify_stability(self) -> LyapunovResult:
-        """
-        Performs a formal stability analysis on the state history.
+        if len(self.potential_history) < self.min_history_for_stability:
+            return LyapunovResult(is_stable=False, convergence_status="insufficient_data", exponent=0.0, iterations=len(self.potential_history))
 
-        This method computes the Lyapunov exponent from the historical data.
-        A negative exponent indicates stability, suggesting that nearby trajectories
-        converge. A positive exponent indicates chaos.
+        positive_potentials = np.array([p for p in self.potential_history if p > 0])
+        if len(positive_potentials) < self.min_history_for_stability:
+            return LyapunovResult(is_stable=False, convergence_status="insufficient_data", exponent=0.0, iterations=len(self.potential_history))
 
-        Returns:
-            A LyapunovResult object summarizing the stability analysis.
-        """
-        if len(self.potential_history) < 2:
-            return LyapunovResult(
-                exponent=0.0,
-                convergence_status="insufficient_data",
-                iterations=len(self.potential_history)
-            )
-
-        trajectory = np.array(self.potential_history)
-
-        # Use the lyapunov utility to compute the exponent
-        exponent = lyapunov.estimate_lyapunov_exponent(trajectory)
+        log_potentials = np.log(positive_potentials)
+        time_steps = np.arange(len(log_potentials))
+        try:
+            # Fit a line to the log of the potentials
+            coeffs = np.polyfit(time_steps, log_potentials, 1)
+            exponent = coeffs[0]
+        except np.linalg.LinAlgError:
+            exponent = 0.0
 
         if exponent < -self.convergence_threshold:
             status = "stable"
@@ -153,71 +60,51 @@ class LyapunovMonitor:
             status = "marginal"
 
         return LyapunovResult(
-            exponent=exponent,
+            is_stable=status == "stable",
             convergence_status=status,
-            iterations=len(trajectory)
+            exponent=exponent,
+            iterations=len(self.potential_history)
         )
 
-    def predict_convergence(self, target_potential: float) -> Optional[float]:
-        """
-        Estimates the time (in steps) to reach a target Lyapunov potential.
-
-        This prediction is based on the currently observed rate of convergence,
-        derived from the Lyapunov exponent.
-
-        Args:
-            target_potential: The target potential value.
-
-        Returns:
-            The estimated number of steps to convergence, or None if the system
-            is not converging.
-        """
+    def predict_convergence(self, target_potential: float) -> float | None:
         stability_result = self.verify_stability()
-
-        # Convergence prediction is only meaningful for stable systems
-        if stability_result.exponent >= 0 or len(self.potential_history) < 1:
+        if not stability_result.is_stable or stability_result.exponent >= 0:
             return None
 
         current_potential = self.potential_history[-1]
-
-        # Simplified exponential decay model: P(t) = P(0) * exp(lambda * t)
-        # We want to find t such that P(t) = target_potential
-        # t = log(target_potential / current_potential) / lambda
-
         if current_potential <= target_potential:
             return 0.0
 
-        # The exponent is the rate of convergence per step
+        # V(t) = V0 * exp(lambda * t)
+        # log(V(t)/V0) = lambda * t
+        # t = log(V(t)/V0) / lambda
         time_to_converge = np.log(target_potential / current_potential) / stability_result.exponent
         return time_to_converge
 
     def verify_martingale_property(self) -> Tuple[bool, float]:
-        """
-        Checks if the sequence of Lyapunov potentials behaves like a supermartingale.
+        if len(self.potential_history) < 2:
+            return True, 0.0 # Not enough data to say otherwise
 
-        A supermartingale E[X_{t+1} | F_t] <= X_t is a process that is expected
-        to decrease or stay the same over time. This is a desirable property for
-        a potential function in an optimization process.
+        diffs = np.diff(self.potential_history)
+        drift = np.mean(diffs)
 
-        Returns:
-            A tuple containing:
-            - bool: True if the supermartingale property holds, False otherwise.
-            - float: The computed test statistic (e.g., drift).
-        """
-        if len(self.potential_history) < 10: # Need some data to test
-            return True, 0.0 # Assume property holds if not enough data
+        # Supermartingale: E[X_{n+1} | F_n] <= X_n
+        # We check the average drift
+        return drift <= 0, drift
 
-        trajectory = np.array(self.potential_history)
+class LyapunovFunction:
+    def __init__(self, kappa: float, xi: float):
+        if kappa <= 0 or xi <= 0:
+            raise ValueError("Weights kappa and xi must be positive.")
+        self.kappa = kappa
+        self.xi = xi
 
-        # Use the martingale utility to check the property
-        is_supermartingale, drift = martingales.is_supermartingale(trajectory)
+    def compute(self, state: QCState) -> float:
+        return state.energy + self.kappa * state.failing_tests + self.xi * state.open_obligations
 
-        return is_supermartingale, drift
-
-    def reset(self):
-        """
-        Resets the monitor's history.
-        """
-        self.potential_history.clear()
-        self.state_history.clear()
-        self.min_potential = None
+    def get_components(self, state: QCState) -> dict:
+        return {
+            "energy": state.energy,
+            "test_penalty": self.kappa * state.failing_tests,
+            "obligation_penalty": self.xi * state.open_obligations,
+        }

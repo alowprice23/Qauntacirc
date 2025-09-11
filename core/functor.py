@@ -1,4 +1,3 @@
-# core/functor.py
 """
 Implements the Functor F: SoftSys -> QuantSys.
 
@@ -53,7 +52,6 @@ class Functor:
         return QuantumState(
             state_vector=[],
             density_matrix=density_matrix_list,
-            measurement_basis="computational"
         )
 
     def _extract_features(self, state_dict: Dict[str, Any]) -> np.ndarray:
@@ -68,14 +66,19 @@ class Functor:
         mock_state.type_errors = state_dict.get('type_errors', [])
         mock_state.proof_obligations = state_dict.get('proof_obligations', [])
         mock_state.policy_violations = state_dict.get('policy_violations', [])
+        mock_state.complexity = state_dict.get('complexity', 0)
+        mock_state.coupling = state_dict.get('coupling', 0)
+        mock_state.constraints = state_dict.get('constraints', 0)
+        mock_state.debt = state_dict.get('debt', 0)
+
 
         _, components = self.energy_calculator.calculate_energy(mock_state)
 
         feature_vector = np.array([
-            components.complexity,
-            components.coupling,
-            components.constraint,
-            components.debt
+            components["complexity"],
+            components["coupling"],
+            components["constraints"],
+            components["debt"]
         ])
         return feature_vector
 
