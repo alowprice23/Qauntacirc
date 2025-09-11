@@ -63,6 +63,7 @@ class TestDiagnostic:
     This class provides detailed guidance on what to build when tests fail,
     following QuantaCirc's principle that every failure should be actionable.
     """
+    __test__ = False
     component_name: str
     expected_behavior: str
     failure_indicators: List[str]

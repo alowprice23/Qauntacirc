@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Dict, Any, List, Optional, Literal
 from uuid import UUID, uuid4
 from datetime import datetime
-from pydantic import BaseModel, Field, root_validator, validator
+from pydantic import field_validator, model_validator, BaseModel, Field, validator
 from enum import Enum
 
 class EnergyComponents(BaseModel):
@@ -38,7 +38,8 @@ class QCState(BaseModel):
     optimization_phase: str = "initialization"
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    @root_validator(pre=True)
+    @model_validator(mode="before")
+    @classmethod
     def energy_must_be_sum_of_components(cls, values):
         energy = values.get('energy')
         energy_components_data = values.get('energy_components')
@@ -52,7 +53,8 @@ class QCState(BaseModel):
                     raise ValueError('Total energy must equal the sum of its components.')
         return values
 
-    @validator('contraction_factor')
+    @field_validator('contraction_factor')
+    @classmethod
     def contraction_factor_must_be_between_0_and_1(cls, v):
         if not (0.0 <= v <= 1.0):
             raise ValueError('Contraction factor must be between 0 and 1.')
@@ -100,11 +102,11 @@ class RunRecord(BaseModel):
     final_state: QCState
     actions: List[AgentResult] = Field(default_factory=list)
 
-    @validator('end_time')
-    def end_time_must_be_after_start_time(cls, v, values):
-        if 'start_time' in values and v < values['start_time']:
+    @model_validator(mode='after')
+    def end_time_must_be_after_start_time(self) -> "RunRecord":
+        if self.end_time < self.start_time:
             raise ValueError('end_time must not be before start_time')
-        return v
+        return self
 
 class LyapunovResult(BaseModel):
     is_stable: bool
