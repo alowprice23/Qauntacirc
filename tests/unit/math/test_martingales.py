@@ -8,7 +8,6 @@ from math_utils.martingales import (
     is_supermartingale
 )
 
-@pytest.mark.xfail(reason="is_martingale implementation is a simplified approximation and may fail.")
 def test_is_martingale():
     # A simple random walk (martingale)
     np.random.seed(42)

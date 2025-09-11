@@ -182,4 +182,37 @@ class TestPLConvergenceAnalysis:
             physics_principle="Dynamical systems: Linear convergence in energy landscapes"
         )
         
-        pytest.skip(diagnostic.format_failure_message("PL convergence analysis framework ready"))
+        try:
+            from math_utils.pl_inequality import validate_linear_convergence
+
+            # Define a simple quadratic function
+            def energy(x):
+                return 0.5 * np.dot(x, x)
+
+            def grad(x):
+                return x
+
+            # For f(x) = 0.5 * x^2, mu = 1, L = 1.
+            mu = 1.0
+            e_star = 0.0
+            step_size = 0.1 # Should be < 2/L = 2. Here L=1, so < 2.
+
+            # Generate a sequence with gradient descent
+            x = np.array([10.0])
+            energy_sequence = []
+            for _ in range(10):
+                energy_sequence.append(energy(x))
+                x = x - step_size * grad(x)
+
+            # This sequence should exhibit linear convergence
+            assert validate_linear_convergence(energy_sequence, e_star, mu, step_size)
+
+            # A sequence that violates the bound should fail
+            violating_sequence = list(energy_sequence)
+            violating_sequence[5] = violating_sequence[4] # No progress
+            assert not validate_linear_convergence(violating_sequence, e_star, mu, step_size)
+
+        except ImportError as e:
+            pytest.fail(diagnostic.format_failure_message(f"ImportError: {str(e)}"))
+        except Exception as e:
+            pytest.fail(diagnostic.format_failure_message(str(e)))

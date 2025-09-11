@@ -5,7 +5,8 @@ def is_martingale(sequence, filtration):
     Checks if a sequence is a martingale with respect to a given filtration.
 
     A sequence X_n is a martingale if E[X_{n+1} | F_n] = X_n, where F_n is the filtration.
-    This check is a simplified, empirical one.
+    This check is a simplified, empirical one. It performs a basic statistical test
+    to see if the mean of the increments is significantly different from zero.
 
     Args:
         sequence (list or np.ndarray): The sequence of random variables.
@@ -14,13 +15,24 @@ def is_martingale(sequence, filtration):
     Returns:
         bool: True if the sequence appears to be a martingale.
     """
-    for n in range(len(sequence) - 1):
-        # This is a simplification. A rigorous check is complex.
-        # We assume the filtration is represented by the history up to time n.
-        conditional_expectation = np.mean(sequence[n+1:]) # Simplified approximation
-        if not np.isclose(conditional_expectation, sequence[n], atol=1e-2):
-            return False
-    return True
+    sequence = np.asarray(sequence)
+    if sequence.ndim != 1 or len(sequence) < 2:
+        return True  # Not enough data to decide or not a 1D sequence
+
+    diffs = np.diff(sequence)
+
+    # If there are no variations in increments, just check if the drift is zero.
+    if np.std(diffs) == 0:
+        return np.isclose(np.mean(diffs), 0)
+
+    # Perform a simplified t-test: check if the mean is close to 0
+    # in terms of standard error.
+    drift = np.mean(diffs)
+    std_err = np.std(diffs) / np.sqrt(len(diffs))
+
+    # We consider it a martingale if the drift is within ~2 standard errors of 0.
+    # This corresponds to an alpha of ~0.05 in a two-tailed test.
+    return np.abs(drift) < 2 * std_err
 
 def doob_martingale_convergence(sequence):
     """

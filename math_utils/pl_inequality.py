@@ -49,7 +49,7 @@ def pl_convergence_rate(mu, step_size):
     """
     Calculates the linear convergence rate for gradient descent under the PL inequality.
 
-    The error e_k = f(x_k) - f(x*) decreases as e_k <= (1 - 2*mu*step_size)^k * e_0.
+    The error e_k = f(x_k) - f(x*) decreases as e_k <= (1 - mu*step_size)^k * e_0.
     The returned value is the base of the exponential convergence.
 
     Args:
@@ -64,9 +64,9 @@ def pl_convergence_rate(mu, step_size):
     if step_size <= 0:
         raise ValueError("Step size must be positive.")
 
-    rate = 1 - 2 * mu * step_size
+    rate = 1 - mu * step_size
 
-    if rate <= 0:
+    if rate < 0:
         print("Warning: The step size may be too large, leading to divergence.")
         return 0.0
 
@@ -91,3 +91,37 @@ def global_optimization_guarantee(mu, L):
         return f"Guaranteed linear convergence to global minimum with rate {rate:.4f} (for step_size=1/L)."
     else:
         return "No guarantee of global convergence from these parameters."
+
+
+def validate_linear_convergence(energy_sequence, e_star, mu, step_size):
+    """
+    Validates if a sequence of energy values exhibits linear convergence
+    as predicted by the PL inequality.
+
+    Args:
+        energy_sequence (list or np.ndarray): A sequence of energy values from an optimization.
+        e_star (float): The optimal energy value.
+        mu (float): The PL constant.
+        step_size (float): The learning rate used.
+
+    Returns:
+        bool: True if the sequence converges linearly according to the PL bound.
+    """
+    e0 = energy_sequence[0]
+    rate = 1 - mu * step_size
+    if rate < 0:
+        # If rate is negative, the bound is not useful for monotonic convergence check.
+        # This indicates a likely divergence or oscillation, failing the validation.
+        return False
+
+    for k, e_k in enumerate(energy_sequence):
+        # Check for convergence stalling
+        if k > 0 and e_k > energy_sequence[k - 1] - 1e-9:  # Not strictly decreasing
+            # Allow stalling only if we are at the minimum
+            if not np.isclose(e_k, e_star):
+                return False
+
+        bound = (rate**k) * (e0 - e_star)
+        if e_k - e_star > bound + 1e-9:  # Add tolerance
+            return False
+    return True

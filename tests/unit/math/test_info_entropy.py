@@ -161,7 +161,42 @@ class TestShannonEntropy:
         )
         
         # Framework for conditional entropy testing
-        pytest.skip(diagnostic.format_failure_message("Conditional entropy framework ready"))
+        try:
+            from math_utils.info_entropy import conditional_entropy, shannon_entropy
+
+            # Case 1: Perfect correlation (Y = X)
+            # H(Y|X) should be 0
+            p_corr = np.array([[0.5, 0], [0, 0.5]])
+            h_y_given_x_corr = conditional_entropy(p_corr)
+            assert np.isclose(h_y_given_x_corr, 0), "H(Y|X) should be 0 for perfect correlation"
+
+            # Case 2: Independence
+            # H(Y|X) should be H(Y)
+            p_ind = np.array([[0.25, 0.25], [0.25, 0.25]])
+            p_y_ind = np.sum(p_ind, axis=0)
+            h_y_ind = shannon_entropy(p_y_ind)
+            h_y_given_x_ind = conditional_entropy(p_ind)
+            assert np.isclose(h_y_given_x_ind, h_y_ind), "H(Y|X) should be H(Y) for independent vars"
+
+            # Case 3: General case
+            p_general = np.array([[0.4, 0.1], [0.2, 0.3]])
+            p_x = np.sum(p_general, axis=1)
+            p_y = np.sum(p_general, axis=0)
+            h_x = shannon_entropy(p_x)
+            h_y = shannon_entropy(p_y)
+            h_xy = shannon_entropy(p_general.flatten())
+            h_y_given_x = conditional_entropy(p_general)
+
+            # Check chain rule: H(X,Y) = H(X) + H(Y|X)
+            assert np.isclose(h_xy, h_x + h_y_given_x), "Chain rule H(X,Y) = H(X)+H(Y|X) violated"
+
+            # Check conditioning property: H(Y|X) <= H(Y)
+            assert h_y_given_x <= h_y, "Conditioning property H(Y|X) <= H(Y) violated"
+
+        except ImportError as e:
+            pytest.fail(diagnostic.format_failure_message(f"ImportError: {str(e)}"))
+        except Exception as e:
+            pytest.fail(diagnostic.format_failure_message(str(e)))
 
 
 class TestKolmogorovComplexity:
@@ -208,4 +243,30 @@ class TestKolmogorovComplexity:
             physics_principle="Algorithmic information theory: Complexity as shortest description length"
         )
         
-        pytest.skip(diagnostic.format_failure_message("Kolmogorov complexity approximation framework ready"))
+        try:
+            from math_utils.info_entropy import kolmogorov_approx
+
+            # A highly repetitive string should have low complexity
+            repetitive_string = "a" * 1000
+            k_repetitive = kolmogorov_approx(repetitive_string)
+
+            # A more random-looking string should have higher complexity
+            random_string = "axbycz" * 167 # length is 1002
+            k_random = kolmogorov_approx(random_string)
+
+            # A string from a smaller alphabet should have lower complexity
+            binary_string = "01" * 500 # length 1000
+            k_binary = kolmogorov_approx(binary_string)
+
+            # Test monotonicity
+            assert k_repetitive < k_binary, "Repetitive string should be more compressible than binary"
+            assert k_binary < k_random, "Binary string should be more compressible than random-like string"
+
+            # Test that complexity is less than original length
+            assert k_repetitive < len(repetitive_string.encode('utf-8'))
+            assert k_random < len(random_string.encode('utf-8'))
+
+        except ImportError as e:
+            pytest.fail(diagnostic.format_failure_message(f"ImportError: {str(e)}"))
+        except Exception as e:
+            pytest.fail(diagnostic.format_failure_message(str(e)))

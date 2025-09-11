@@ -33,6 +33,28 @@ def shannon_entropy(data: List[Any] | np.ndarray) -> float:
 
     return entropy
 
+
+def conditional_entropy(joint_prob_dist):
+    """
+    Calculates the conditional entropy H(Y|X) from a joint probability distribution.
+
+    H(Y|X) = H(X,Y) - H(X)
+
+    Args:
+        joint_prob_dist (np.ndarray): A 2D array representing the joint probability dist p(x,y).
+
+    Returns:
+        float: The conditional entropy H(Y|X) in bits.
+    """
+    joint_prob_dist = np.asarray(joint_prob_dist)
+    p_x = np.sum(joint_prob_dist, axis=1)  # Marginal for X
+
+    h_xy = shannon_entropy(joint_prob_dist.flatten())
+    h_x = shannon_entropy(p_x)
+
+    # H(Y|X) can be negative due to floating point errors if it's close to 0
+    return max(0, h_xy - h_x)
+
 def mutual_information(joint_prob_dist):
     """
     Calculates the mutual information between two random variables from their
@@ -102,3 +124,28 @@ def cross_entropy(p, q):
     q[q == 0] = 1e-12
 
     return -np.sum(p * np.log2(q))
+
+
+import zlib, bz2, lzma
+
+def kolmogorov_approx(data: str) -> int:
+    """
+    Approximates the Kolmogorov complexity of a string using various compressors.
+
+    K_approx(s) = min(len(compress(s)))
+
+    Args:
+        data (str): The input string.
+
+    Returns:
+        int: The length of the shortest compressed representation.
+    """
+    encoded_data = data.encode('utf-8')
+
+    compressed_lengths = [
+        len(zlib.compress(encoded_data)),
+        len(bz2.compress(encoded_data)),
+        len(lzma.compress(encoded_data))
+    ]
+
+    return min(compressed_lengths)

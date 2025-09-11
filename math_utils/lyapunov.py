@@ -91,8 +91,18 @@ def estimate_lyapunov_exponent(time_series: np.ndarray) -> float:
     if len(time_series) < 2:
         return 0.0
 
-    log_ratios = np.log(np.abs(time_series[1:] / time_series[:-1]))
-    log_ratios = log_ratios[np.isfinite(log_ratios)] # remove infs and nans
+    # Avoid division by zero by filtering out pairs where the denominator is zero.
+    non_zero_indices = np.where(time_series[:-1] != 0)
+    numerator = time_series[1:][non_zero_indices]
+    denominator = time_series[:-1][non_zero_indices]
+
+    if len(denominator) == 0:
+        return 0.0
+
+    ratios = np.abs(numerator / denominator)
+
+    # Avoid log(0)
+    log_ratios = np.log(ratios[ratios > 0])
 
     if len(log_ratios) == 0:
         return 0.0
