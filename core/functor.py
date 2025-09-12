@@ -66,6 +66,8 @@ class Functor:
         mock_state.type_errors = state_dict.get('type_errors', [])
         mock_state.proof_obligations = state_dict.get('proof_obligations', [])
         mock_state.policy_violations = state_dict.get('policy_violations', [])
+        mock_state.dependency_graph = state_dict.get('dependency_graph')
+        mock_state.constraints = state_dict.get('constraints', [])
         mock_state.complexity = state_dict.get('complexity', 0)
         mock_state.coupling = state_dict.get('coupling', 0)
         mock_state.constraints = state_dict.get('constraints', 0)

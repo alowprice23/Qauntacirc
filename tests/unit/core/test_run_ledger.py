@@ -3,22 +3,23 @@ import json
 from uuid import uuid4
 from datetime import datetime
 from core.run_ledger import RunLedger
-from core.types import RunRecord, QCState, SoftwareState, EnergyComponents
+from core.types import RunRecord, QCState, SoftwareState, EnergyComponents, EnergyBreakdown, LyapunovMetrics
 
 @pytest.fixture
 def dummy_run_record():
     """Creates a valid RunRecord for testing."""
     initial_state = QCState(
         software_state=SoftwareState(component_versions={}, config_hashes={}),
-        energy=10.0,
-        energy_components=EnergyComponents(static=5, dynamic=5, interaction=0),
-        lyapunov_potential=0.5,
+        energy_breakdown=EnergyBreakdown(total=10.0, complexity=5.0, coupling=5.0, constraint=0.0, debt=0.0),
+        lyapunov_metrics=LyapunovMetrics(phi=0.5, energy=10.0, test_penalty=0.0, obligation_penalty=0.0),
         contraction_factor=0.8,
     )
-    final_state = initial_state.model_copy(update={
-        'energy': 8.0,
-        'energy_components': EnergyComponents(static=4, dynamic=4, interaction=0)
-    })
+    final_state = initial_state.model_copy(deep=True)
+    final_state.energy_breakdown.total = 8.0
+    final_state.energy_breakdown.complexity = 4.0
+    final_state.energy_breakdown.coupling = 4.0
+    final_state.lyapunov_metrics.energy = 8.0
+
     return RunRecord(
         run_id=uuid4(),
         start_time=datetime.utcnow(),
@@ -51,7 +52,7 @@ def test_add_and_get_record(tmp_path, dummy_run_record):
     assert retrieved_record is not None
     assert retrieved_record.run_id == dummy_run_record.run_id
     assert retrieved_record.status == "completed"
-    assert retrieved_record.final_state.energy == 8.0
+    assert retrieved_record.final_state.energy_breakdown.total == 8.0
 
 def test_get_nonexistent_record(tmp_path):
     """Tests that getting a non-existent record returns None."""
@@ -112,7 +113,7 @@ def test_record_serialization_and_deserialization(tmp_path, dummy_run_record):
 
     assert data["run_id"] == str(dummy_run_record.run_id)
     assert data["status"] == "completed"
-    assert data["initial_state"]["energy"] == 10.0
+    assert data["initial_state"]["energy_breakdown"]["total"] == 10.0
     assert "start_time" in data
 
     # Test deserialization

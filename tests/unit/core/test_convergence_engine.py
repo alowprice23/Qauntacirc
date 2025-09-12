@@ -3,9 +3,10 @@
 import pytest
 from unittest.mock import MagicMock
 import numpy as np
+from typing import Optional
 
 from core.convergence_engine import ConvergenceEngine, ConvergenceCriteria
-from core.types import QCState, LyapunovResult, SoftwareState, EnergyComponents
+from core.types import QCState, LyapunovResult, SoftwareState, EnergyComponents, EnergyBreakdown, LyapunovMetrics, QuantumState
 from core.lyapunov_monitor import LyapunovMonitor
 from core.lyapunov_function import LyapunovFunction
 from core.two_phase_annealer import TwoPhaseAnnealer
@@ -13,19 +14,16 @@ from core.two_phase_annealer import TwoPhaseAnnealer
 # Mock QCState for testing purposes
 class MockQCState(QCState):
     def __init__(self, energy, potential, failing_tests=0, open_obligations=0):
-        energy_components = EnergyComponents(static=energy, dynamic=0, interaction=0)
         super().__init__(
-            software_state=SoftwareState(component_versions={}, config_hashes={}),
-            energy=energy,
-            energy_components=energy_components,
-            lyapunov_potential=potential,
+            software_state=SoftwareState(),
+            energy_breakdown=EnergyBreakdown(total=energy, complexity=energy, coupling=0, constraint=0, debt=0),
+            lyapunov_metrics=LyapunovMetrics(phi=potential, energy=energy, test_penalty=failing_tests, obligation_penalty=open_obligations),
             contraction_factor=0.5,
-            failing_tests=failing_tests,
-            open_obligations=open_obligations,
-            context_code="mock",
-            file_path="mock/path",
-            line_number=0,
+            failing_tests=[str(i) for i in range(failing_tests)],
+            obligations=[MagicMock() for _ in range(open_obligations)],
         )
+
+MockQCState.model_rebuild()
 
 @pytest.fixture
 def lyapunov_function():
@@ -33,9 +31,9 @@ def lyapunov_function():
     return LyapunovFunction(kappa=1.0, xi=1.0)
 
 @pytest.fixture
-def lyapunov_monitor(lyapunov_function):
+def lyapunov_monitor():
     """Fixture for a LyapunovMonitor instance."""
-    return LyapunovMonitor(lyapunov_function=lyapunov_function)
+    return LyapunovMonitor(kappa=1.0, xi=1.0)
 
 @pytest.fixture
 def mock_annealer():
@@ -43,7 +41,7 @@ def mock_annealer():
     annealer = MagicMock(spec=TwoPhaseAnnealer)
     annealer.is_finished = False
     annealer.phase = "B" # Assume exploitation phase
-    annealer.check_convergence.return_value = True
+    annealer.check_convergence = MagicMock(return_value=True)
     return annealer
 
 @pytest.fixture
@@ -98,17 +96,17 @@ def test_lyapunov_stability_check(lyapunov_monitor):
     # Stable case
     stable_history = [MockQCState(energy=1.0 * (0.9**i), potential=1.0 * (0.9**i)) for i in range(20)]
     for state in stable_history:
-        lyapunov_monitor.track_state(state)
+        lyapunov_monitor.track(lyapunov_monitor.compute(state))
     is_stable, exponent = engine._check_lyapunov_stability(lyapunov_monitor)
     assert is_stable
     assert exponent < -1e-3
 
     # Unstable case
-    lyapunov_monitor.reset()
+    unstable_monitor = LyapunovMonitor(kappa=1.0, xi=1.0)
     unstable_history = [MockQCState(energy=1.0 * (1.1**i), potential=1.0 * (1.1**i)) for i in range(20)]
     for state in unstable_history:
-        lyapunov_monitor.track_state(state)
-    is_stable, exponent = engine._check_lyapunov_stability(lyapunov_monitor)
+        unstable_monitor.track(unstable_monitor.compute(state))
+    is_stable, exponent = engine._check_lyapunov_stability(unstable_monitor)
     assert not is_stable
     assert exponent > -1e-3
 
@@ -134,7 +132,7 @@ def test_full_convergence_all_criteria_met(lyapunov_monitor, mock_annealer):
     engine = ConvergenceEngine(criteria=criteria)
     stable_history = [MockQCState(energy=1.0 - i * 1e-9, potential=0, failing_tests=0, open_obligations=0) for i in range(100)]
     for state in stable_history:
-        lyapunov_monitor.track_state(state)
+        lyapunov_monitor.track(lyapunov_monitor.compute(state))
     result = engine.check_convergence(stable_history, lyapunov_monitor, mock_annealer)
 
     assert result["converged"]
@@ -152,26 +150,26 @@ def test_full_convergence_one_criterion_fails(lyapunov_monitor, mock_annealer):
     # Make energy unstable
     unstable_energy_history = [MockQCState(energy=np.random.randn(), potential=1.0) for _ in range(100)]
     for state in unstable_energy_history:
-        lyapunov_monitor.track_state(state)
+        lyapunov_monitor.track(lyapunov_monitor.compute(state))
     result = engine.check_convergence(unstable_energy_history, lyapunov_monitor, mock_annealer)
     assert not result["converged"]
     assert not result["checks"]["energy_stability"]["succeeded"]
 
     # Make Lyapunov unstable
-    lyapunov_monitor.reset()
+    unstable_lyapunov_monitor = LyapunovMonitor(kappa=1.0, xi=1.0)
     unstable_history = [MockQCState(energy=1.0 * (1.1**i), potential=1.0 * (1.1**i)) for i in range(100)]
     for state in unstable_history:
-        lyapunov_monitor.track_state(state)
-    result = engine.check_convergence(unstable_history, lyapunov_monitor, mock_annealer)
+        unstable_lyapunov_monitor.track(unstable_lyapunov_monitor.compute(state))
+    result = engine.check_convergence(unstable_history, unstable_lyapunov_monitor, mock_annealer)
     assert not result["converged"]
     assert not result["checks"]["lyapunov_stability"]["succeeded"]
 
     # Not in exploitation phase
     mock_annealer.phase = "A" # Exploration
-    lyapunov_monitor.reset()
+    stable_lyapunov_monitor = LyapunovMonitor(kappa=1.0, xi=1.0)
     stable_history = [MockQCState(energy=1.0 * (0.9**i), potential=1.0 * (0.9**i)) for i in range(100)]
     for state in stable_history:
-        lyapunov_monitor.track_state(state)
-    result = engine.check_convergence(stable_history, lyapunov_monitor, mock_annealer)
+        stable_lyapunov_monitor.track(stable_lyapunov_monitor.compute(state))
+    result = engine.check_convergence(stable_history, stable_lyapunov_monitor, mock_annealer)
     assert not result["converged"]
     assert not result["checks"]["in_exploitation_phase"]

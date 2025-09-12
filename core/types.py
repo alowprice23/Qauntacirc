@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Dict, Any, List, Optional, Literal, Set
+from typing import Dict, Any, List, Optional, Literal, Set, Tuple
 from uuid import UUID, uuid4
 from datetime import datetime, timedelta
 from pydantic import field_validator, model_validator, BaseModel, Field, validator
@@ -72,9 +72,18 @@ class Module(BaseModel):
     coverage_deficit: float
     last_refactor: datetime
 
+class Component(BaseModel):
+    id: str
+    properties: Dict[str, Any] = Field(default_factory=dict)
+
+class Dependency(BaseModel):
+    source: Component
+    target: Component
+    strength: float
+
 class DependencyGraph(BaseModel):
-    adjacency_matrix: Any # Should be numpy array
-    nodes: List[str]
+    nodes: List[Component]
+    edges: List[Dependency]
 
 class Constraint(BaseModel):
     name: str
@@ -87,8 +96,19 @@ class SystemState(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
+    software_state: "SoftwareState"
+    quantum_state: Optional["QuantumState"] = None
+
     modules: List[Module] = Field(default_factory=list)
-    dependency_graph: Optional[DependencyGraph] = None
+    requirements: List[str] = Field(default_factory=list)
+    dependency_graph: Optional['DependencyGraph'] = None
+
+    # Fields for HydroSpread and TunnelFix
+    total_complexity: float = 0.0
+    module_count: int = 0
+    coupling_density: float = 0.0
+    team_size: int = 1
+    current_volume: float = 1.0
     constraints: List[Constraint] = Field(default_factory=list)
     obligations: List[Obligation] = Field(default_factory=list)
     failing_tests: List[str] = Field(default_factory=list)
@@ -199,9 +219,19 @@ class AppContext(BaseModel):
         arbitrary_types_allowed = True
 
 
+class SoftwareState(BaseModel):
+    component_versions: Dict[str, str] = Field(default_factory=dict)
+    config_hashes: Dict[str, str] = Field(default_factory=dict)
+    status: str = "nominal"
+
+class QuantumState(BaseModel):
+    state_vector: List[complex] = Field(default_factory=list)
+
 Proposal = AgentAction
 State = SystemState
 Action = AgentResult
+QCState = SystemState
+EnergyComponents = EnergyBreakdown
 
 
 class AnnealingResult(BaseModel):
@@ -213,6 +243,269 @@ class ContractionResult(BaseModel):
     state: SystemState
     lambda_factor: float
     converged: bool
+
+class Observable(BaseModel):
+    name: str
+    value: Any
+    unit: str
+
+class PhysicsResult(BaseModel):
+    """Base class for results from physics-based operations."""
+    class Config:
+        arbitrary_types_allowed = True
+
+# --- Agent-specific Data Models ---
+
+# PlanckForge
+class TaskQuantum(BaseModel):
+    n: int
+    frequency: float
+    energy: float
+    description: str
+    dependencies: List[str]
+
+class QuantizedTasks(PhysicsResult):
+    quanta: List[TaskQuantum]
+    total_energy: float
+
+# SchrödingerDev
+class CodeState(BaseModel):
+    state_vector: Any # np.ndarray
+    code: str
+
+class Hamiltonian(BaseModel):
+    matrix: Any # np.ndarray
+
+class UnitaryOperator(BaseModel):
+    matrix: Any # np.ndarray
+
+class Proof(BaseModel):
+    obligation: str
+    proof_script: str
+    verified: bool
+
+class CodeEvolution(PhysicsResult):
+    new_state: CodeState
+    proofs: List[Proof]
+    energy_change: float
+    unitary_operator: UnitaryOperator
+
+# PauliGuard
+class ModuleState(BaseModel):
+    id: str
+    state_vector: Any # np.ndarray
+    code: str
+
+class OrthogonalityViolation(BaseModel):
+    module_i: ModuleState
+    module_j: ModuleState
+    overlap: float
+    severity: float
+
+class SharedComponent(BaseModel):
+    id: str
+    code: str
+    used_by: List[str]
+
+class OrthogonalizationResult(PhysicsResult):
+    modules: List[ModuleState]
+    shared_components: List[SharedComponent]
+    eliminated_duplicates: int
+    orthogonality_improvement: float
+    violations: List[OrthogonalityViolation] = []
+
+# UncertainAI
+class RiskBounds(BaseModel):
+    lower_bound: float
+    upper_bound: float
+    confidence: float
+
+class UncertaintyAnalysis(PhysicsResult):
+    spec_uncertainty: float
+    impl_uncertainty: float
+    uncertainty_product: float
+    satisfies_principle: bool
+    additional_tests: List[Any]
+    risk_bounds: RiskBounds
+
+# TunnelFix
+class PerformanceBarrier(BaseModel):
+    id: str
+    height: float
+    width: float
+    location: str
+
+class TunnelingOpportunity(BaseModel):
+    barrier: PerformanceBarrier
+    probability: float
+    optimization_moves: List[str]
+    expected_improvement: float
+
+class AppliedOptimization(BaseModel):
+    opportunity: TunnelingOpportunity
+    performance_gain: float
+    status: str
+
+class TunnelingResult(PhysicsResult):
+    barriers_detected: int
+    tunneling_opportunities: int
+    applied_optimizations: List[AppliedOptimization]
+    total_performance_gain: float
+
+class PerformanceProfile(BaseModel):
+    metrics: Dict[str, float]
+
+# BoseBoost
+class WorkloadDistribution(BaseModel):
+    tasks: Dict[str, Dict[str, Any]]
+    total_resources: float
+    max_replicas_per_task: int
+
+class DeploymentPlan(BaseModel):
+    topology: Dict[str, Any]
+
+class ResourceAllocation(PhysicsResult):
+    allocations: Dict[str, Any]
+    chemical_potential: float
+    temperature: float
+    deployment_plan: Optional[DeploymentPlan] = None
+    total_efficiency: float = 0.0
+
+# PhononFlow
+class Node(BaseModel):
+    id: str
+
+class Edge(BaseModel):
+    source: Node
+    target: Node
+    weight: float
+
+class CommunicationGraph(BaseModel):
+    nodes: List[Node]
+    edges: List[Edge]
+
+class Lattice(BaseModel):
+    def k_space_sampling(self) -> List[Any]: # List[np.ndarray]
+        import numpy as np
+        # Return a non-empty list of k-vectors
+        return [np.array([kx, ky, kz]) for kx in [-1,0,1] for ky in [-1,0,1] for kz in [-1,0,1] if not (kx==0 and ky==0 and kz==0)]
+
+    def compute_acoustic_velocity(self) -> float:
+        return 1.0
+    def compute_optical_velocity(self) -> float:
+        return 0.6
+
+class DispersionRelation(BaseModel):
+    k_vector: Any # np.ndarray
+    frequency: float
+    mode_type: str
+    group_velocity: float
+    energy: float
+
+class OptimizedChannel(BaseModel):
+    k_vector: Any # np.ndarray
+    group_velocity: float
+    bandwidth: float
+
+class FlowOptimization(PhysicsResult):
+    dispersion_relations: List[DispersionRelation]
+    optimized_channels: List[OptimizedChannel]
+    total_bandwidth: float
+    latency_improvement: float
+
+# FluctuaTest
+class ComplexResponse(BaseModel):
+    value: complex
+    imaginary_part: float = 0.0
+
+class ChaosScenario(BaseModel):
+    frequency: float
+    spectral_density: float
+    response_magnitude: float
+    system_components: List[str]
+
+class ChaosExperimentResult(BaseModel):
+    scenario: ChaosScenario
+    outcome: str
+    recovery_time: Optional[float] = None
+
+class ResilienceAnalysis(BaseModel):
+    overall_score: float
+    failure_modes: List[str]
+    recovery_times: Dict[str, float]
+    suggested_improvements: List[str]
+
+class ChaosTestResult(PhysicsResult):
+    scenarios_generated: int
+    experiments_executed: int
+    resilience_score: float
+    failure_modes_discovered: List[str]
+    recovery_times: Dict[str, float]
+    stability_improvements: List[str]
+
+# HydroSpread
+class GrowthParameters(BaseModel):
+    density: float
+    gravity: float
+    time_horizons: List[float]
+
+class GrowthPredictionInstance(BaseModel):
+    time: float
+    predicted_radius: float
+    predicted_size: float
+    predicted_complexity: float
+    confidence_interval: Tuple[float, float]
+
+class ScalingRecommendation(BaseModel):
+    recommendation: str
+
+class GrowthPrediction(PhysicsResult):
+    predictions: List[GrowthPredictionInstance]
+    viscosity: float
+    spreading_coefficient: float
+    scaling_recommendations: List[ScalingRecommendation]
+    growth_sustainability: float
+
+# LondonLink
+class Component(BaseModel):
+    id: str
+    properties: Dict[str, Any] = Field(default_factory=dict)
+
+
+class DependencyOptimizationMove(BaseModel):
+    description: str
+    potential_reduction: float
+
+class DependencyOptimization(PhysicsResult):
+    original_potential: float
+    optimized_moves: List[DependencyOptimizationMove]
+    expected_potential_reduction: float
+    modularity_improvement: float
+
+# Agent Communication Protocol
+class ConservationProof(BaseModel):
+    energy_before: float
+    energy_after: float
+    conservation_error: float
+    mathematical_justification: str
+
+class EnergyDelta(BaseModel):
+    value: float
+    conservation_proof: 'ConservationProof'
+
+class AgentProposal(BaseModel):
+    agent_id: str
+    proposal: Any
+
+class CoordinationResult(BaseModel):
+    approved: bool
+    modifications: List[Any]
+
+# Final forward reference resolution
+Component.model_rebuild()
+Dependency.model_rebuild()
+GrowthPredictionInstance.model_rebuild()
+
 
 # ### Quantum-Control-Enhancement Types ###
 

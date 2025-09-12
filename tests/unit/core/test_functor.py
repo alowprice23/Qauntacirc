@@ -1,9 +1,10 @@
 import pytest
 import numpy as np
 import networkx as nx
+from datetime import datetime
 
 from core.functor import Functor
-from core.types import SoftwareState, QuantumState
+from core.types import SoftwareState, QuantumState, Module
 
 class TestFunctor:
     def test_functor_mapping_produces_valid_quantum_state(self):
@@ -25,12 +26,34 @@ class TestFunctor:
         # Create sample metrics, including data for energy calculation
         metrics = {
             "code": "def f(x): return x",
-            "modules": ["mod_a", "mod_b"],
+            "modules": [
+                Module(
+                    name="mod_a",
+                    code="...",
+                    normalized_ast=b"...",
+                    semantic_tokens=["a", "b"],
+                    cyclomatic_complexity=1,
+                    duplication_factor=0,
+                    coverage_deficit=0,
+                    last_refactor=datetime.now()
+                ),
+                Module(
+                    name="mod_b",
+                    code="...",
+                    normalized_ast=b"...",
+                    semantic_tokens=["c", "d"],
+                    cyclomatic_complexity=1,
+                    duplication_factor=0,
+                    coverage_deficit=0,
+                    last_refactor=datetime.now()
+                ),
+            ],
             "module_dependencies": {"mod_a": ["mod_b"]},
             "dependency_graph": nx.DiGraph([("mod_a", "mod_b")]),
             "type_errors": [],
             "proof_obligations": [],
-            "policy_violations": []
+            "policy_violations": [],
+            "constraints": [],
         }
 
         # 2. Execution
@@ -65,14 +88,24 @@ class TestFunctor:
             config_hashes={"config": "hash1"},
             status="nominal"
         )
-        metrics1 = {"code": "pass", "modules": ["a"], "module_dependencies": {}}
+        module = Module(
+            name="a",
+            code="pass",
+            normalized_ast=b"pass",
+            semantic_tokens=["pass"],
+            cyclomatic_complexity=1,
+            duplication_factor=0,
+            coverage_deficit=0,
+            last_refactor=datetime.now()
+        )
+        metrics1 = {"code": "pass", "modules": [module], "module_dependencies": {}, "dependency_graph": None, "constraints": []}
 
         software_state2 = SoftwareState(
             component_versions={"comp": "1.0"},
             config_hashes={"config": "hash1"},
             status="nominal"
         )
-        metrics2 = {"code": "pass", "modules": ["a"], "module_dependencies": {}}
+        metrics2 = {"code": "pass", "modules": [module], "module_dependencies": {}, "dependency_graph": None, "constraints": []}
 
         # 2. Execution
         quantum_state1 = functor.map_software_to_quantum(software_state1, metrics1)

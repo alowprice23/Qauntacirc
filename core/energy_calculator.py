@@ -31,6 +31,33 @@ class EnergyCalculator:
         return EnergyBreakdown(total=total, complexity=complexity, coupling=coupling,
                                constraint=constraint, debt=debt)
 
+    def calculate_energy(self, state: SystemState) -> tuple[float, dict[str, float]]:
+        """Calculates the total energy and returns it along with its components."""
+        breakdown = self.compute_total_energy(state)
+        components = {
+            "complexity": breakdown.complexity,
+            "coupling": breakdown.coupling,
+            "constraint": breakdown.constraint,
+            "debt": breakdown.debt,
+        }
+        return breakdown.total, components
+
+    def compute_gradient(self, state: SystemState) -> dict[str, float]:
+        """
+        Computes the gradient of the energy function with respect to the weights.
+        For a linear energy function E = α*c + β*o + γ*n + δ*d, the partial derivatives
+        ∂E/∂α, ∂E/∂β, etc., are simply the component energy values.
+        This method is a conceptual placeholder for a more complex gradient calculation
+        that would be needed for state-based optimization.
+        """
+        breakdown = self.compute_total_energy(state)
+        return {
+            'alpha': breakdown.complexity,
+            'beta': breakdown.coupling,
+            'gamma': breakdown.constraint,
+            'delta': breakdown.debt,
+        }
+
     def _compress_gzip(self, data: bytes) -> int:
         return len(gzip.compress(data))
 

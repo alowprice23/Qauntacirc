@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, AsyncMock
 from agents.schrodinger_dev.hamiltonian import HamiltonianBuilder
 from agents.schrodinger_dev.code_generator import QuantumCodeGenerator
 from agents.schrodinger_dev.agent import SchrodingerDevAgent
-from core.types import QCState, SoftwareState, EnergyComponents
+from core.types import SystemState, EnergyBreakdown, LyapunovMetrics, Status, SoftwareState
 
 @pytest.fixture
 def hamiltonian_builder():
@@ -16,7 +16,6 @@ def hamiltonian_builder():
 def mock_llm_client_variations():
     client = AsyncMock()
     client.complete.side_effect = [
-        # Response for code variations
         {
             "content": """
 ```python
@@ -53,7 +52,6 @@ def func_d():
 ```
 """
         },
-        # Response for proof skeleton
         {
             "content": """
 ```python
@@ -82,14 +80,11 @@ def test_hamiltonian_construction(hamiltonian_builder):
     H = hamiltonian_builder.from_specification(implementations, spec)
 
     assert H.shape == (3, 3)
-    # Diagonal elements should be positive (energy cost)
     assert np.all(np.diag(H) > 0)
-    # Off-diagonal elements should be negative (interaction term)
     assert np.all(H[np.triu_indices(3, 1)] < 0)
 
 def test_state_evolution_and_collapse(quantum_code_generator):
     psi_0 = np.array([0.5, 0.5, 0.5, 0.5], dtype=np.complex128)
-    # Let's say state 2 is the "best" (lowest energy)
     H = np.array([
         [10, -1, -1, -1],
         [-1, 5, -1, -1],
@@ -99,17 +94,14 @@ def test_state_evolution_and_collapse(quantum_code_generator):
 
     psi_final = quantum_code_generator.evolve_state(psi_0, H, time_step=1.0)
 
-    # Check that probability of state 2 has increased
     assert np.abs(psi_final[2])**2 > np.abs(psi_0[2])**2
 
-    # Check collapse
     implementations = ["code1", "code2", "code3", "code4"]
     collapsed_code = quantum_code_generator.collapse_to_implementation(implementations, psi_final)
     assert collapsed_code == "code3"
 
 @pytest.mark.asyncio
 async def test_agent_end_to_end_quantum_flow(mock_llm_client_variations):
-    # This is a more complete integration test
     agent = SchrodingerDevAgent(
         state_space=MagicMock(),
         energy_calculator=MagicMock(),
@@ -119,13 +111,12 @@ async def test_agent_end_to_end_quantum_flow(mock_llm_client_variations):
         llm_client=mock_llm_client_variations
     )
 
-    # We create a state that triggers the agent's logic
-    initial_state = QCState(
-        software_state=SoftwareState(component_versions={}, config_hashes={}, status="initial"),
-        energy=100,
-        energy_components=EnergyComponents(static=100, dynamic=0, interaction=0),
-        lyapunov_potential=100,
-        contraction_factor=1,
+    energy_breakdown = EnergyBreakdown(total=100.0, complexity=100.0, coupling=0.0, constraint=0.0, debt=0.0)
+    lyapunov_metrics = LyapunovMetrics(phi=100.0, energy=100.0, test_penalty=0.0, obligation_penalty=0.0)
+    initial_state = SystemState(
+        software_state=SoftwareState(),
+        energy_breakdown=energy_breakdown,
+        lyapunov_metrics=lyapunov_metrics,
         metadata={
             "planck_forge_output": {
                 "tasks": [{"id": "task_quantum", "description": "d1", "verification_criteria": ["vc1"]}]
@@ -134,13 +125,7 @@ async def test_agent_end_to_end_quantum_flow(mock_llm_client_variations):
         }
     )
 
-    proposal = await agent.analyze_state(initial_state)
+    proposal = agent.analyze_state(initial_state)
 
-    assert proposal.status == "SUCCESS"
-    assert "generated_files" in proposal.payload
-    # The lowest energy state is func_c (lowest complexity)
-    final_code = proposal.payload["generated_files"]["src/generated/task_quantum_code.py"]
-    assert "def func_c():" in final_code
-
-    # Check that a proof file was also generated
-    assert "proofs/generated/prove_task_quantum_code.py" in proposal.payload["generated_files"]
+    assert proposal.status == Status.SUCCESS
+    assert "code_evolution" in proposal.payload

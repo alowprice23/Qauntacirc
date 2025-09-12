@@ -6,19 +6,29 @@ from core.types import (
     Plan, PlanNode, PlanEdge, Intent, CNLValidation, CNLValidationStatus,
     IntentContext, QCState, EnergyEstimate, RiskBound, QuantumSignatures,
     Priority, EffortLevel, PlanMetadata, VerificationPoint, EnergyMetrics,
-    ConvergenceProof, LyapunovCertificate, Permission, SoftwareState, EnergyComponents
+    ConvergenceProof, LyapunovCertificate, Permission, SoftwareState, EnergyBreakdown,
+    LyapunovMetrics
 )
 import uuid
 
 # --- Helper to create a mock intent ---
 # This is complex and doesn't need to be generated every time.
 def get_mock_intent():
+    mock_energy_breakdown = EnergyBreakdown(total=0, complexity=0, coupling=0, constraint=0, debt=0)
+    mock_lyapunov_metrics = LyapunovMetrics(phi=0, energy=0, test_penalty=0, obligation_penalty=0)
+    mock_qc_state = QCState(
+        software_state=SoftwareState(component_versions={}, config_hashes={}),
+        energy_breakdown=mock_energy_breakdown,
+        lyapunov_metrics=mock_lyapunov_metrics,
+        contraction_factor=0.5
+    )
+
     return Intent(
         goal="Test",
         cnl_translation="Test",
         cnl_validation=CNLValidation(status=CNLValidationStatus.AUTO_ACCEPT, confidence=1.0),
         constraints={},
-        context=IntentContext(session_id=uuid.uuid4(), user_profile={}, system_state=QCState(software_state=SoftwareState(component_versions={}, config_hashes={}), energy=0, energy_components=EnergyComponents(static=0,dynamic=0,interaction=0), lyapunov_potential=0, contraction_factor=0.5)),
+        context=IntentContext(session_id=uuid.uuid4(), user_profile={}, system_state=mock_qc_state),
         priority=Priority.LOW,
         acceptance_criteria=[],
         energy_estimate=EnergyEstimate(e_complexity=1, e_coupling=1, e_constraint=1, e_debt=1, total_estimated_energy=4),

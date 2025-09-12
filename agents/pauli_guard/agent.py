@@ -1,118 +1,108 @@
 import numpy as np
-from typing import List
+from typing import List, Any
+from collections import defaultdict
 
-from common.base_agent import PhysicsBasedAgent
-from common.data_models import (
-    ModuleState, OrthogonalizationResult, OrthogonalityViolation,
-    SharedComponent, SystemState, Observable
+from agents.base.agent import QuantumAgent
+from core.types import (
+    SystemState, AgentTask, AgentResult, ModuleState, OrthogonalizationResult,
+    OrthogonalityViolation, SharedComponent, Status
 )
 from common.utils import DeduplicationEngine
 
-class PauliGuardAgent(PhysicsBasedAgent):
-    def __init__(self):
-        super().__init__(
-            physics_principle="Exclusion Principle",
-            mathematical_formula="⟨ψᵢ|ψⱼ⟩ = 0 for i ≠ j"
-        )
+class PauliGuardAgent(QuantumAgent):
+    def __init__(self, llm_client: Any = None, config: dict = None, **kwargs: Any):
+        super().__init__(name="pauli_guard", **kwargs)
+        self.physics_principle = "Exclusion Principle"
+        self.mathematical_formula = "⟨ψᵢ|ψⱼ⟩ = 0 for i ≠ j"
         self.orthogonality_threshold = 1e-6
         self.deduplication_engine = DeduplicationEngine()
+        self.llm_client = llm_client
+        self.config = config or {}
 
-    def apply_physics_principle(self, modules: List[ModuleState], **kwargs) -> OrthogonalizationResult:
-        """Enforce orthogonality by eliminating overlapping code components"""
-        if not modules:
-            return OrthogonalizationResult(
-                modules=[],
-                shared_components=[],
-                eliminated_duplicates=0,
-                orthogonality_improvement=0.0
-            )
+    def analyze_state(self, state: SystemState) -> AgentTask:
+        """
+        Analyzes the system state for orthogonality violations and proposes a fix.
+        """
+        # A real implementation would get ModuleState objects from the SystemState.
+        # We'll create mock ModuleStates based on the modules in the state.
+        mock_module_states = [
+            ModuleState(id=m.name, state_vector=np.random.rand(10), code=m.normalized_ast.decode())
+            for m in state.modules
+        ]
 
-        # Compute overlap matrix between all module pairs
-        overlap_matrix = self._compute_overlap_matrix(modules)
+        if len(mock_module_states) < 2:
+            return AgentTask(agent_name=self.name, task_type="orthogonalization", payload={}, status=Status.SUCCESS, reason="Not enough modules to compare.")
 
-        # Identify non-orthogonal pairs (violations of exclusion principle)
+        # Core physics logic is now directly in analyze_state
+        code_bodies = defaultdict(list)
+        for module in mock_module_states:
+            body = "\n".join(module.code.splitlines()[1:])
+            if body:
+                code_bodies[body].append(module)
+
         violations = []
-        for i in range(len(modules)):
-            for j in range(i + 1, len(modules)):
-                overlap = abs(overlap_matrix[i][j])
-                if overlap > self.orthogonality_threshold:
-                    violations.append(OrthogonalityViolation(
-                        module_i=modules[i], module_j=modules[j],
-                        overlap=overlap, severity=overlap / self.orthogonality_threshold
-                    ))
+        for body, mods in code_bodies.items():
+            if len(mods) > 1:
+                violations.append(OrthogonalityViolation(
+                    module_i=mods[0], module_j=mods[1],
+                    overlap=1.0, severity=1.0 / self.orthogonality_threshold
+                ))
 
-        # Apply Gram-Schmidt-like orthogonalization
-        orthogonalized_modules = self._apply_orthogonalization(modules, violations)
-
-        # Generate shared components for extracted duplicates
+        orthogonalized_modules = self._apply_orthogonalization(mock_module_states, violations)
         shared_components = self._extract_shared_components(violations)
 
-        return OrthogonalizationResult(
+        orthogonalization_result = OrthogonalizationResult(
             modules=orthogonalized_modules,
             shared_components=shared_components,
             eliminated_duplicates=len(violations),
-            orthogonality_improvement=self._compute_orthogonality_improvement(modules, orthogonalized_modules)
+            orthogonality_improvement=self._compute_orthogonality_improvement(mock_module_states, orthogonalized_modules),
+            violations=violations
         )
 
-    def _compute_overlap_matrix(self, modules: List[ModuleState]) -> np.ndarray:
-        """Compute ⟨ψᵢ|ψⱼ⟩ for all module pairs"""
-        n = len(modules)
-        if n == 0:
-            return np.array([])
-        overlap_matrix = np.zeros((n, n), dtype=complex)
-
-        for i in range(n):
-            for j in range(n):
-                # Inner product in semantic space
-                vec_i = modules[i].state_vector
-                vec_j = modules[j].state_vector
-                overlap_matrix[i][j] = np.vdot(vec_i, vec_j)
-
-        return overlap_matrix
+        return AgentTask(
+            agent_name=self.name,
+            task_type="orthogonalization",
+            payload={"orthogonalization_result": orthogonalization_result.model_dump()},
+            status=Status.SUCCESS
+        )
 
     def _apply_orthogonalization(self, modules: List[ModuleState], violations: List[OrthogonalityViolation]) -> List[ModuleState]:
-        """Placeholder for a Gram-Schmidt-like orthogonalization process."""
-        print(f"Applying mock orthogonalization for {len(violations)} violations.")
-        # In a real implementation, this would modify the state vectors of the modules.
-        # For this placeholder, we return the original modules unmodified.
+        """Placeholder for Gram-Schmidt-like orthogonalization."""
         return modules
 
     def _extract_shared_components(self, violations: List[OrthogonalityViolation]) -> List[SharedComponent]:
-        """Placeholder for extracting shared components from non-orthogonal modules."""
-        shared_components = []
-        for i, violation in enumerate(violations):
-            shared_components.append(
-                SharedComponent(
-                    id=f"shared_{i}",
-                    code=f"// Shared logic from {violation.module_i.id} & {violation.module_j.id}",
-                    used_by=[violation.module_i.id, violation.module_j.id]
-                )
+        """Placeholder for extracting shared components."""
+        return [
+            SharedComponent(
+                id=f"shared_{i}",
+                code=f"// Shared code from {v.module_i.id} and {v.module_j.id}",
+                used_by=[v.module_i.id, v.module_j.id]
+            ) for i, v in enumerate(violations)
+        ]
+
+    def _compute_orthogonality_improvement(self, old_modules: List[ModuleState], new_modules: List[ModuleState]) -> float:
+        """Placeholder for computing orthogonality improvement."""
+        return float(len(old_modules) - len(new_modules))
+
+    def validate_proposal(self, proposal: AgentTask) -> bool:
+        """Validates the proposal."""
+        return proposal.status == Status.SUCCESS
+
+    def execute(self, proposal: AgentTask) -> AgentResult:
+        """Executes the proposal."""
+        if self.validate_proposal(proposal):
+            return AgentResult(
+                task_id=proposal.id,
+                agent_name=self.name,
+                action_taken=True,
+                result=proposal.payload,
+                status=Status.SUCCESS
             )
-        return shared_components
-
-    def _compute_orthogonality_improvement(self, before: List[ModuleState], after: List[ModuleState]) -> float:
-        """Placeholder for computing the improvement in orthogonality."""
-        # A real implementation would compare the off-diagonal elements of the overlap matrices.
-        # Since our mock orthogonalization does nothing, the improvement is 0.
-        return 0.0
-
-    def measure_observable(self, system_state: SystemState) -> Observable:
-        """Measure the overall system orthogonality."""
-        if len(system_state.modules) < 2:
-            return Observable(name="system_orthogonality", value=1.0, unit="normalized_orthogonality")
-
-        overlap_matrix = self._compute_overlap_matrix(system_state.modules)
-        # Calculate the sum of the squares of the off-diagonal elements
-        off_diagonal_sum_sq = float(np.sum(np.abs(overlap_matrix - np.diag(np.diag(overlap_matrix)))**2))
-
-        # Normalize (this is a mock metric)
-        # A perfectly orthogonal system would have this be 0.
-        # We can return 1 - error
-        n = len(system_state.modules)
-        orthogonality_metric = 1.0 - (off_diagonal_sum_sq / (n * (n - 1))) if n > 1 else 1.0
-
-        return Observable(
-            name="system_orthogonality",
-            value=orthogonality_metric,
-            unit="normalized_orthogonality"
-        )
+        else:
+            return AgentResult(
+                task_id=proposal.id,
+                agent_name=self.name,
+                action_taken=False,
+                error="Invalid proposal",
+                status=Status.FAILED
+            )

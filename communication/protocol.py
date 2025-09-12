@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 # Assuming data models are in common.data_models
-from common.data_models import EnergyDelta, AgentProposal, CoordinationResult
+from core.types import EnergyDelta, AgentProposal, CoordinationResult
 
 class NATSClient:
     """A mock NATS client for simulation purposes."""
@@ -48,8 +48,8 @@ class AgentCommunicationProtocol:
         message = {
             "agent_id": agent_id,
             "timestamp": datetime.now().isoformat(),
-            # Use vars() for dataclass serialization in this mock setup
-            "energy_delta": vars(energy_delta),
+            # Use .model_dump() for pydantic models
+            "energy_delta": energy_delta.model_dump(),
             "mathematical_proof": str(energy_delta.conservation_proof)
         }
         await self.nats_client.publish(self.topics["energy_updates"], message)

@@ -46,10 +46,10 @@ class EnergyCondition(Condition):
         """
         Verifies that the current energy state is below the maximum threshold.
         """
-        if not hasattr(state, 'energy'):
+        if not hasattr(state, 'energy_breakdown'):
             return False
 
-        return self.solver.solve([f"energy <= {self.max_energy}"], {"energy": state.energy})
+        return self.solver.solve([f"energy <= {self.max_energy}"], {"energy": state.energy_breakdown.total})
 
 
 class LyapunovCondition(Condition):

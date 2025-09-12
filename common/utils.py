@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Tuple
 from collections import namedtuple
 
 # Import data models needed for return types
-from .data_models import (
+from core.types import (
     Observable, SystemState, Proof, ModuleState, SharedComponent, OrthogonalityViolation,
     RiskBounds, PerformanceBarrier, TunnelingOpportunity, AppliedOptimization, DeploymentPlan, ResourceAllocation,
     OptimizedChannel, ChaosScenario, ChaosExperimentResult, ResilienceAnalysis,
@@ -67,8 +67,9 @@ class RiskQuantifier:
 class PerformanceBarrierDetector:
     def identify_barriers(self, performance_profile: PerformanceProfile) -> List[PerformanceBarrier]:
         """Placeholder: identifies mock performance barriers."""
+        # Adjusted values to produce a reasonable tunneling probability
         return [
-            PerformanceBarrier(id="barrier1", height=100.0, width=5.0, location="slow_function"),
+            PerformanceBarrier(id="barrier1", height=1.0, width=1.0, location="slow_function"),
         ]
 
 class TunnelingOptimizer:

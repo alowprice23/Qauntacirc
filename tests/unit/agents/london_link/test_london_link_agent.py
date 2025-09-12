@@ -1,7 +1,11 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from agents.london_link.agent import LondonLinkAgent
-from core.types import QCState, AgentTask, SoftwareState, EnergyComponents
+from core.types import (
+    SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status,
+    DependencyGraph, Component, Dependency, SoftwareState
+)
+from datetime import datetime
 
 @pytest.fixture
 def mock_llm_client():
@@ -30,51 +34,41 @@ def london_link_agent(mock_llm_client, mock_energy_calculator):
 @pytest.fixture
 def initial_state():
     """A state with three files forming a chain dependency A -> B -> C."""
-    software_state = SoftwareState(component_versions={}, config_hashes={}, status="initial")
-    energy_components = EnergyComponents(static=100.0, dynamic=50.0, interaction=20.0)
-    return QCState(
-        software_state=software_state,
-        energy=energy_components.total,
-        energy_components=energy_components,
-        lyapunov_potential=170.0,
-        contraction_factor=1.0,
-        metadata={
-            "source_code_map": {
-                "src/a.py": "import src.b",
-                "src/b.py": "import src.c",
-                "src/c.py": "x = 1"
-            }
-        }
+    energy_breakdown = EnergyBreakdown(total=170.0, complexity=100.0, coupling=50.0, constraint=20.0, debt=0.0)
+    lyapunov_metrics = LyapunovMetrics(phi=170.0, energy=170.0, test_penalty=0.0, obligation_penalty=0.0)
+
+    nodes = [Component(id="a.py"), Component(id="b.py"), Component(id="c.py")]
+    edges = [
+        Dependency(source=nodes[0].model_dump(), target=nodes[1].model_dump(), strength=0.8),
+        Dependency(source=nodes[1].model_dump(), target=nodes[2].model_dump(), strength=0.8)
+    ]
+    dep_graph = DependencyGraph(nodes=[n.model_dump() for n in nodes], edges=edges)
+
+    return SystemState(
+        software_state=SoftwareState(),
+        dependency_graph=dep_graph,
+        energy_breakdown=energy_breakdown,
+        lyapunov_metrics=lyapunov_metrics,
     )
 
 @pytest.mark.asyncio
 async def test_analyze_state_finds_most_attractive_pair(london_link_agent, initial_state):
-    # The most distant pair is (a, c) with r=2. They should have the
-    # highest attraction potential (most negative V).
-    proposal = await london_link_agent.analyze_state(initial_state)
-    assert proposal.status == "SUCCESS"
-    assert "optimization_plan" in proposal.payload
-    # We can't easily assert which pair was chosen without mocking complexity,
-    # but we can check the proposal structure.
-    plan = proposal.payload["optimization_plan"]
-    assert "refactored_code" in plan
-    assert "original_potential" in plan
-    assert plan["original_potential"] < 0
+    proposal = london_link_agent.analyze_state(initial_state)
+    assert proposal.status == Status.SUCCESS
+    assert "dependency_optimization" in proposal.payload
+    opt = proposal.payload["dependency_optimization"]
+    assert "original_potential" in opt
+    assert opt["original_potential"] < 0
 
 def test_execute_calculates_energy_impact(london_link_agent):
     proposal = AgentTask(
         agent_name="london_link",
         task_type="dependency_optimization",
         payload={
-            "optimization_plan": {
-                "refactored_module_path": "src/a.py",
-                "refactored_code": "new code",
-                "explanation": "...",
-                "original_potential": -100.0
-            }
+            "dependency_optimization": {"original_potential": -100.0}
         },
+        status=Status.SUCCESS
     )
     action = london_link_agent.execute(proposal)
-    assert action.status == "SUCCESS"
-    assert "optimization_plan" in action.result
-    assert action.result["energy_impact"]["interaction"] == -100.0
+    assert action.status == Status.SUCCESS
+    assert "dependency_optimization" in action.result

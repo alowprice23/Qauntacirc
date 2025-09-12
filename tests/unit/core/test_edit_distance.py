@@ -1,5 +1,5 @@
 import pytest
-from core.types import SoftwareState, QCState, EnergyComponents
+from core.types import SoftwareState, QCState, EnergyComponents, EnergyBreakdown, LyapunovMetrics
 from core.edit_distance import software_state_edit_distance, qcstate_edit_distance
 
 @pytest.fixture
@@ -99,9 +99,8 @@ def test_qcstate_edit_distance_wrapper(base_state):
     """Tests the QCState wrapper function."""
     qc_state_a = QCState(
         software_state=base_state,
-        energy=0,
-        energy_components=EnergyComponents(static=0,dynamic=0,interaction=0),
-        lyapunov_potential=0,
+        energy_breakdown=EnergyBreakdown(total=0, complexity=0, coupling=0, constraint=0, debt=0),
+        lyapunov_metrics=LyapunovMetrics(phi=0, energy=0, test_penalty=0, obligation_penalty=0),
         contraction_factor=0.5
     )
 
@@ -109,9 +108,8 @@ def test_qcstate_edit_distance_wrapper(base_state):
     state_b.status = "degraded"
     qc_state_b = QCState(
         software_state=state_b,
-        energy=0,
-        energy_components=EnergyComponents(static=0,dynamic=0,interaction=0),
-        lyapunov_potential=0,
+        energy_breakdown=EnergyBreakdown(total=0, complexity=0, coupling=0, constraint=0, debt=0),
+        lyapunov_metrics=LyapunovMetrics(phi=0, energy=0, test_penalty=0, obligation_penalty=0),
         contraction_factor=0.5
     )
 

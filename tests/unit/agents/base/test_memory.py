@@ -4,15 +4,25 @@ import numpy as np
 import uuid
 
 from agents.base.memory import AgentMemory, Constellation
-from core.types import QCState, AgentTask, AgentResult, SoftwareState, EnergyComponents
+from core.types import QCState, AgentTask, AgentResult, SoftwareState, EnergyComponents, LyapunovMetrics, EnergyBreakdown
 
 @pytest.fixture
 def mock_state():
     return QCState(
-        software_state=SoftwareState(component_versions={}, config_hashes={}),
-        energy=100.0,
-        energy_components=EnergyComponents(static=50.0, dynamic=30.0, interaction=20.0),
-        lyapunov_potential=0.5,
+        software_state=SoftwareState(),
+        energy_breakdown=EnergyBreakdown(
+            total=100.0,
+            complexity=50.0,
+            coupling=30.0,
+            constraint=20.0,
+            debt=0.0,
+        ),
+        lyapunov_metrics=LyapunovMetrics(
+            phi=0.5,
+            energy=100.0,
+            test_penalty=0.0,
+            obligation_penalty=0.0,
+        ),
         contraction_factor=0.9,
     )
 

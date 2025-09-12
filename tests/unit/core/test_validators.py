@@ -3,9 +3,10 @@ from datetime import datetime, timedelta
 from core.types import (
     QCState,
     SoftwareState,
-    EnergyComponents,
+    EnergyBreakdown,
     QuantumState,
     RunRecord,
+    LyapunovMetrics,
 )
 from core.validators import (
     validate_qc_state_consistency,
@@ -19,18 +20,18 @@ def create_valid_qc_state(phase="initialization", lyapunov=0.5, has_quantum_stat
     software_state = SoftwareState(
         component_versions={"comp": "1.0"}, config_hashes={"conf": "abc"}
     )
-    energy_components = EnergyComponents(static=1, dynamic=1, interaction=0)
+    energy_breakdown = EnergyBreakdown(total=2.0, complexity=1.0, coupling=0.5, constraint=0.5, debt=0.0)
+    lyapunov_metrics = LyapunovMetrics(phi=lyapunov, energy=energy_breakdown.total, test_penalty=0.0, obligation_penalty=0.0)
     quantum_state = None
     if has_quantum_state:
         quantum_state = QuantumState(state_vector=[1.0, 0.0])
 
     return QCState(
         software_state=software_state,
-        energy=2.0,
-        energy_components=energy_components,
-        lyapunov_potential=lyapunov,
+        energy_breakdown=energy_breakdown,
+        lyapunov_metrics=lyapunov_metrics,
         contraction_factor=0.5,
-        optimization_phase=phase,
+        phase=phase,
         quantum_state=quantum_state,
     )
 
@@ -63,8 +64,7 @@ def test_validate_run_record_valid():
     initial_state = create_valid_qc_state()
     # Create a valid final_state with decreased energy
     final_state = initial_state.model_copy(update={
-        'energy': 1.0,
-        'energy_components': EnergyComponents(static=0.5, dynamic=0.5, interaction=0.0),
+        'energy_breakdown': EnergyBreakdown(total=1.0, complexity=0.5, coupling=0.25, constraint=0.25, debt=0.0),
         'timestamp': initial_state.timestamp + timedelta(seconds=1)
     })
 
@@ -82,8 +82,7 @@ def test_validate_run_record_high_final_energy():
     initial_state = create_valid_qc_state()
     # Create a valid final_state with increased energy
     final_state = initial_state.model_copy(update={
-        'energy': 3.0,
-        'energy_components': EnergyComponents(static=1.0, dynamic=2.0, interaction=0.0),
+        'energy_breakdown': EnergyBreakdown(total=3.0, complexity=1.0, coupling=1.0, constraint=1.0, debt=0.0),
     })
 
     record = RunRecord(

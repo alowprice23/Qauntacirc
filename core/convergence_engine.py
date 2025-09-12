@@ -126,20 +126,45 @@ class ConvergenceEngine:
 
     def _check_energy_stability(self, recent_states: List[QCState]) -> tuple[bool, float]:
         """Checks if the energy has stabilized over the recent window."""
-        energies = [s.energy for s in recent_states]
+        energies = [s.energy_breakdown.total for s in recent_states]
         variance = np.var(energies)
         is_stable = variance < self.criteria.energy_variance_threshold
         return is_stable, variance
 
     def _check_lyapunov_stability(self, lyapunov_monitor: LyapunovMonitor) -> tuple[bool, float]:
-        """Checks if the Lyapunov exponent indicates stability."""
-        result = lyapunov_monitor.verify_stability()
-        is_stable = result.exponent < self.criteria.lyapunov_exponent_threshold
-        return is_stable, result.exponent
+        """
+        Calculates the Lyapunov exponent from the potential history and checks for stability.
+        The exponent is estimated by the slope of a linear fit to log(potential) vs. time.
+        """
+        history = lyapunov_monitor.history
+        if len(history) < max(10, self.criteria.window_size // 2): # Need enough points for a meaningful fit
+            return False, 0.0
+
+        # Use the most recent points from the monitor's history
+        recent_potentials = [m.phi for m in history[-self.criteria.window_size:]]
+
+        # Filter out non-positive values for log
+        positive_potentials = [p for p in recent_potentials if p > 0]
+        if len(positive_potentials) < 2:
+            return False, 0.0 # Cannot compute slope
+
+        log_potentials = np.log(positive_potentials)
+        time_steps = np.arange(len(log_potentials))
+
+        # Perform linear regression to find the slope (Lyapunov exponent)
+        try:
+            # The slope of log(y) vs x is the exponent
+            slope, _ = np.polyfit(time_steps, log_potentials, 1)
+        except np.linalg.LinAlgError:
+            return False, 0.0 # Could not fit
+
+        exponent = float(slope)
+        is_stable = exponent < self.criteria.lyapunov_exponent_threshold
+        return is_stable, exponent
 
     def _check_potential_drift(self, recent_states: List[QCState]) -> tuple[bool, float]:
         """Checks if the Lyapunov potential is no longer decreasing significantly."""
-        potentials = [s.lyapunov_potential for s in recent_states]
+        potentials = [s.lyapunov_metrics.phi for s in recent_states]
         # Calculate the average change (drift)
         drift = np.mean(np.diff(potentials))
         is_stable = abs(drift) < self.criteria.potential_drift_threshold

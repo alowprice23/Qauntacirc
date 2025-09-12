@@ -1,7 +1,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
-from agents.hydrospread.agent import HydroSpreadAgent
-from core.types import QCState, AgentTask, SoftwareState, EnergyComponents, TaskQuanta
+from agents.hydro_spread.agent import HydroSpreadAgent
+from core.types import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, Module, SoftwareState
+from datetime import datetime
 
 @pytest.fixture
 def mock_llm_client():
@@ -22,38 +23,35 @@ def hydrospread_agent(mock_llm_client):
 
 @pytest.fixture
 def initial_state():
-    software_state = SoftwareState(component_versions={}, config_hashes={}, status="initial")
-    energy_components = EnergyComponents(static=100.0, dynamic=50.0, interaction=20.0)
-    tasks = [
-        TaskQuanta(id="task1", description="d1", verification_criteria=["vc1"], energy=20.0),
-        TaskQuanta(id="task2", description="d2", verification_criteria=["vc2"], energy=80.0),
-    ]
-    return QCState(
-        software_state=software_state,
-        energy=energy_components.total,
-        energy_components=energy_components,
-        lyapunov_potential=170.0,
-        contraction_factor=1.0,
-        metadata={
-            "planck_forge_output": {
-                "tasks": tasks
-            }
-        }
+    energy_breakdown = EnergyBreakdown(total=170.0, complexity=100.0, coupling=50.0, constraint=20.0, debt=0.0)
+    lyapunov_metrics = LyapunovMetrics(phi=170.0, energy=170.0, test_penalty=0.0, obligation_penalty=0.0)
+    return SystemState(
+        software_state=SoftwareState(),
+        energy_breakdown=energy_breakdown,
+        lyapunov_metrics=lyapunov_metrics,
+        module_count=10,
+        team_size=5,
+        total_complexity=50.0,
+        coupling_density=0.2,
+        current_volume=100.0
     )
 
 @pytest.mark.asyncio
 async def test_analyze_state_success(hydrospread_agent, initial_state):
-    proposal = await hydrospread_agent.analyze_state(initial_state)
-    assert proposal.status == "SUCCESS"
-    assert "forecast_report" in proposal.payload
+    proposal = hydrospread_agent.analyze_state(initial_state)
+    assert proposal.status == Status.SUCCESS
+    assert "growth_prediction" in proposal.payload
+    prediction = proposal.payload["growth_prediction"]
+    assert len(prediction["predictions"]) > 0
+    assert "viscosity" in prediction
 
 def test_execute(hydrospread_agent):
     proposal = AgentTask(
         agent_name="hydrospread",
         task_type="forecast",
-        payload={"forecast_report": "{}"},
+        payload={"growth_prediction": {"predictions": []}},
+        status=Status.SUCCESS
     )
     action = hydrospread_agent.execute(proposal)
-    assert action.status == "SUCCESS"
-    assert "forecast_report" in action.result
-    assert not action.result["energy_impact"] # No energy impact
+    assert action.status == Status.SUCCESS
+    assert "growth_prediction" in action.result

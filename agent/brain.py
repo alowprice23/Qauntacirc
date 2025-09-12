@@ -16,7 +16,7 @@ from core.types import (
     IntentContext, PlanNode, PlanEdge, VerificationPoint, EnergyMetrics,
     ConvergenceProof, LyapunovCertificate, PlanMetadata, Priority, EffortLevel,
     CapabilityToken, Permission, QCState, EnergyComponents, SoftwareState,
-    CNLValidation, CNLValidationStatus
+    CNLValidation, CNLValidationStatus, LyapunovMetrics
 )
 from llm.client import LLMClient
 
@@ -88,10 +88,20 @@ class QuantumAgentBrain:
         """Initializes the system's state vector (psi)."""
         print("Initializing QCState (system state vector)...")
         return QCState(
-            software_state=SoftwareState(component_versions={}, config_hashes={}),
-            energy=0.0,
-            energy_components=EnergyComponents(static=0.0, dynamic=0.0, interaction=0.0),
-            lyapunov_potential=1.0,
+            software_state=SoftwareState(),
+            energy_breakdown=EnergyComponents(
+                total=0.0,
+                complexity=0.0,
+                coupling=0.0,
+                constraint=0.0,
+                debt=0.0,
+            ),
+            lyapunov_metrics=LyapunovMetrics(
+                phi=1.0,
+                energy=0.0,
+                test_penalty=0.0,
+                obligation_penalty=0.0,
+            ),
             contraction_factor=1.0,
         )
 
@@ -207,13 +217,14 @@ class QuantumAgentBrain:
         """
         print(f"\nEvolving QCState based on plan {plan.id}...")
 
-        new_energy = self.psi_current.energy + plan.energy_impact.delta_e
-        new_lyapunov = self.psi_current.lyapunov_potential + (plan.energy_impact.delta_e * 0.1)
+        new_energy = self.psi_current.lyapunov_metrics.energy + plan.energy_impact.delta_e
+        new_lyapunov = self.psi_current.lyapunov_metrics.phi + (plan.energy_impact.delta_e * 0.1)
         if new_lyapunov < 0: new_lyapunov = 0
         new_contraction = 1 - (1 / (1 + new_lyapunov)) if new_lyapunov > 0 else 0
 
-        self.psi_current.energy = new_energy
-        self.psi_current.lyapunov_potential = new_lyapunov
+        self.psi_current.energy_breakdown.total = new_energy
+        self.psi_current.lyapunov_metrics.energy = new_energy
+        self.psi_current.lyapunov_metrics.phi = new_lyapunov
         self.psi_current.contraction_factor = new_contraction
         self.psi_current.timestamp = datetime.utcnow()
 

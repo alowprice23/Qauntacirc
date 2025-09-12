@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from core.state_space import StateSpace
-from core.types import QCState, QuantumState, SoftwareState, EnergyComponents
+from core.types import QCState, QuantumState, SoftwareState, EnergyComponents, EnergyBreakdown, LyapunovMetrics
 
 # Helper to create a dummy QCState for testing
 def create_dummy_qc_state(vector):
@@ -10,9 +10,8 @@ def create_dummy_qc_state(vector):
         vector = [complex(v) for v in vector]
     return QCState(
         software_state=SoftwareState(component_versions={}, config_hashes={}),
-        energy=0,
-        energy_components=EnergyComponents(static=0, dynamic=0, interaction=0),
-        lyapunov_potential=0,
+        energy_breakdown=EnergyBreakdown(total=0, complexity=0, coupling=0, constraint=0, debt=0),
+        lyapunov_metrics=LyapunovMetrics(phi=0, energy=0, test_penalty=0, obligation_penalty=0),
         contraction_factor=0.5,
         quantum_state=QuantumState(state_vector=vector) if vector else None
     )

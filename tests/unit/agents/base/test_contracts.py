@@ -9,16 +9,26 @@ from agents.base.contracts import (
     LyapunovCondition,
     ClosureRuleCondition,
 )
-from core.types import QCState, AgentResult, SoftwareState, EnergyComponents, QuantumState
+from core.types import QCState, AgentResult, SoftwareState, EnergyComponents, QuantumState, LyapunovMetrics, EnergyBreakdown, QuantumState
 
 @pytest.fixture
 def mock_state():
     return QCState(
-        software_state=SoftwareState(component_versions={}, config_hashes={}),
-        quantum_state=QuantumState(state_vector=[1.0, 0.0]),
-        energy=100.0,
-        energy_components=EnergyComponents(static=50.0, dynamic=30.0, interaction=20.0),
-        lyapunov_potential=0.5,
+        software_state=SoftwareState(),
+        quantum_state=QuantumState(state_vector=[complex(1.0), complex(0.0)]),
+        energy_breakdown=EnergyBreakdown(
+            total=100.0,
+            complexity=50.0,
+            coupling=30.0,
+            constraint=20.0,
+            debt=0.0,
+        ),
+        lyapunov_metrics=LyapunovMetrics(
+            phi=0.5,
+            energy=100.0,
+            test_penalty=0.0,
+            obligation_penalty=0.0,
+        ),
         contraction_factor=0.9,
     )
 

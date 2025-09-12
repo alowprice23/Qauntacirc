@@ -1,6 +1,6 @@
 import pytest
 from agents.fluctuatest.ops import parse_chaos_experiment_proposal, ChaosSimulator, ChaosExperimentError
-from core.types import QCState, SoftwareState, EnergyComponents
+from core.types import QCState, SoftwareState, EnergyComponents, LyapunovMetrics, EnergyBreakdown
 
 def test_parse_chaos_experiment_proposal_success():
     llm_output = '{"hypothesis": "h", "experiment_type": "e", "magnitude": "m", "duration_seconds": 1}'
@@ -17,13 +17,21 @@ def test_parse_chaos_experiment_proposal_missing_keys():
 
 @pytest.fixture
 def initial_state():
-    software_state = SoftwareState(component_versions={}, config_hashes={}, status="initial")
-    energy_components = EnergyComponents(static=100.0, dynamic=50.0, interaction=20.0)
     return QCState(
-        software_state=software_state,
-        energy=energy_components.total,
-        energy_components=energy_components,
-        lyapunov_potential=170.0,
+        software_state=SoftwareState(status="initial"),
+        energy_breakdown=EnergyBreakdown(
+            total=170.0,
+            complexity=100.0,
+            coupling=50.0,
+            constraint=20.0,
+            debt=0.0,
+        ),
+        lyapunov_metrics=LyapunovMetrics(
+            phi=170.0,
+            energy=170.0,
+            test_penalty=0.0,
+            obligation_penalty=0.0,
+        ),
         contraction_factor=1.0,
     )
 

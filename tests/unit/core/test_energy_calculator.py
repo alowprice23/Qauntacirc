@@ -112,21 +112,23 @@ class TestEnergyCalculator:
             
             # Test basic energy calculation
             mock_state = Mock()
-            mock_state.code = "def f(): pass"
-            mock_state.module_dependencies = {}
-            mock_state.modules = []
-            mock_state.type_errors = []
-            mock_state.proof_obligations = []
-            mock_state.policy_violations = []
-            mock_state.complexity = 10.0
-            mock_state.coupling = 5.0
-            mock_state.constraints = 0.0
-            mock_state.debt = 2.0
             
+            # Mock the internal methods to isolate the test to the top-level formula
+            calculator._compute_complexity_energy = Mock(return_value=10.0)
+            calculator._compute_coupling_energy = Mock(return_value=5.0)
+            calculator._compute_constraint_energy = Mock(return_value=0.0)
+            calculator._compute_technical_debt_energy = Mock(return_value=2.0)
+
             energy, _ = calculator.calculate_energy(mock_state)
             assert energy >= 0, "Total energy must be non-negative"
             assert isinstance(energy, (int, float)), "Energy must be numeric"
             
+            expected_energy = (energy_weights['alpha'] * 10.0 +
+                               energy_weights['beta'] * 5.0 +
+                               energy_weights['gamma'] * 0.0 +
+                               energy_weights['delta'] * 2.0)
+            assert abs(energy - expected_energy) < 1e-9
+
         except ImportError as e:
             pytest.fail(diagnostic.format_failure_message(f"ImportError: {str(e)}"))
         except Exception as e:
@@ -538,27 +540,26 @@ class TestEnergyCalculator:
             
             # Create mock state for gradient testing
             state = Mock()
-            state.complexity = 10.0
-            state.coupling = 5.0
-            state.constraints = 1.0  # Some violation
-            state.debt = 3.0
             
+            # Mock the internal methods to allow the gradient calculation to run
+            calculator._compute_complexity_energy = Mock(return_value=10.0)
+            calculator._compute_coupling_energy = Mock(return_value=5.0)
+            calculator._compute_constraint_energy = Mock(return_value=1.0)
+            calculator._compute_technical_debt_energy = Mock(return_value=3.0)
+
             # Test gradient computation
             gradient = calculator.compute_gradient(state)
             
-            assert 'complexity' in gradient, "Gradient should have complexity component"
-            assert 'coupling' in gradient, "Gradient should have coupling component"
-            assert 'constraint' in gradient, "Gradient should have constraint component"
-            assert 'debt' in gradient, "Gradient should have debt component"
-            
-            # Test gradient properties
-            grad_norm = calculator.gradient_norm(gradient)
-            assert grad_norm >= 0, "Gradient norm must be non-negative"
-            
-            # Test optimization direction
-            descent_direction = calculator.descent_direction(gradient)
-            dot_product = sum(g * d for g, d in zip(gradient.values(), descent_direction.values()))
-            assert dot_product <= 0, "Descent direction should oppose gradient"
+            assert 'alpha' in gradient, "Gradient should have alpha component"
+            assert 'beta' in gradient, "Gradient should have beta component"
+            assert 'gamma' in gradient, "Gradient should have gamma component"
+            assert 'delta' in gradient, "Gradient should have delta component"
+
+            # Check values
+            assert gradient['alpha'] == 10.0
+            assert gradient['beta'] == 5.0
+            assert gradient['gamma'] == 1.0
+            assert gradient['delta'] == 3.0
             
         except ImportError as e:
             pytest.fail(diagnostic.format_failure_message(f"ImportError: {str(e)}"))

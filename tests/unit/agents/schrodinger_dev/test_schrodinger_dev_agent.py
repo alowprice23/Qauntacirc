@@ -1,17 +1,14 @@
 import pytest
+import numpy as np
 from unittest.mock import AsyncMock, MagicMock
 from agents.schrodinger_dev.agent import SchrodingerDevAgent
-from core.types import QCState, AgentTask, SoftwareState, EnergyComponents
+from core.types import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, CodeEvolution, CodeState, UnitaryOperator, SoftwareState
 
 @pytest.fixture
 def mock_llm_client():
     client = AsyncMock()
-    # This mock is for the old agent logic, the new logic is tested in test_quantum_evolution.py
-    # However, we need to make it compatible with the new agent's expectations.
     client.complete.side_effect = [
-        # Response for code variations
         {"content": "```python\ndef func_a(): pass\n```\n```python\ndef func_b(): pass\n```"},
-        # Response for proof
         {"content": "```python\nassert True\n```"}
     ]
     return client
@@ -36,14 +33,13 @@ def schrodinger_agent(mock_llm_client, mock_energy_calculator):
 
 @pytest.fixture
 def initial_state():
-    software_state = SoftwareState(component_versions={}, config_hashes={}, status="initial")
-    energy_components = EnergyComponents(static=100.0, dynamic=50.0, interaction=20.0)
-    return QCState(
-        software_state=software_state,
-        energy=energy_components.total,
-        energy_components=energy_components,
-        lyapunov_potential=170.0,
-        contraction_factor=1.0,
+    # Refactored to create a valid SystemState object
+    energy_breakdown = EnergyBreakdown(total=170.0, complexity=100.0, coupling=50.0, constraint=20.0, debt=0.0)
+    lyapunov_metrics = LyapunovMetrics(phi=170.0, energy=170.0, test_penalty=0.0, obligation_penalty=0.0)
+    return SystemState(
+        software_state=SoftwareState(),
+        energy_breakdown=energy_breakdown,
+        lyapunov_metrics=lyapunov_metrics,
         metadata={
             "planck_forge_output": {
                 "tasks": [
@@ -56,30 +52,33 @@ def initial_state():
 
 @pytest.mark.asyncio
 async def test_analyze_state_success(schrodinger_agent, initial_state):
-    proposal = await schrodinger_agent.analyze_state(initial_state)
-    assert proposal.status == "SUCCESS"
-    assert "generated_files" in proposal.payload
-    # The new agent doesn't produce 'avg_llm_confidence', so we remove that check.
-    assert "src/generated/task1_code.py" in proposal.payload["generated_files"]
+    proposal = schrodinger_agent.analyze_state(initial_state)
+    assert proposal.status == Status.SUCCESS
+    assert "code_evolution" in proposal.payload
 
 @pytest.mark.asyncio
 async def test_analyze_state_no_task_dag(schrodinger_agent, initial_state):
     initial_state.metadata = {}
-    proposal = await schrodinger_agent.analyze_state(initial_state)
-    assert proposal.status == "FAILED"
+    proposal = schrodinger_agent.analyze_state(initial_state)
+    assert proposal.status == Status.FAILED
     assert "Task DAG or task list not found" in proposal.reason
 
 def test_execute(schrodinger_agent):
+    # Create a realistic proposal for the execute method
+    mock_evolution = CodeEvolution(
+        new_state=CodeState(state_vector=np.random.rand(4), code="..."),
+        proofs=[],
+        energy_change=0.1,
+        unitary_operator=UnitaryOperator(matrix=np.identity(4))
+    )
+
     proposal = AgentTask(
         agent_name="schrodinger_dev",
-        task_type="analysis",
-        payload={
-            "generated_files": {"src/test.py": "print('test')"},
-            "avg_llm_confidence": 0.8
-        },
+        task_type="code_evolution",
+        payload={"code_evolution": mock_evolution.model_dump()},
+        status=Status.SUCCESS
     )
+
     action = schrodinger_agent.execute(proposal)
-    assert action.status == "SUCCESS"
-    assert "files_to_create" in action.result
-    assert "energy_impact" in action.result
-    assert action.result["energy_impact"]["dynamic"] == pytest.approx(0.0)
+    assert action.status == Status.SUCCESS
+    assert action.result == proposal.payload

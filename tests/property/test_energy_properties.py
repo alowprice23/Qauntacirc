@@ -109,16 +109,28 @@ class TestEnergyFunctionProperties:
             
             # Create mock state with given components
             state = type('State', (), {})()
-            state.code = ""
-            state.module_dependencies = {}
             state.modules = []
-            state.type_errors = []
-            state.proof_obligations = []
-            state.policy_violations = []
+            state.dependency_graph = None
+            state.constraints = []
+            state.failing_tests = []
+            state.obligations = []
+
+            # The energy calculator's internal methods use these, but for this property test,
+            # we are bypassing the internal calculation and just checking the top-level formula.
+            # So we can mock the direct energy components.
+            # To do this, we need to mock the internal compute methods.
+            # A simpler way is to provide the necessary attributes for the real methods to run.
             state.complexity = complexity
             state.coupling = coupling
-            state.constraints = constraints
-            state.debt = debt
+            # The test is about the top-level formula, not the internal calculation.
+            # The internal calculation for constraints and debt require more complex objects.
+            # We will mock the internal methods to avoid this complexity.
+
+            from unittest.mock import MagicMock
+            calculator._compute_complexity_energy = MagicMock(return_value=complexity)
+            calculator._compute_coupling_energy = MagicMock(return_value=coupling)
+            calculator._compute_constraint_energy = MagicMock(return_value=constraints)
+            calculator._compute_technical_debt_energy = MagicMock(return_value=debt)
             
             # Calculate energy
             energy, _ = calculator.calculate_energy(state)
@@ -202,37 +214,51 @@ class TestEnergyFunctionProperties:
             
             calculator = EnergyCalculator(alpha=alpha, beta=beta, gamma=gamma, delta=delta)
             
-            # Create individual states
+            from unittest.mock import MagicMock
+            # Mock the internal calculation methods to test additivity of the top-level function
+            complexity1, coupling1, constraints1, debt1 = state1
+            complexity2, coupling2, constraints2, debt2 = state2
+
+            def mock_calc(state_tuple):
+                def side_effect(state):
+                    if state == s1:
+                        return complexity1
+                    if state == s2:
+                        return complexity2
+                    if state == s_combined:
+                        return complexity1 + complexity2
+                return MagicMock(side_effect=side_effect)
+
+            calculator._compute_complexity_energy = mock_calc(state1)
+            
+            def mock_coupling(state_tuple):
+                def side_effect(state):
+                    if state == s1: return coupling1
+                    if state == s2: return coupling2
+                    if state == s_combined: return coupling1 + coupling2
+                return MagicMock(side_effect=side_effect)
+            calculator._compute_coupling_energy = mock_coupling(state1)
+
+            def mock_constraints(state_tuple):
+                def side_effect(state):
+                    if state == s1: return constraints1
+                    if state == s2: return constraints2
+                    if state == s_combined: return constraints1 + constraints2
+                return MagicMock(side_effect=side_effect)
+            calculator._compute_constraint_energy = mock_constraints(state1)
+
+            def mock_debt(state_tuple):
+                def side_effect(state):
+                    if state == s1: return debt1
+                    if state == s2: return debt2
+                    if state == s_combined: return debt1 + debt2
+                return MagicMock(side_effect=side_effect)
+            calculator._compute_technical_debt_energy = mock_debt(state1)
+
+            # Create mock state objects. They only need to be distinct objects.
             s1 = type('State', (), {})()
-            s1.code = ""
-            s1.module_dependencies = {}
-            s1.modules = []
-            s1.type_errors = []
-            s1.proof_obligations = []
-            s1.policy_violations = []
-            s1.complexity, s1.coupling, s1.constraints, s1.debt = state1
-            
             s2 = type('State', (), {})()
-            s2.code = ""
-            s2.module_dependencies = {}
-            s2.modules = []
-            s2.type_errors = []
-            s2.proof_obligations = []
-            s2.policy_violations = []
-            s2.complexity, s2.coupling, s2.constraints, s2.debt = state2
-            
-            # Create combined state (disjoint union)
             s_combined = type('State', (), {})()
-            s_combined.code = ""
-            s_combined.module_dependencies = {}
-            s_combined.modules = []
-            s_combined.type_errors = []
-            s_combined.proof_obligations = []
-            s_combined.policy_violations = []
-            s_combined.complexity = s1.complexity + s2.complexity
-            s_combined.coupling = s1.coupling + s2.coupling
-            s_combined.constraints = s1.constraints + s2.constraints
-            s_combined.debt = s1.debt + s2.debt
             
             # Calculate energies
             e1, _ = calculator.calculate_energy(s1)

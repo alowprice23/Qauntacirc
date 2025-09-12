@@ -3,7 +3,7 @@ from unittest.mock import Mock, call, patch, MagicMock
 import uuid
 
 from agents.base.agent import QuantumAgent
-from core.types import QCState as State, AgentTask as Proposal, AgentResult as Action, SoftwareState, EnergyComponents
+from core.types import QCState as State, AgentTask as Proposal, AgentResult as Action, SoftwareState, EnergyComponents, LyapunovMetrics, EnergyBreakdown
 
 # A concrete implementation of the abstract QuantumAgent for testing
 class ConcreteQuantumAgent(QuantumAgent):
@@ -35,10 +35,20 @@ def mock_dependencies():
 def mock_state():
     # A simplified mock of QCState for testing purposes
     return State(
-        software_state=SoftwareState(component_versions={}, config_hashes={}),
-        energy=100.0,
-        energy_components=EnergyComponents(static=50.0, dynamic=30.0, interaction=20.0),
-        lyapunov_potential=0.5,
+        software_state=SoftwareState(),
+        energy_breakdown=EnergyBreakdown(
+            total=100.0,
+            complexity=50.0,
+            coupling=30.0,
+            constraint=20.0,
+            debt=0.0,
+        ),
+        lyapunov_metrics=LyapunovMetrics(
+            phi=0.5,
+            energy=100.0,
+            test_penalty=0.0,
+            obligation_penalty=0.0,
+        ),
         contraction_factor=0.9,
     )
 

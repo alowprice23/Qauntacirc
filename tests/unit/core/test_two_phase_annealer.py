@@ -42,6 +42,21 @@ from dataclasses import dataclass
 # Test diagnostic imports
 from tests.conftest import TestDiagnostic, EnergyLandscape
 
+# Helper class for Metropolis acceptance rule test
+class MetropolisAcceptor:
+    def __init__(self, seed=None):
+        self.rng = np.random.default_rng(seed)
+
+    def acceptance_probability(self, delta_energy: float, temperature: float) -> float:
+        if delta_energy <= 0:
+            return 1.0
+        if temperature <= 1e-9:
+            return 0.0
+        return math.exp(-delta_energy / temperature)
+
+    def should_accept(self, delta_energy: float, temperature: float) -> bool:
+        prob = self.acceptance_probability(delta_energy, temperature)
+        return self.rng.random() < prob
 
 @dataclass
 class AnnealingTrace:
@@ -668,7 +683,7 @@ class TestLyapunovMonitoring:
         )
         
         try:
-            from core.lyapunov_monitor import LyapunovFunction
+            from core.lyapunov_function import LyapunovFunction
             
             # Test construction
             lyapunov = LyapunovFunction(kappa=100.0, xi=50.0)

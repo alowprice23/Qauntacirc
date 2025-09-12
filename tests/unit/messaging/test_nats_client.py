@@ -11,7 +11,7 @@ from tests.conftest import TestDiagnostic
 import asyncio
 from unittest.mock import AsyncMock, patch, PropertyMock, MagicMock
 from uuid import uuid4
-from core.types import QCState, SoftwareState, EnergyComponents
+from core.types import QCState, SoftwareState, EnergyBreakdown, LyapunovMetrics
 from nats.aio.msg import Msg
 
 from messaging.nats_client import NATSClient
@@ -72,13 +72,13 @@ async def test_publish_with_quantum_context():
         client = NATSClient(server_urls="nats://localhost:4222")
         await client.connect()
 
-        from core.types import SoftwareState, EnergyComponents
+        energy_breakdown = EnergyBreakdown(total=1.0, complexity=1.0, coupling=0.0, constraint=0.0, debt=0.0)
+        lyapunov_metrics = LyapunovMetrics(phi=1.0, energy=1.0, test_penalty=0.0, obligation_penalty=0.0)
         qc_state = QCState(
             id=uuid4(),
             software_state=SoftwareState(component_versions={}, config_hashes={}),
-            energy=1.0,
-            energy_components=EnergyComponents(static=1.0, dynamic=0.0, interaction=0.0),
-            lyapunov_potential=0.0,
+            energy_breakdown=energy_breakdown,
+            lyapunov_metrics=lyapunov_metrics,
             contraction_factor=0.5
         )
         payload = b"test_payload"
@@ -111,12 +111,13 @@ async def test_subscribe_and_receive_message():
         client = NATSClient(server_urls="nats://localhost:4222")
         await client.connect()
 
+        energy_breakdown = EnergyBreakdown(total=1.0, complexity=1.0, coupling=0.0, constraint=0.0, debt=0.0)
+        lyapunov_metrics = LyapunovMetrics(phi=1.0, energy=1.0, test_penalty=0.0, obligation_penalty=0.0)
         qc_state = QCState(
             id=uuid4(),
             software_state=SoftwareState(component_versions={}, config_hashes={}),
-            energy=1.0,
-            energy_components=EnergyComponents(static=1.0, dynamic=0.0, interaction=0.0),
-            lyapunov_potential=0.0,
+            energy_breakdown=energy_breakdown,
+            lyapunov_metrics=lyapunov_metrics,
             contraction_factor=0.5
         )
 

@@ -3,7 +3,7 @@ from unittest.mock import Mock, call
 import uuid
 
 from agents.base.metrics import AgentMetrics
-from core.types import AgentResult, QCState, SoftwareState, EnergyComponents
+from core.types import AgentResult, QCState, SoftwareState, EnergyBreakdown, LyapunovMetrics
 
 @pytest.fixture
 def mock_logger():
@@ -43,11 +43,12 @@ def test_track_error(agent_metrics, mock_logger):
 def test_track_execution(agent_metrics, mock_logger, mock_energy_calculator):
     duration = 1.23
     action = AgentResult(task_id=uuid.uuid4(), agent_name="test_agent", action_taken=True)
+    energy_breakdown = EnergyBreakdown(total=100.0, complexity=50.0, coupling=30.0, constraint=20.0, debt=0.0)
+    lyapunov_metrics = LyapunovMetrics(phi=100.5, energy=100.0, test_penalty=0.5, obligation_penalty=0.0)
     state = QCState(
         software_state=SoftwareState(component_versions={}, config_hashes={}),
-        energy=100.0,
-        energy_components=EnergyComponents(static=50.0, dynamic=30.0, interaction=20.0),
-        lyapunov_potential=0.5,
+        energy_breakdown=energy_breakdown,
+        lyapunov_metrics=lyapunov_metrics,
         contraction_factor=0.9,
     )
     mock_energy_calculator.calculate_action_energy.return_value = -10.5
