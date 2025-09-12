@@ -19,9 +19,17 @@ class NLParser:
         prompt_spec = prompts.get_prompt("decompose_requirement", "latest")
         formatted_prompt = prompt_spec.format(requirement_text=requirement_text)
 
-        llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
+        # The 'chat' method expects a list of message dictionaries.
+        messages = [{"role": "user", "content": formatted_prompt}]
 
-        if not llm_response.get("content"):
+        # The llm_client.complete method is synchronous in the base class,
+        # but the calling agent is async. This suggests the concrete
+        # implementation should be async or run in an executor.
+        # For now, we will assume an async-compatible mock or implementation.
+        # The primary fix is the message format.
+        llm_response_dict = self.llm_client.complete(messages)
+
+        if not llm_response_dict.get("response"):
             raise ValueError("LLM failed to provide content.")
 
-        return llm_response["content"]
+        return llm_response_dict["response"]
