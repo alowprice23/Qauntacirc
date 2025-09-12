@@ -2,115 +2,161 @@ import datetime
 import numpy as np
 import math
 import sys
+import asyncio
 
 from core.orchestrator import Orchestrator
 from core.energy_calculator import EnergyCalculator
-from core.two_phase_annealer import TwoPhaseAnnealer
 from core.lyapunov_monitor import LyapunovMonitor
 from core.closure_validator import ClosureValidator
-from core.agent_pool import AgentPool
+from communication.protocol import AgentCommunicationProtocol
 from core.types import (
-    SystemState,
-    Agent,
-    Module,
-    DependencyGraph,
-    Constraint,
-    Obligation,
-    EnergyBreakdown,
-    LyapunovMetrics,
-    ObligationType,
-    ObligationStatus,
-    ProofWitness,
+    SystemState, Module, DependencyGraph, Constraint, Obligation,
+    EnergyBreakdown, LyapunovMetrics, ObligationType, ObligationStatus, SoftwareState
 )
 
-def setup_system() -> tuple[Orchestrator, list[Agent], SystemState]:
+# Import all the agents
+from agents.planck_forge.agent import PlanckForgeAgent
+from agents.schrodinger_dev.agent import SchrödingerDevAgent
+from agents.pauli_guard.agent import PauliGuardAgent
+from agents.uncertain_ai.agent import UncertainAIAgent
+from agents.tunnel_fix.agent import TunnelFixAgent
+from agents.bose_boost.agent import BoseBoostAgent
+from agents.phonon_flow.agent import PhononFlowAgent
+from agents.fluctua_test.agent import FluctuaTestAgent
+from agents.hydro_spread.agent import HydroSpreadAgent
+from agents.london_link.agent import LondonLinkAgent
+
+def setup_system() -> tuple[Orchestrator, SystemState]:
     """
     Initializes all components and creates a sample initial state.
     """
     energy_calculator = EnergyCalculator(alpha=1.0, beta=1.0, gamma=2.0, delta=0.5)
     lyapunov_monitor = LyapunovMonitor(kappa=100.0, xi=50.0)
-    annealer = TwoPhaseAnnealer()
     closure_validator = ClosureValidator()
-    agents = [Agent(id=f"agent_{i}", name=f"Agent-{i:02d}") for i in range(10)]
-    agent_pool = AgentPool(agents=agents)
+    comm_protocol = AgentCommunicationProtocol()
 
-    orchestrator = Orchestrator(
-        energy_calculator=energy_calculator,
-        lyapunov_monitor=lyapunov_monitor,
-        annealer=annealer,
-        agent_pool=agent_pool,
-        closure_validator=closure_validator,
-    )
-
-    # Construct a sample initial SystemState
-    modules = [
-        Module(name="auth", normalized_ast=b"", semantic_tokens=[], cyclomatic_complexity=5.0, duplication_factor=0.1, coverage_deficit=0.3, last_refactor=datetime.datetime.now()),
-        Module(name="payment", normalized_ast=b"", semantic_tokens=[], cyclomatic_complexity=12.0, duplication_factor=0.2, coverage_deficit=0.5, last_refactor=datetime.datetime.now()),
-        Module(name="profile", normalized_ast=b"", semantic_tokens=[], cyclomatic_complexity=2.0, duplication_factor=0.0, coverage_deficit=0.1, last_refactor=datetime.datetime.now()),
+    # Instantiate all the real agents
+    agents = [
+        PlanckForgeAgent(),
+        SchrödingerDevAgent(),
+        PauliGuardAgent(),
+        UncertainAIAgent(),
+        TunnelFixAgent(),
+        BoseBoostAgent(),
+        PhononFlowAgent(),
+        FluctuaTestAgent(),
+        HydroSpreadAgent(),
+        LondonLinkAgent(),
     ]
 
-    # Use the annealer's internal demo energy calculation to set the initial state energy
-    # This ensures consistency throughout the demonstration.
-    initial_demo_energy = annealer._calculate_demo_energy(SystemState(modules=modules, energy_breakdown=EnergyBreakdown(total=0, complexity=0, coupling=0, constraint=0, debt=0), lyapunov_metrics=LyapunovMetrics(phi=0, energy=0, test_penalty=0, obligation_penalty=0)))
+    orchestrator = Orchestrator(
+        agents=agents,
+        energy_calculator=energy_calculator,
+        lyapunov_monitor=lyapunov_monitor,
+        closure_validator=closure_validator,
+        communication_protocol=comm_protocol,
+    )
+
+    modules = [
+        Module(name="auth", normalized_ast=b"auth_code", semantic_tokens=["def", "login"], cyclomatic_complexity=5.0, duplication_factor=0.1, coverage_deficit=0.3, last_refactor=datetime.datetime.now()),
+        Module(name="payment", normalized_ast=b"payment_code", semantic_tokens=["class", "Payment"], cyclomatic_complexity=12.0, duplication_factor=0.2, coverage_deficit=0.5, last_refactor=datetime.datetime.now()),
+    ]
+
+    # Create a temporary state to calculate initial energy
+    temp_state = SystemState(
+        modules=modules,
+        software_state=SoftwareState(),
+        energy_breakdown=EnergyBreakdown(total=0, complexity=0, coupling=0, constraint=0, debt=0),
+        lyapunov_metrics=LyapunovMetrics(phi=0, energy=0, test_penalty=0, obligation_penalty=0)
+    )
+    initial_energy = energy_calculator.compute_total_energy(temp_state)
+
+    # Add metadata for agents that require it
+    metadata = {
+        "schrodinger_dev_input": {
+            "code_state": {
+                "state_vector": [1, 0, 0, 0],
+                "code": "def hello():\n    print('hello')"
+            },
+            "hamiltonian": {
+                "matrix": [[1, 0.5, 0, 0], [0.5, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]]
+            },
+            "dt": 0.1
+        },
+        "pauli_guard_input": {
+            "modules": [
+                {"id": "auth", "state_vector": [1, 0.1, 0, 0], "code": "..." },
+                {"id": "payment", "state_vector": [0.9, 0.2, 0, 0], "code": "..." }
+            ]
+        },
+        "tunnel_fix_input": {
+            "performance_profile": {"metrics": {"latency": 100.0, "error_rate": 0.05}}
+        },
+        "bose_boost_input": {
+            "workload": {
+                "tasks": {
+                    "auth": {"complexity": 5.0},
+                    "payment": {"complexity": 12.0}
+                },
+                "total_resources": 100.0,
+                "max_replicas_per_task": 10
+            },
+            "temperature": 1.0
+        },
+        "hydro_spread_input": {
+            "growth_parameters": {
+                "density": 1.0,
+                "gravity": 9.8,
+                "time_horizons": [1, 12, 24]
+            }
+        },
+        "fluctua_test_input": {
+            "temperature": 1.0
+        }
+    }
 
     initial_state = SystemState(
         modules=modules,
-        dependency_graph=None,
-        constraints=[],
-        obligations=[Obligation(id="SEC-001",type=ObligationType.SECURITY,description="",status=ObligationStatus.OPEN,energy_impact=50.0)],
-        failing_tests=["test_login_failure"],
-        energy_breakdown=EnergyBreakdown(total=initial_demo_energy, complexity=initial_demo_energy, coupling=0, constraint=0, debt=0),
-        lyapunov_metrics=LyapunovMetrics(phi=0, energy=0, test_penalty=0, obligation_penalty=0) # Will be calculated
+        software_state=SoftwareState(),
+        requirements=["The system must be secure.", "The system must be fast."],
+        energy_breakdown=initial_energy,
+        lyapunov_metrics=LyapunovMetrics(phi=0, energy=initial_energy.total, test_penalty=0, obligation_penalty=0),
+        metadata=metadata
     )
+    return orchestrator, initial_state
 
-    return orchestrator, agents, initial_state
-
-def main():
+async def main():
     """
-    Runs the main simulation loop to demonstrate the orchestration system.
+    Runs the main agent-driven loop.
     """
-    orchestrator, agents, current_state = setup_system()
-    print("✅ System initialized successfully!")
+    orchestrator, current_state = setup_system()
+    print("✅ System initialized successfully with 10 agents.")
 
-    max_iterations = 200
-    c_cooling_const = 10.0
-    energy_history = []
-    gradient_history = []
+    # Connect to NATS
+    try:
+        await orchestrator.comm_protocol.connect()
+    except Exception as e:
+        print(f"WARNING: Could not connect to NATS server. Continuing without communication features. Error: {e}")
+
+    max_iterations = 20  # Run a few iterations to see different agents work
 
     print("\n" + "="*70)
-    print("--- Starting Simulation ---")
+    print("--- Starting Agent-Driven Evolution ---")
     print("="*70)
 
     for k in range(max_iterations):
-        evolution = orchestrator.evolve_system(current_state, agents, k, c_cooling_const)
+        print(f"\n--- Iteration {k:03d} ---")
+        evolution = orchestrator.evolve_system(current_state)
         current_state = evolution.final_state
 
-        energy_history.append(current_state.energy_breakdown.total)
-        gradient_history.append(orchestrator.annealer._compute_energy_gradient(current_state))
-
         print(
-            f"Iter {k:03d} | "
-            f"Phase: {current_state.phase} | "
+            f"State | "
             f"Energy: {current_state.energy_breakdown.total:6.2f} | "
-            f"Lyapunov Φ: {current_state.lyapunov_metrics.phi:6.2f} | "
-            f"λ: {current_state.contraction_factor:.3f}"
+            f"Lyapunov Φ: {current_state.lyapunov_metrics.phi:6.2f}"
         )
 
-        if current_state.phase == "A":
-            if orchestrator.annealer.detect_basin_capture(energy_history, gradient_history):
-                print("\n" + "="*70)
-                print(f"🚀 PHASE TRANSITION DETECTED AT ITERATION {k}! Switching to Phase B.")
-                print("="*70 + "\n")
-                current_state.phase = "B"
-
-        elif current_state.phase == "B":
-            if evolution.final_state.contraction_factor >= 1.0 and evolution.initial_state.contraction_factor < 1.0:
-                print("\n--- Convergence Reached in Phase B ---")
-                break
-            gradient_norm = np.linalg.norm(orchestrator.annealer._compute_energy_gradient(current_state))
-            if gradient_norm < orchestrator.annealer.convergence_tolerance:
-                print("\n--- Convergence Reached in Phase B (Gradient Norm) ---")
-                break
+    if orchestrator.comm_protocol.is_connected:
+        await orchestrator.comm_protocol.close()
 
     print("\n" + "="*70)
     print("--- Simulation Finished ---")
@@ -118,6 +164,5 @@ def main():
     print(f"Final State Energy:     {current_state.energy_breakdown.total:.2f}")
     print(f"Final Lyapunov Potential: {current_state.lyapunov_metrics.phi:.2f}")
 
-
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())

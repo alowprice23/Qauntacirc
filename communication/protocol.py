@@ -1,40 +1,17 @@
 import asyncio
+import json
 from datetime import datetime
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 
-# Assuming data models are in common.data_models
+import nats
+from nats.aio.client import Client as NATSClient
+
+# Assuming data models are in core.types
 from core.types import EnergyDelta, AgentProposal, CoordinationResult
-
-class NATSClient:
-    """A mock NATS client for simulation purposes."""
-    def __init__(self):
-        self._subscriptions = {}
-        self._messages = []
-        print("Mock NATSClient initialized.")
-
-    async def publish(self, topic: str, message: Dict[str, Any]):
-        """Simulates publishing a message to a topic."""
-        print(f"NATS MOCK: Publishing to topic '{topic}': {message}")
-        self._messages.append((topic, message))
-        if topic in self._subscriptions:
-            for callback in self._subscriptions[topic]:
-                await callback(message)
-
-    async def subscribe(self, topic: str, callback):
-        """Simulates subscribing to a topic."""
-        print(f"NATS MOCK: Subscribing to topic '{topic}'")
-        if topic not in self._subscriptions:
-            self._subscriptions[topic] = []
-        self._subscriptions[topic].append(callback)
-
-    async def close(self):
-        """Simulates closing the connection."""
-        print("NATS MOCK: Connection closed.")
-
 
 class AgentCommunicationProtocol:
     def __init__(self):
-        self.nats_client = NATSClient()
+        self.nc: NATSClient = NATSClient()
         self.topics = {
             "energy_updates": "qc.energy.updates",
             "agent_proposals": "qc.agents.proposals",
@@ -42,38 +19,66 @@ class AgentCommunicationProtocol:
             "constraint_violations": "qc.constraints.violations",
             "convergence_signals": "qc.convergence.signals"
         }
+        self.is_connected = False
+
+    async def connect(self, servers: List[str] = ["nats://localhost:4222"]):
+        """Connects to the NATS server."""
+        if not self.is_connected:
+            try:
+                await self.nc.connect(servers=servers)
+                self.is_connected = True
+                print(f"Connected to NATS server at {servers}")
+            except Exception as e:
+                print(f"Failed to connect to NATS: {e}")
+                self.is_connected = False
+                raise
+
+    async def close(self):
+        """Closes the NATS connection."""
+        if self.is_connected:
+            await self.nc.close()
+            self.is_connected = False
+            print("NATS connection closed.")
 
     async def publish_energy_update(self, agent_id: str, energy_delta: EnergyDelta):
-        """Publish energy changes for orchestrator monitoring"""
+        """Publish energy changes for orchestrator monitoring."""
+        if not self.is_connected:
+            raise ConnectionError("Not connected to NATS server. Call connect() first.")
+
         message = {
             "agent_id": agent_id,
             "timestamp": datetime.now().isoformat(),
-            # Use .model_dump() for pydantic models
             "energy_delta": energy_delta.model_dump(),
             "mathematical_proof": str(energy_delta.conservation_proof)
         }
-        await self.nats_client.publish(self.topics["energy_updates"], message)
+        payload = json.dumps(message).encode('utf-8')
+        await self.nc.publish(self.topics["energy_updates"], payload)
 
     async def _check_proposal_conflicts(self, proposal: AgentProposal) -> List[AgentProposal]:
-        """Mock check for conflicting proposals."""
-        # In a real system, this would query a shared state or recent proposals.
-        print(f"MOCK: Checking for conflicts with proposal from {proposal.agent_id}")
-        return [] # Assume no conflicts for now
+        """
+        Placeholder for checking for conflicting proposals.
+        A full implementation would require a shared state management system
+        (e.g., Redis) to track and compare pending proposals from all agents.
+        """
+        print(f"MOCK: Checking for conflicts for proposal from {proposal.agent_id}")
+        return []
 
-    async def _resolve_conflicts_mathematically(self, proposal: AgentProposal, conflicting_proposals: List[AgentProposal]):
-        """Mock resolution of conflicts."""
+    async def _resolve_conflicts_mathematically(self, proposal: AgentProposal, conflicting: List[AgentProposal]):
+        """
+        Placeholder for resolving conflicts using mathematical optimization.
+        A full implementation could use game theory or multi-objective optimization
+        to find a resolution that maximizes a global utility function.
+        """
         print(f"MOCK: Resolving conflicts for {proposal.agent_id}")
-        # Simple strategy: approve the first one.
         return CoordinationResult(approved=True, modifications=[])
 
     async def coordinate_with_agents(self, proposal: AgentProposal) -> CoordinationResult:
-        """Coordinate proposal with other agents for mathematical consistency"""
-        # Check for conflicts with other agent proposals
-        conflicting_proposals = await self._check_proposal_conflicts(proposal)
+        """Coordinate proposal with other agents for mathematical consistency."""
+        if not self.is_connected:
+            raise ConnectionError("Not connected to NATS server. Call connect() first.")
 
-        # Resolve conflicts using mathematical optimization
+        conflicting_proposals = await self._check_proposal_conflicts(proposal)
         if conflicting_proposals:
-            resolution = await self._resolve_conflicts_mathematically(proposal, conflicting_proposals)
-            return resolution
+            return await self._resolve_conflicts_mathematically(proposal, conflicting_proposals)
 
         return CoordinationResult(approved=True, modifications=[])

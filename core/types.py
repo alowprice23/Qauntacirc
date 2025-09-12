@@ -81,9 +81,12 @@ class Dependency(BaseModel):
     target: Component
     strength: float
 
+from typing import List, Optional
+
 class DependencyGraph(BaseModel):
     nodes: List[Component]
     edges: List[Dependency]
+    adjacency_matrix: Optional[List[List[float]]] = None
 
 class Constraint(BaseModel):
     name: str
@@ -226,6 +229,9 @@ class SoftwareState(BaseModel):
 
 class QuantumState(BaseModel):
     state_vector: List[complex] = Field(default_factory=list)
+
+    class Config:
+        arbitrary_types_allowed = True
 
 Proposal = AgentAction
 State = SystemState
@@ -418,6 +424,9 @@ class ComplexResponse(BaseModel):
     value: complex
     imaginary_part: float = 0.0
 
+    class Config:
+        arbitrary_types_allowed = True
+
 class ChaosScenario(BaseModel):
     frequency: float
     spectral_density: float
@@ -436,6 +445,7 @@ class ResilienceAnalysis(BaseModel):
     suggested_improvements: List[str]
 
 class ChaosTestResult(PhysicsResult):
+    scenarios: List[ChaosScenario]
     scenarios_generated: int
     experiments_executed: int
     resilience_score: float

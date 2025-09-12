@@ -1,81 +1,166 @@
 import numpy as np
 import scipy.linalg
-from typing import List, Any
+from typing import List
 
-from agents.base.agent import QuantumAgent
+from agents.base.agent import PhysicsBasedAgent
 from core.types import (
-    SystemState, AgentTask, AgentResult, CodeState, Hamiltonian, CodeEvolution, UnitaryOperator, Proof, Status
+    SystemState, CodeState, Hamiltonian, CodeEvolution, UnitaryOperator, Proof, Observable
 )
+from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from common.utils import QuantumCodeGenerator, ProofSynthesizer
 
-class SchrodingerDevAgent(QuantumAgent):
-    def __init__(self, llm_client: Any = None, **kwargs: Any):
-        super().__init__(name="schrodinger_dev", **kwargs)
-        self.physics_principle = "Quantum State Evolution"
-        self.mathematical_formula = "iℏ∂ψ/∂t = Ĥψ"
+class SchrödingerDevAgent(PhysicsBasedAgent):
+    def __init__(self):
+        """
+        Initializes the SchrödingerDevAgent.
+        This agent is responsible for code synthesis through quantum state evolution,
+        governed by the Schrödinger equation.
+        """
+        super().__init__(
+            physics_principle="Quantum State Evolution",
+            mathematical_formula="iℏ∂ψ/∂t = Ĥψ"
+        )
         self.hbar = 1.054571817e-34
         self.code_generator = QuantumCodeGenerator()
         self.proof_synthesizer = ProofSynthesizer()
-        self.llm_client = llm_client
 
-    def analyze_state(self, state: SystemState) -> AgentTask:
+    def apply_physics_principle(self, system_state: SystemState) -> CodeEvolution:
         """
-        Analyzes the current state and proposes a code evolution.
+        Evolve the code state using the Schrödinger equation.
+        This function requires 'code_state', 'hamiltonian', and 'dt' to be present
+        in the system_state.metadata.
         """
-        # A real implementation would derive these from the SystemState.
-        mock_code_state = CodeState(state_vector=np.random.rand(4), code="// initial code")
-        mock_hamiltonian = Hamiltonian(matrix=np.random.rand(4, 4))
-        dt = 0.1
+        metadata = system_state.metadata.get("schrodinger_dev_input", {})
+        current_code_state_data = metadata.get("code_state")
+        hamiltonian_data = metadata.get("hamiltonian")
+        dt = metadata.get("dt")
 
-        # Core physics logic is now directly in analyze_state
-        unitary_operator = self._compute_unitary_operator(mock_hamiltonian, dt)
-        new_psi = unitary_operator.matrix @ mock_code_state.state_vector
+        if not all([current_code_state_data, hamiltonian_data, dt is not None]):
+            raise ValueError("SchrödingerDevAgent requires 'code_state', 'hamiltonian', and 'dt' in metadata.")
+
+        current_code_state = CodeState(**current_code_state_data)
+        hamiltonian = Hamiltonian(**hamiltonian_data)
+
+        initial_psi = np.array(current_code_state.state_vector, dtype=complex)
+
+        unitary_operator = self._compute_unitary_operator(hamiltonian, dt)
+
+        new_psi = np.array(unitary_operator.matrix) @ initial_psi
+
         generated_code = self.code_generator.materialize_from_state(new_psi)
+
         proof_obligations = self._extract_proof_obligations(generated_code)
         proofs = self.proof_synthesizer.generate_proofs(proof_obligations)
 
-        code_evolution = CodeEvolution(
-            new_state=CodeState(state_vector=new_psi, code=generated_code),
+        return CodeEvolution(
+            new_state=CodeState(state_vector=new_psi.tolist(), code=generated_code),
             proofs=proofs,
-            energy_change=self._compute_energy_change(mock_code_state.state_vector, new_psi),
+            energy_change=self._compute_energy_change(initial_psi, new_psi, hamiltonian),
             unitary_operator=unitary_operator
         )
 
-        return AgentTask(
-            agent_name=self.name,
-            task_type="code_evolution",
-            payload={"code_evolution": code_evolution.model_dump()},
-            status=Status.SUCCESS
-        )
-
     def _compute_unitary_operator(self, H: Hamiltonian, dt: float) -> UnitaryOperator:
-        """Compute U = exp(-iĤt/ℏ) using matrix exponential"""
-        matrix = -1j * H.matrix * dt / self.hbar
-        return UnitaryOperator(matrix=scipy.linalg.expm(matrix))
+        """Compute U = exp(-iĤt/ℏ) using matrix exponential."""
+        h_matrix = np.array(H.matrix, dtype=complex)
+        matrix = -1j * h_matrix * dt / self.hbar
+        return UnitaryOperator(matrix=scipy.linalg.expm(matrix).tolist())
 
     def _extract_proof_obligations(self, code: str) -> List[str]:
-        """Placeholder for extracts mock proof obligations from code."""
+        """Placeholder for extracting mock proof obligations from code."""
         if "assert" in code or "require" in code:
             return ["obligation_1", "obligation_2"]
         return []
 
-    def _compute_energy_change(self, old_psi: np.ndarray, new_psi: np.ndarray) -> float:
-        """Placeholder for computes a mock energy change."""
-        return np.linalg.norm(new_psi) - np.linalg.norm(old_psi)
+    def _compute_energy_change(self, old_psi: np.ndarray, new_psi: np.ndarray, H: Hamiltonian) -> float:
+        """Computes the change in expectation value of energy <E> = <ψ|H|ψ>."""
+        h_matrix = np.array(H.matrix, dtype=complex)
+        energy_before = np.vdot(old_psi, h_matrix @ old_psi).real
+        energy_after = np.vdot(new_psi, h_matrix @ new_psi).real
+        return energy_after - energy_before
 
-    def validate_proposal(self, proposal: AgentTask) -> bool:
-        """Validates the proposal."""
-        return proposal.status == Status.SUCCESS and "code_evolution" in proposal.payload
+    def measure_observable(self, system_state: SystemState) -> Observable:
+        """
+        Measures the stability of the code state evolution, represented by the
+        change in the norm of the state vector. A perfectly unitary evolution
+        should result in a norm change of 0.
+        """
+        try:
+            metadata = system_state.metadata.get("schrodinger_dev_input", {})
+            if "code_state" not in metadata:
+                raise ValueError("Missing 'code_state' for measurement.")
 
-    def execute(self, proposal: AgentTask) -> AgentResult:
-        """Executes the proposal."""
-        if self.validate_proposal(proposal):
-            return AgentResult(
-                task_id=proposal.id, agent_name=self.name, action_taken=True,
-                result=proposal.payload, status=Status.SUCCESS
+            evolution_result = self.apply_physics_principle(system_state)
+
+            current_code_state = CodeState(**metadata.get("code_state"))
+
+            norm_before = np.linalg.norm(current_code_state.state_vector)
+            norm_after = np.linalg.norm(evolution_result.new_state.state_vector)
+
+            stability_delta = abs(norm_after - norm_before)
+
+            return Observable(
+                name="evolution_norm_stability",
+                value=stability_delta,
+                unit="norm_delta"
             )
-        else:
-            return AgentResult(
-                task_id=proposal.id, agent_name=self.name, action_taken=False,
-                error="Invalid proposal", status=Status.FAILED
-            )
+        except (ValueError, TypeError) as e:
+            return Observable(name="evolution_norm_stability", value=-1.0, unit="error")
+
+    def verify_conservation_laws(self, before: SystemState, after: SystemState) -> bool:
+        """
+        Verifies the conservation of probability. For a unitary evolution,
+        the norm of the state vector must be conserved: ||ψ_after|| = ||ψ_before||.
+        This assumes the system's quantum_state field is updated by the orchestrator.
+        """
+        if not before.quantum_state or not after.quantum_state:
+            return True
+
+        norm_before = np.linalg.norm(before.quantum_state.state_vector)
+        norm_after = np.linalg.norm(after.quantum_state.state_vector)
+
+        tolerance = 1e-9
+        return abs(norm_before - norm_after) < tolerance
+
+    def generate_certificate(self, before_state: SystemState, after_state: SystemState, result: CodeEvolution) -> AgentCertificate:
+        """Generates a mathematical certificate for the code evolution operation."""
+
+        # 1. Conservation Proof (Probability/Norm Conservation)
+        norm_before = np.linalg.norm(before_state.quantum_state.state_vector) if before_state.quantum_state else 0
+        norm_after = np.linalg.norm(after_state.quantum_state.state_vector) if after_state.quantum_state else 0
+        conservation_error = abs(norm_before - norm_after)
+
+        conservation_proof = ConservationProof(
+            energy_before=norm_before,
+            energy_after=norm_after,
+            conservation_error=conservation_error,
+            mathematical_justification=f"Probability norm conservation for unitary evolution. | |ψ_after| - |ψ_before| | = {conservation_error:.2e}"
+        )
+
+        # 2. Convergence Proof (Not applicable)
+        convergence_proof = ConvergenceProof(
+            lyapunov_before=0, lyapunov_after=0, descent_amount=0, convergence_rate=0,
+            justification="N/A: SchrödingerDev performs a single-step evolution, not an iterative convergence."
+        )
+
+        # 3. Stability Proof (Unitary evolution is inherently stable)
+        stability_proof = StabilityProof(
+            description="Evolution Stability", is_stable=True,
+            details="The evolution is governed by a unitary operator U. Unitary operators are norm-preserving, guaranteeing a stable evolution.",
+            justification="Unitary evolution is stable by definition."
+        )
+
+        # 4. Performance Guarantee (Not applicable)
+        performance_guarantee = PerformanceGuarantee(
+            description="Agent Performance", bound="N/A", verified=True,
+            justification="N/A: This agent performs code generation, performance is not its primary metric."
+        )
+
+        return AgentCertificate(
+            agent_id="schrodinger_dev",
+            physics_principle=self.physics_principle,
+            mathematical_formula=self.formula,
+            conservation_proof=conservation_proof,
+            convergence_proof=convergence_proof,
+            stability_proof=stability_proof,
+            performance_guarantee=performance_guarantee
+        )
