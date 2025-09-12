@@ -1,7 +1,10 @@
 import asyncio
-from contextlib import contextmanager
-from typing import Any, Dict, List, Optional
+import os
+from contextlib import asynccontextmanager
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Callable
 
+import sacrebleu
 from rich.console import Console
 from rich.live import Live
 from rich.panel import Panel
@@ -12,13 +15,23 @@ from rich.progress import (
     TextColumn,
     TimeElapsedColumn,
 )
-from rich.prompt import Prompt, Confirm
+from rich.prompt import Confirm
 from rich.spinner import Spinner
 from rich.table import Table
-# import sacrobleu # Temporarily removed to debug ModuleNotFoundError
+from rich.text import Text
+
+from prompt_toolkit import PromptSession
+from prompt_toolkit.history import FileHistory
+from prompt_toolkit.completion import PathCompleter
+from prompt_toolkit.styles import Style
 
 from core.types import AppContext, TaskQuanta
 from cli.state import SessionState
+
+# Define a custom style for the prompt
+prompt_style = Style.from_dict({
+    'prompt': 'bold cyan',
+})
 
 class QuantaCircIO:
     """
@@ -28,6 +41,13 @@ class QuantaCircIO:
     def __init__(self, context: AppContext):
         self.console = getattr(context, 'console', Console())
         self.interactive = getattr(context, 'interactive', True)
+
+        # Setup prompt_toolkit session with history
+        history_path = Path(os.path.expanduser("~/.quantacirc/history.txt"))
+        history_path.parent.mkdir(parents=True, exist_ok=True)
+        self.prompt_session = PromptSession(
+            history=FileHistory(str(history_path))
+        )
 
     def welcome_screen(self, session_state: SessionState):
         """
@@ -57,29 +77,69 @@ class QuantaCircIO:
         )
         self.console.print(panel)
 
-    def get_user_input(self, session_state: SessionState) -> str:
+    def get_user_input(self, session_state: SessionState, bottom_toolbar: Optional[Callable] = None) -> str:
         """
-        Gets user input with history and auto-completion.
-        CNL validation is temporarily disabled to avoid dependency issues.
+        Gets user input with history, auto-completion, and BLEU score validation.
         """
-        prompt_text = f"[bold cyan]Q> [/]({session_state.session_id[:8]}) "
-        raw_input = Prompt.ask(prompt_text)
+        prompt_text = [('class:prompt', f"Q> ({session_state.session_id[:8]}) ")]
 
-        # CNL validation using BLEU score is temporarily disabled.
-        # We'll assume a perfect score for now.
-        bleu_score = 100.0
+        def get_toolbar():
+            if bottom_toolbar:
+                return Text.from_markup(bottom_toolbar())
+            return None
 
-        session_state.add_history("user", raw_input, metadata={"bleu_score": bleu_score})
+        while True:
+            raw_input = self.prompt_session.prompt(
+                prompt_text,
+                completer=PathCompleter(),
+                style=prompt_style,
+                bottom_toolbar=get_toolbar,
+                refresh_interval=0.5
+            )
 
-        return raw_input
+            # --- BLEU Score Validation ---
+            # A simple reference for what we expect. In a real system, this would be
+            # more sophisticated, perhaps generated based on the current context.
+            cnl_reference = "create a new project"
+            bleu = sacrebleu.corpus_bleu(raw_input, [cnl_reference])
+            bleu_score = bleu.score
 
-    @contextmanager
-    def spinner(self, text: str = "Processing..."):
+            session_state.add_history("user", raw_input, metadata={"bleu_score": bleu_score})
+
+            if bleu_score >= 90: # Auto-accept (using 0.90 scale from prompt, so 90 for sacrebleu)
+                return raw_input
+            elif 70 <= bleu_score < 90:
+                if not self.interactive:
+                    self.console.print("[yellow]Warning: Low clarity input in non-interactive mode. Proceeding.[/yellow]")
+                    return raw_input
+
+                if Confirm.ask(
+                    f"[yellow]Your command has a low clarity score (BLEU: {bleu_score:.2f}). Proceed anyway?[/yellow]",
+                    default=True
+                ):
+                    return raw_input
+                else:
+                    self.console.print("[bold cyan]Please rephrase your command.[/bold cyan]")
+                    continue # Ask for input again
+            else: # < 70
+                if not self.interactive:
+                    raise ValueError(f"Input clarity too low (BLEU: {bleu_score:.2f}). Aborting in non-interactive mode.")
+
+                self.display_error(
+                    "QCE-CLI-003",
+                    f"Input clarity is too low to proceed (BLEU: {bleu_score:.2f}).",
+                    ["Please try rephrasing your command in simpler terms.", "Focus on one action and one subject."]
+                )
+                continue # Ask for input again
+
+
+    @asynccontextmanager
+    async def spinner(self, text: str = "Processing..."):
         """
         Displays a spinner for long-running operations with quantum state indicators.
         """
-        # TODO: Update spinner with live energy metrics from another thread.
-        spinner = Spinner("dots", text=text)
+        spinner_text = Text(text, style="yellow")
+        spinner = Spinner("dots", text=spinner_text)
         with Live(spinner, console=self.console, transient=True, refresh_per_second=20) as live:
             yield live
 
@@ -113,12 +173,13 @@ class QuantaCircIO:
             table.add_row(q.id, q.description, f"{q.energy:.4f}")
             total_energy += q.energy
 
-        self.console.print(table)
-        self.console.print(f"Total Quantized Energy: [energy]{total_energy:.4f}[/energy]")
+        table.caption = f"Total Quantized Energy: [energy]{total_energy:.4f}[/energy]"
+        return table
 
     def display_results(self, session_state: SessionState, artifacts: Optional[List[str]] = None):
         """
         Displays the results of an operation, including quantum state changes.
+        Returns a Rich renderable.
         """
         qc_state = session_state.qc_state
 
@@ -133,15 +194,8 @@ class QuantaCircIO:
         state_table.add_row("Contraction Factor λ", f"{qc_state.contraction_factor:.6f}")
         state_table.add_row("Optimization Phase", qc_state.optimization_phase)
 
-        self.console.print(state_table)
+        return state_table
 
-        if artifacts is not None:
-            artifacts_panel = Panel(
-                "\n".join(artifacts) if artifacts else "No artifacts generated.",
-                title="[bold green]Generated Artifacts[/bold green]",
-                border_style="green"
-            )
-            self.console.print(artifacts_panel)
 
     def display_error(self, code: str, message: str, suggestions: Optional[List[str]] = None):
         """

@@ -1,11 +1,16 @@
 from typing import Dict, Any, List, Tuple
 import re
 
+from typing import Dict, Any, List, Tuple
+import re
+
 from core.types import TaskQuanta
+from cli.state import SessionState
 
 # --- Constants for mock physics calculations ---
 # Planck's constant in a mock unit system
 H_NU = 0.1
+MAX_PLAN_ENERGY = 0.5 # Arbitrary threshold for the energy gate
 
 class CommandRouter:
     """
@@ -14,15 +19,14 @@ class CommandRouter:
     """
 
     def __init__(self):
-        # In a real system, this might load patterns or models.
-        pass
+        self.MAX_PLAN_ENERGY = MAX_PLAN_ENERGY
 
-    def process_input(self, raw_input: str) -> Dict[str, Any]:
+    def process_input(self, raw_input: str, session: SessionState) -> Dict[str, Any]:
         """
         Runs the full intent processing pipeline.
         """
-        # 1. CNL Translation (simulated)
-        cnl_translation = self._to_cnl(raw_input)
+        # 1. CNL Translation (simulated and now context-aware)
+        cnl_translation = self._to_cnl(raw_input, session)
 
         # 2. Intent Extraction & DSL Generation
         dsl = self._extract_intent_to_dsl(raw_input)
@@ -34,9 +38,18 @@ class CommandRouter:
         gallina_spec = self._generate_gallina(dsl)
 
         # 4. Task Quantization
-        quanta, obligations = self._quantize_task(dsl)
+        quanta, obligations = self._quantize_task(dsl, session)
 
-        # 5. Δ-closure verification (simulated)
+        # 5. Energy-Guided Routing Gate
+        plan_energy = sum(q.energy for q in quanta)
+        print(f"[DEBUG] Checking energy {plan_energy} against threshold {self.MAX_PLAN_ENERGY}")
+        if plan_energy > self.MAX_PLAN_ENERGY:
+            raise ValueError(
+                f"Proposed plan energy ({plan_energy:.2f}) exceeds threshold "
+                f"({self.MAX_PLAN_ENERGY:.2f}). Please try a less complex command."
+            )
+
+        # 6. Δ-closure verification (simulated)
         # For now, we just return the obligations we generated.
         # A real system would have a loop to ensure all are met.
 
@@ -52,10 +65,10 @@ class CommandRouter:
             "canonical_ast": canonical_ast,
         }
 
-    def _to_cnl(self, text: str) -> str:
+    def _to_cnl(self, text: str, session: SessionState) -> str:
         """
         Translates raw text to a more structured Controlled Natural Language format.
-        This is a simplified simulation.
+        This is a simplified simulation that is now context-aware.
         """
         text = text.lower()
         lang_match = re.search(r'\b(python|typescript|go|rust)\b', text)
@@ -66,7 +79,14 @@ class CommandRouter:
         p_type = project_type_match.group(0) if project_type_match else "unknown"
         action = action_match.group(0) if action_match else "unknown"
 
-        return f"It is asserted that the user wants to {action} a new software artifact. The artifact is of type '{p_type}' and is implemented in the language '{lang}'."
+        # Use the git context
+        git_context = session.context.get("git", {})
+        branch = git_context.get("active_branch", "unknown-branch")
+        is_dirty = git_context.get("is_dirty", False)
+
+        dirty_status = "dirty" if is_dirty else "clean"
+
+        return f"On git branch '{branch}' (status: {dirty_status}), it is asserted that the user wants to {action} a new software artifact. The artifact is of type '{p_type}' and is implemented in the language '{lang}'."
 
     def _extract_intent_to_dsl(self, text: str) -> Dict[str, Any]:
         """
@@ -131,12 +151,13 @@ Admitted.
 """
         return "(* Could not generate Gallina spec for the given DSL *)"
 
-    def _quantize_task(self, dsl: Dict[str, Any]) -> Tuple[List[TaskQuanta], List[str]]:
+    def _quantize_task(self, dsl: Dict[str, Any], session: SessionState) -> Tuple[List[TaskQuanta], List[str]]:
         """
         Breaks a DSL task into discrete TaskQuanta with energy levels.
+        It also registers the obligations in the session state.
         """
         quanta = []
-        obligations = []
+        new_obligations = []
 
         if dsl.get("command") == "create_project":
             lang = dsl.get("params", {}).get("language", "python")
@@ -170,10 +191,14 @@ Admitted.
                 energy=3 * H_NU # Highest energy
             ))
 
-            # Create corresponding obligations
-            obligations = [f"Ensure {q.id} is completed" for q in quanta]
+            # Create and register corresponding obligations
+            for q in quanta:
+                obligation = f"Verify task '{q.id}' ({q.description}) is complete."
+                new_obligations.append(obligation)
+                if obligation not in session.qc_state.open_obligations:
+                    session.qc_state.open_obligations.append(obligation)
 
-        return quanta, obligations
+        return quanta, new_obligations
 
     def _dsl_to_ast(self, dsl: Dict[str, Any]) -> Dict[str, Any]:
         """

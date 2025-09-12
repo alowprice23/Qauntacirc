@@ -34,7 +34,8 @@ class QCState(BaseModel):
     lyapunov_potential: float
     contraction_factor: float
     failing_tests: int = 0
-    open_obligations: int = 0
+    open_obligations: List[str] = Field(default_factory=list)
+    completed_obligations: List[str] = Field(default_factory=list)
     optimization_phase: str = "initialization"
     metadata: Dict[str, Any] = Field(default_factory=dict)
 

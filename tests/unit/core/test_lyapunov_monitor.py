@@ -8,7 +8,12 @@ from core.types import QCState, LyapunovResult, SoftwareState, EnergyComponents
 
 # Mock QCState, we only need the lyapunov_potential for most tests
 class MockQCState(QCState):
-    def __init__(self, energy, potential, failing_tests=0, open_obligations=0):
+    def __init__(self, energy, potential, failing_tests=0, open_obligations=None):
+        if isinstance(open_obligations, int): # Handle old test code passing 0
+            open_obligations = []
+        elif open_obligations is None:
+            open_obligations = []
+
         energy_components = EnergyComponents(static=energy, dynamic=0, interaction=0)
         super().__init__(
             software_state=SoftwareState(component_versions={}, config_hashes={}),

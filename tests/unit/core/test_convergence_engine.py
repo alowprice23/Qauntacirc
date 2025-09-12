@@ -12,7 +12,12 @@ from core.two_phase_annealer import TwoPhaseAnnealer
 
 # Mock QCState for testing purposes
 class MockQCState(QCState):
-    def __init__(self, energy, potential, failing_tests=0, open_obligations=0):
+    def __init__(self, energy, potential, failing_tests=0, open_obligations=None):
+        if isinstance(open_obligations, int): # Handle old test code passing 0
+            open_obligations = []
+        elif open_obligations is None:
+            open_obligations = []
+
         energy_components = EnergyComponents(static=energy, dynamic=0, interaction=0)
         super().__init__(
             software_state=SoftwareState(component_versions={}, config_hashes={}),
@@ -22,9 +27,6 @@ class MockQCState(QCState):
             contraction_factor=0.5,
             failing_tests=failing_tests,
             open_obligations=open_obligations,
-            context_code="mock",
-            file_path="mock/path",
-            line_number=0,
         )
 
 @pytest.fixture

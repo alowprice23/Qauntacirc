@@ -680,7 +680,7 @@ class TestLyapunovMonitoring:
             mock_state = Mock()
             mock_state.energy = 10.0
             mock_state.failing_tests = 2
-            mock_state.open_obligations = 1
+            mock_state.open_obligations = ["obligation1"] # Must be a list
             
             phi = lyapunov.compute(mock_state)
             expected_phi = 10.0 + 100.0 * 2 + 50.0 * 1  # E + κ*tests + ξ*obligations

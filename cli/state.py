@@ -1,9 +1,11 @@
 import json
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+import git
 from cryptography.fernet import Fernet
 from pydantic import BaseModel, Field
 
@@ -106,3 +108,53 @@ class SessionState(BaseModel):
         Adds a new item to the conversation history.
         """
         self.history.append(HistoryItem(role=role, content=content, metadata=metadata or {}))
+
+    def aggregate_context(self) -> None:
+        """
+        Aggregates context from the environment, such as git status and env vars.
+        """
+        context_data = {
+            "environment": {},
+            "git": {}
+        }
+
+        # 1. Aggregate environment variables
+        relevant_vars = ["USER", "PWD", "HOME"]
+        for var in relevant_vars:
+            if var in os.environ:
+                context_data["environment"][var] = os.environ[var]
+
+        # Add any custom QUANTA_ vars
+        for key, value in os.environ.items():
+            if key.startswith("QUANTA_"):
+                context_data["environment"][key] = value
+
+        # 2. Aggregate git repository information
+        try:
+            repo = git.Repo(search_parent_directories=True)
+            context_data["git"]["active_branch"] = repo.active_branch.name
+            context_data["git"]["is_dirty"] = repo.is_dirty()
+            context_data["git"]["head_commit"] = repo.head.commit.hexsha
+
+            # Get untracked files
+            untracked_files = repo.untracked_files
+            if untracked_files:
+                 context_data["git"]["untracked_files"] = untracked_files[:10] # Limit to 10
+
+        except git.InvalidGitRepositoryError:
+            context_data["git"]["error"] = "Not a git repository."
+        except Exception as e:
+            context_data["git"]["error"] = f"An error occurred: {str(e)}"
+
+        self.context = context_data
+
+    def resolve_obligation(self, obligation_id: str) -> bool:
+        """
+        Moves an obligation from the open to the completed list.
+        Returns True if the obligation was found and moved, False otherwise.
+        """
+        if obligation_id in self.qc_state.open_obligations:
+            self.qc_state.open_obligations.remove(obligation_id)
+            self.qc_state.completed_obligations.append(obligation_id)
+            return True
+        return False
