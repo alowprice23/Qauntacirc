@@ -1,96 +1,58 @@
-# core/lyapunov_monitor.py
-
-from typing import List, Tuple
-import numpy as np
-from core.types import QCState, LyapunovResult
-from core.lyapunov_function import LyapunovFunction
+from typing import List
+from core.types import SystemState, LyapunovMetrics, ObligationStatus
 
 class LyapunovMonitor:
     """
-    A class to monitor the Lyapunov stability of the system.
+    Monitors the system's Lyapunov potential to ensure stability.
+    The Lyapunov function is defined as:
+    Φ(S) = E_approx(S) + κ·#{failing tests} + ξ·#{open obligations}
     """
-    def __init__(self, lyapunov_function: LyapunovFunction, excursion_bound: float = 1.5, convergence_threshold: float = 1e-4, min_history_for_stability: int = 10):
-        self.lyapunov_function = lyapunov_function
-        self.excursion_bound = excursion_bound
-        self.convergence_threshold = convergence_threshold
-        self.min_history_for_stability = min_history_for_stability
-        self.potential_history: List[float] = []
-        self.state_history: List[QCState] = []
-        self.min_potential: float | None = None
+    def __init__(self, kappa: float, xi: float):
+        """
+        Initializes the monitor with penalty coefficients.
+        Args:
+            kappa (float): Weight for the penalty on failing tests.
+            xi (float): Weight for the penalty on open obligations.
+        """
+        if kappa < 0 or xi < 0:
+            raise ValueError("Lyapunov penalty coefficients must be non-negative.")
+        self.kappa = kappa
+        self.xi = xi
+        self.history: List[LyapunovMetrics] = []
 
-    def reset(self):
-        self.potential_history = []
-        self.state_history = []
-        self.min_potential = None
+    def compute(self, state: SystemState) -> LyapunovMetrics:
+        """
+        Computes the Lyapunov potential for a given system state.
+        """
+        energy = state.energy_breakdown.total
+        test_failures = len(state.failing_tests)
+        open_obligations = len([
+            ob for ob in state.obligations if ob.status != ObligationStatus.CLOSED
+        ])
 
-    def track_state(self, state: QCState):
-        potential = self.lyapunov_function.compute(state)
-        state.lyapunov_potential = potential
-        self.potential_history.append(potential)
-        self.state_history.append(state)
-        if self.min_potential is None or potential < self.min_potential:
-            self.min_potential = potential
+        test_penalty = self.kappa * test_failures
+        obligation_penalty = self.xi * open_obligations
 
-    def track_excursion(self) -> Tuple[bool, float]:
-        if not self.potential_history or self.min_potential is None:
-            return False, 0.0
+        phi = energy + test_penalty + obligation_penalty
 
-        ratio = self.potential_history[-1] / self.min_potential
-        return ratio > self.excursion_bound, ratio
-
-    def verify_stability(self) -> LyapunovResult:
-        if len(self.potential_history) < self.min_history_for_stability:
-            return LyapunovResult(is_stable=False, convergence_status="insufficient_data", exponent=0.0, iterations=len(self.potential_history))
-
-        positive_potentials = np.array([p for p in self.potential_history if p > 0])
-        if len(positive_potentials) < self.min_history_for_stability:
-            return LyapunovResult(is_stable=False, convergence_status="insufficient_data", exponent=0.0, iterations=len(self.potential_history))
-
-        log_potentials = np.log(positive_potentials)
-        time_steps = np.arange(len(log_potentials))
-        try:
-            # Fit a line to the log of the potentials
-            coeffs = np.polyfit(time_steps, log_potentials, 1)
-            exponent = coeffs[0]
-        except np.linalg.LinAlgError:
-            exponent = 0.0
-
-        if exponent < -self.convergence_threshold:
-            status = "stable"
-        elif exponent > self.convergence_threshold:
-            status = "unstable"
-        else:
-            status = "marginal"
-
-        return LyapunovResult(
-            is_stable=status == "stable",
-            convergence_status=status,
-            exponent=exponent,
-            iterations=len(self.potential_history)
+        metrics = LyapunovMetrics(
+            phi=phi,
+            energy=energy,
+            test_penalty=test_penalty,
+            obligation_penalty=obligation_penalty
         )
+        return metrics
 
-    def predict_convergence(self, target_potential: float) -> float | None:
-        stability_result = self.verify_stability()
-        if not stability_result.is_stable or stability_result.exponent >= 0:
-            return None
+    def track(self, metrics: LyapunovMetrics):
+        """Adds the latest Lyapunov metrics to the history."""
+        self.history.append(metrics)
 
-        current_potential = self.potential_history[-1]
-        if current_potential <= target_potential:
-            return 0.0
-
-        # V(t) = V0 * exp(lambda * t)
-        # log(V(t)/V0) = lambda * t
-        # t = log(V(t)/V0) / lambda
-        time_to_converge = np.log(target_potential / current_potential) / stability_result.exponent
-        return time_to_converge
-
-    def verify_martingale_property(self) -> Tuple[bool, float]:
-        if len(self.potential_history) < 2:
-            return True, 0.0 # Not enough data to say otherwise
-
-        diffs = np.diff(self.potential_history)
-        drift = np.mean(diffs)
-
-        # Supermartingale: E[X_{n+1} | F_n] <= X_n
-        # We check the average drift
-        return drift <= 0, drift
+    def verify_descent(self) -> bool:
+        """
+        Checks if the potential has not increased in the last step (is non-increasing).
+        A true supermartingale property would require E[Φ(k+1)|F_k] <= Φ(k).
+        This is a simpler, deterministic check.
+        """
+        if len(self.history) < 2:
+            return True # Not enough data to say otherwise
+        return self.history[-1].phi <= self.history[-2].phi

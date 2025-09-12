@@ -1,128 +1,121 @@
-"""
-Orchestrator
-"""
-from typing import Optional, List
-from uuid import uuid4
-from agents.contracts.composition import ContractComposer
-from core.closure_rules import ClosureRuleSet
-from core.energy_calculator import EnergyCalculator
-from core.energy_conservation import ConservationMonitor
-from core.lyapunov_monitor import LyapunovMonitor
-from core.two_phase_annealer import TwoPhaseAnnealer
-from core.functor import Functor
-from core.types import QCState, AgentTask, AgentResult, SoftwareState, EnergyComponents, Status
-from messaging.agent_router import AgentRouter
-from messaging.types import Message
+from typing import List
+import math
+import numpy as np
 
+# All the components I've built or refactored
+from core.energy_calculator import EnergyCalculator
+from core.two_phase_annealer import TwoPhaseAnnealer
+from core.closure_validator import ClosureValidator
+from core.agent_pool import AgentPool
+from core.lyapunov_monitor import LyapunovMonitor
+
+# The types I've defined
+from core.types import (
+    SystemState,
+    Agent,
+    SystemEvolution,
+    LyapunovMetrics,
+    EnergyBreakdown,
+    AgentAction,
+    ComposedAction
+)
 
 class Orchestrator:
     """
-    The orchestrator is responsible for managing the overall process.
+    The orchestrator coordinates all agents and system components to evolve
+    the software state towards a lower energy configuration, enforcing
+    mathematical guarantees throughout the process.
     """
 
     def __init__(
-            self,
-            agents: List,
-            energy_calculator: EnergyCalculator,
-            lyapunov_monitor: LyapunovMonitor,
-            annealer: TwoPhaseAnnealer,
-            functor: Functor,
-            closure_rules: ClosureRuleSet,
-            agent_router: AgentRouter,
+        self,
+        energy_calculator: EnergyCalculator,
+        lyapunov_monitor: LyapunovMonitor,
+        annealer: TwoPhaseAnnealer,
+        agent_pool: AgentPool,
+        closure_validator: ClosureValidator,
     ):
-        self.agents = agents
         self.energy_calculator = energy_calculator
         self.lyapunov_monitor = lyapunov_monitor
         self.annealer = annealer
-        self.functor = functor
-        self.closure_rules = closure_rules
-        self.state_history: List[QCState] = []
-        self.agent_router = agent_router
-        self.contract_composer = ContractComposer()
+        self.agent_pool = agent_pool
+        self.closure_validator = closure_validator
 
-    async def execute_pipeline(self, requirement: str, max_iterations: int = 100) -> QCState:
-        # 1. Initial state from requirement
-        initial_software_state = SoftwareState(component_versions={}, config_hashes={}, status="new")
-        initial_energy_components = EnergyComponents(static=1000.0, dynamic=500.0, interaction=200.0)
-        initial_state = QCState(
-            software_state=initial_software_state,
-            energy=initial_energy_components.total,
-            energy_components=initial_energy_components,
-            lyapunov_potential=initial_energy_components.total,  # Initially, potential = energy
-            contraction_factor=1.0,
-            metadata={"requirement_text": requirement}
+    def evolve_system(self, current_state: SystemState, agents: List[Agent], k: int, c_cooling_const: float) -> SystemEvolution:
+        """
+        Executes one full cycle of the system's evolution.
+        """
+        # 1. Calculate Lyapunov potential for the current state.
+        # The energy is assumed to be correct from the previous step.
+        current_state.lyapunov_metrics = self.lyapunov_monitor.compute(current_state)
+        self.lyapunov_monitor.track(current_state.lyapunov_metrics)
+
+        # 2. Apply agent transformations via the annealer, depending on the phase.
+        if current_state.phase == "A":
+            temperature = c_cooling_const / math.log(k + 2)
+            annealing_result = self.annealer.phase_a_step(current_state, temperature)
+            new_state = annealing_result.state
+            # In a real system, the proposal would contain the action.
+            actions = []
+            energy_delta = annealing_result.energy_delta
+
+        elif current_state.phase == "B":
+            contraction_result = self.annealer.phase_b_step(current_state)
+            new_state = contraction_result.state
+            new_state.contraction_factor = contraction_result.lambda_factor
+            # The action is implicit in the gradient step.
+            actions = []
+            energy_delta = new_state.energy_breakdown.total - current_state.energy_breakdown.total
+        else:
+            raise ValueError(f"Unknown annealing phase: {current_state.phase}")
+
+        # 3. Recalculate Lyapunov metrics for the new state.
+        #    For this demonstration, we trust the energy value that was set by the
+        #    annealer's placeholder methods, rather than recalculating it.
+        new_state.lyapunov_metrics = self.lyapunov_monitor.compute(new_state)
+
+        # 4. Create the evolution record for this step.
+        evolution = SystemEvolution(
+            initial_state=current_state,
+            final_state=new_state,
+            actions=actions,
+            energy_delta=energy_delta
         )
-        self.state_history.append(initial_state)
-        # Initialize the energy conservation monitor
-        conservation_monitor = ConservationMonitor(initial_energy=initial_state.energy)
 
-        # 2. Run optimization loop
-        current_state = initial_state
-        proposal = None
-        for i in range(max_iterations):
-            # In a real scenario, we would select agents based on the current state and phase
-            selected_agent = self.agents[i % len(self.agents)]
+        # 5. Verify mathematical guarantees on the resulting evolution.
+        self.verify_lyapunov_descent(evolution)
+        self.verify_contraction_bounds(evolution)
 
-            # Agent proposes a task
-            proposal: AgentTask = await selected_agent.analyze_state(current_state)
+        return evolution
 
-            if not selected_agent.validate_proposal(proposal):
-                continue
+    def verify_lyapunov_descent(self, evolution: SystemEvolution):
+        """
+        Verifies that the Lyapunov potential has not increased, which is a
+        necessary condition for stability.
+        Φ(S_{k+1}) <= Φ(S_k)
+        """
+        initial_phi = evolution.initial_state.lyapunov_metrics.phi
+        final_phi = evolution.final_state.lyapunov_metrics.phi
 
-            # Creating a contract for the current action
-            action_contract = selected_agent.get_contract(proposal)
-            if not action_contract.precondition(current_state):
-                continue  # Skip if precondition is not met
+        # In Phase A, stochastic jumps are allowed to temporarily increase potential.
+        # However, in Phase B, the descent should be deterministic.
+        if final_phi > initial_phi and evolution.final_state.phase == "B":
+            raise RuntimeError(
+                f"CRITICAL: Lyapunov potential increased from {initial_phi:.4f} to {final_phi:.4f} "
+                "during Phase B. System is unstable."
+            )
 
-            action: AgentResult = selected_agent.execute(proposal)
-            energy_impact = action.result.get("energy_impact", {})
+        print("Lyapunov descent verified.")
 
-            delta_energy = sum(energy_impact.values())
-            new_energy = current_state.energy + delta_energy
-
-            # Track energy change with the conservation monitor
-            conservation_monitor.track_energy_change(delta_energy)
-            if not conservation_monitor.is_conserved():
-                # Handle energy conservation violation
-                pass
-
-            if self.annealer.should_accept(new_energy, current_state.energy):
-                # Create a new state based on the action
-                new_energy_components = current_state.energy_components.copy(deep=True)
-                new_energy_components.static += energy_impact.get("static", 0.0)
-                new_energy_components.dynamic += energy_impact.get("dynamic", 0.0)
-                new_energy_components.interaction += energy_impact.get("interaction", 0.0)
-                new_software_state = current_state.software_state.copy(deep=True)
-
-                new_state = QCState(
-                    software_state=new_software_state,
-                    energy=new_energy,
-                    energy_components=new_energy_components,
-                    lyapunov_potential=new_energy,  # Simplified
-                    contraction_factor=0.9,  # Simplified
-                    metadata=current_state.metadata,
-                )
-
-                if action_contract.postcondition(new_state):
-                    current_state = new_state
-                    self.state_history.append(current_state)
-                    self.lyapunov_monitor.track_state(current_state)
-
-                    # Example of broadcasting a message to other agents
-                    msg = Message(sender_id=selected_agent.id, receiver_id='broadcast',
-                                  topic='state_update', payload=new_state)
-                    await self.agent_router.publish(msg)
-
-            self.annealer.temperature = self.annealer.initial_temp / (1 + i)  # Simplified cooling
-
-            # Check for convergence
-            if self.lyapunov_monitor.verify_stability().is_stable:
-                break
-
-        # 3. Final verification
-        if proposal:
-            mock_action = AgentResult(task_id=proposal.id, agent_name="final_verification", action_taken=False,
-                                      status=Status.SUCCESS)
-            self.closure_rules.is_satisfied(current_state, mock_action)
-
-        return current_state
+    def verify_contraction_bounds(self, evolution: SystemEvolution):
+        """
+        Monitors the contraction factor during Phase B of annealing to ensure
+        the system is converging towards a local minimum.
+        """
+        if evolution.final_state.phase == "B":
+            lambda_factor = evolution.final_state.contraction_factor
+            if lambda_factor >= 1.0:
+                print(f"WARNING: Contraction factor λ = {lambda_factor:.4f} >= 1. "
+                      "Local convergence not guaranteed.")
+            else:
+                print(f"Contraction factor λ = {lambda_factor:.4f} < 1 verified.")

@@ -12,37 +12,27 @@ the computational engine, state representation, and optimization algorithms.
 from .energy_calculator import EnergyCalculator
 from .lyapunov_monitor import LyapunovMonitor
 from .two_phase_annealer import TwoPhaseAnnealer
-from .functor import Functor
 from .orchestrator import Orchestrator
-from .convergence_engine import ConvergenceEngine
-from .state_space import StateSpace
+from .closure_validator import ClosureValidator
+from .agent_pool import AgentPool
 
-# --- Data Management and Validation ---
-from .run_ledger import RunLedger
-from .persistence import PersistenceManager
-from .constraint_solver import ConstraintSolver
-from .closure_rules import ClosureRuleSet
-from .validators import validate_qc_state_consistency
-from .serialization import serialize_model, deserialize_model, save_model_to_json, load_model_from_json
-
-# --- Metrics and Utilities ---
-from .metrics import collect_all_metrics
-from .edit_distance import software_state_edit_distance, qcstate_edit_distance
-from .error_budget import ErrorBudget
 
 # --- Core Data Types ---
 from .types import (
-    QCState,
-    EnergyComponents,
-    SoftwareState,
-    QuantumState,
-    RunRecord,
-    AgentTask,
-    AgentResult,
-    LyapunovResult,
-    ConstraintViolation,
-    SMTResult,
-    ProofCertificate
+    SystemState,
+    EnergyBreakdown,
+    LyapunovMetrics,
+    Obligation,
+    ClosureResult,
+    Agent,
+    AgentAction,
+    ComposedAction,
+    Module,
+    DependencyGraph,
+    Constraint,
+    SystemEvolution,
+    AnnealingResult,
+    ContractionResult,
 )
 
 # --- Custom Exceptions ---
@@ -65,41 +55,26 @@ __all__ = [
     # Core Components
     "Orchestrator",
     "EnergyCalculator",
-    "Functor",
     "LyapunovMonitor",
     "TwoPhaseAnnealer",
-    "ConvergenceEngine",
-    "StateSpace",
-
-    # Data Management
-    "RunLedger",
-    "PersistenceManager",
-    "ConstraintSolver",
-    "ClosureRuleSet",
-    "validate_qc_state_consistency",
-    "serialize_model",
-    "deserialize_model",
-    "save_model_to_json",
-    "load_model_from_json",
-
-    # Metrics & Utilities
-    "collect_all_metrics",
-    "software_state_edit_distance",
-    "qcstate_edit_distance",
-    "ErrorBudget",
+    "ClosureValidator",
+    "AgentPool",
 
     # Core Data Types
-    "QCState",
-    "EnergyComponents", # Exported instead of QCEnergy
-    "SoftwareState",
-    "QuantumState",
-    "RunRecord",
-    "AgentTask",
-    "AgentResult",
-    "LyapunovResult",
-    "ConstraintViolation",
-    "SMTResult",
-    "ProofCertificate",
+    "SystemState",
+    "EnergyBreakdown",
+    "LyapunovMetrics",
+    "Obligation",
+    "ClosureResult",
+    "Agent",
+    "AgentAction",
+    "ComposedAction",
+    "Module",
+    "DependencyGraph",
+    "Constraint",
+    "SystemEvolution",
+    "AnnealingResult",
+    "ContractionResult",
 
     # Custom Exceptions
     "QuantaCircError",

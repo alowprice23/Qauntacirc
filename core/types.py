@@ -5,60 +5,107 @@ from datetime import datetime, timedelta
 from pydantic import field_validator, model_validator, BaseModel, Field, validator
 from enum import Enum
 
-class EnergyComponents(BaseModel):
-    static: float
-    dynamic: float
-    interaction: float
+class EnergyBreakdown(BaseModel):
+    total: float
+    complexity: float
+    coupling: float
+    constraint: float
+    debt: float
 
-    @property
-    def total(self) -> float:
-        return self.static + self.dynamic + self.interaction
+class LyapunovMetrics(BaseModel):
+    phi: float
+    energy: float
+    test_penalty: float
+    obligation_penalty: float
 
-class SoftwareState(BaseModel):
-    component_versions: Dict[str, str]
-    config_hashes: Dict[str, str]
-    status: str = "nominal"
+class ObligationType(str, Enum):
+    FUNCTIONAL = "FUNCTIONAL"
+    SECURITY = "SECURITY"
+    PERFORMANCE = "PERFORMANCE"
+    DOCUMENTATION = "DOCUMENTATION"
 
-class QuantumState(BaseModel):
-    state_vector: List[complex]
-    eigenvalues: Optional[List[float]] = None
-    density_matrix: Optional[List[List[complex]]] = None
+class ObligationStatus(str, Enum):
+    OPEN = "OPEN"
+    IN_PROGRESS = "IN_PROGRESS"
+    CLOSED = "CLOSED"
+    FAILED = "FAILED"
 
-class QCState(BaseModel):
+class ProofWitness(BaseModel):
+    type: str
+    data: Any
+
+class Obligation(BaseModel):
+    id: str
+    type: ObligationType
+    description: str
+    status: ObligationStatus = ObligationStatus.OPEN
+    witness: Optional[ProofWitness] = None
+    dependencies: List[str] = Field(default_factory=list)
+    deadline: Optional[datetime] = None
+    energy_impact: float
+
+class ClosureResult(BaseModel):
+    valid: bool
+    error: Optional[str] = None
+    unsatisfied: Optional[List[Obligation]] = None
+    closure_proof: Optional[Any] = None
+
+class Agent(BaseModel):
+    id: str
+    name: str
+
+class AgentAction(BaseModel):
+    agent_id: str
+    action_type: str
+    params: Dict[str, Any]
+
+class ComposedAction(BaseModel):
+    plan: Any
+    parallel_groups: List[List[AgentAction]]
+
+class Module(BaseModel):
+    name: str
+    normalized_ast: bytes
+    semantic_tokens: List[str]
+    cyclomatic_complexity: float
+    duplication_factor: float
+    coverage_deficit: float
+    last_refactor: datetime
+
+class DependencyGraph(BaseModel):
+    adjacency_matrix: Any # Should be numpy array
+    nodes: List[str]
+
+class Constraint(BaseModel):
+    name: str
+    weight: float
+    def evaluate_violation(self, state: "SystemState") -> float:
+        # Placeholder for actual violation logic
+        return 0.0
+
+class SystemState(BaseModel):
     id: UUID = Field(default_factory=uuid4)
     timestamp: datetime = Field(default_factory=datetime.utcnow)
-    software_state: SoftwareState
-    quantum_state: Optional[QuantumState] = None
-    energy: float
-    energy_components: EnergyComponents
-    lyapunov_potential: float
-    contraction_factor: float
-    failing_tests: int = 0
-    open_obligations: int = 0
-    optimization_phase: str = "initialization"
+
+    modules: List[Module] = Field(default_factory=list)
+    dependency_graph: Optional[DependencyGraph] = None
+    constraints: List[Constraint] = Field(default_factory=list)
+    obligations: List[Obligation] = Field(default_factory=list)
+    failing_tests: List[str] = Field(default_factory=list)
+
+    energy_breakdown: EnergyBreakdown
+    lyapunov_metrics: LyapunovMetrics
+
+    contraction_factor: float = 1.0
+    phase: str = "A"
+
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
-    @model_validator(mode="before")
-    @classmethod
-    def energy_must_be_sum_of_components(cls, values):
-        energy = values.get('energy')
-        energy_components_data = values.get('energy_components')
-        if energy is not None and energy_components_data is not None:
-            if isinstance(energy_components_data, dict):
-                energy_components = EnergyComponents(**energy_components_data)
-                if not abs(energy - energy_components.total) < 1e-9:
-                    raise ValueError('Total energy must equal the sum of its components.')
-            elif isinstance(energy_components_data, EnergyComponents):
-                if not abs(energy - energy_components_data.total) < 1e-9:
-                    raise ValueError('Total energy must equal the sum of its components.')
-        return values
-
-    @field_validator('contraction_factor')
-    @classmethod
-    def contraction_factor_must_be_between_0_and_1(cls, v):
-        if not (0.0 <= v <= 1.0):
-            raise ValueError('Contraction factor must be between 0 and 1.')
-        return v
+class SystemEvolution(BaseModel):
+    initial_state: SystemState
+    final_state: SystemState
+    actions: List[AgentAction]
+    energy_delta: float
 
 class TaskQuanta(BaseModel):
     id: str
@@ -81,7 +128,7 @@ class AgentTask(BaseModel):
     task_type: str
     payload: Dict[str, Any] | List[TaskQuanta]
     priority: int = Field(5, ge=1, le=10)
-    quantum_context: Optional[QCState] = None
+    quantum_context: Optional[SystemState] = None
     status: Status = Status.PENDING
     reason: Optional[str] = None
 
@@ -98,8 +145,8 @@ class RunRecord(BaseModel):
     start_time: datetime
     end_time: datetime
     status: Literal["completed", "failed", "running"]
-    initial_state: QCState
-    final_state: QCState
+    initial_state: SystemState
+    final_state: SystemState
     actions: List[AgentResult] = Field(default_factory=list)
 
     @model_validator(mode='after')
@@ -152,10 +199,20 @@ class AppContext(BaseModel):
         arbitrary_types_allowed = True
 
 
-Proposal = AgentTask
-State = QCState
+Proposal = AgentAction
+State = SystemState
 Action = AgentResult
 
+
+class AnnealingResult(BaseModel):
+    state: SystemState
+    accepted: bool
+    energy_delta: float
+
+class ContractionResult(BaseModel):
+    state: SystemState
+    lambda_factor: float
+    converged: bool
 
 # ### Quantum-Control-Enhancement Types ###
 
@@ -244,7 +301,7 @@ class IntentContext(BaseModel):
     """Mathematical context with energy state."""
     session_id: UUID
     user_profile: Dict[str, Any] # Placeholder for user model
-    system_state: QCState # Links to the overall quantum system state
+    system_state: SystemState # Links to the overall quantum system state
 
 class QuantumSignatures(BaseModel):
     """Mathematical fingerprints of the intent."""
