@@ -1,133 +1,108 @@
-import networkx as nx
-from typing import Dict, Any, Optional
-import itertools
+import numpy as np
+from typing import List, Dict, Any
 
-from agents.base.agent import QuantumAgent
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action, Status
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
-from agents.base import ops as base_ops
+from common.base_agent import PhysicsBasedAgent
+from common.data_models import (
+    DependencyGraph, Dependency, DependencyOptimization, DependencyOptimizationMove,
+    Component, SystemState, Observable
+)
+from common.utils import DependencyOptimizer, LondonCoefficientCalculator
 
-from . import prompts
-from . import ops
-
-class LondonLinkAgent(QuantumAgent):
-    """
-    The LondonLink Agent is an internal dependency optimization specialist.
-    It uses an analogy to London dispersion forces to find and resolve
-    improper couplings between distant modules in the codebase.
-    """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
+class LondonLinkAgent(PhysicsBasedAgent):
+    def __init__(self):
         super().__init__(
-            name="london_link",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
+            physics_principle="van der Waals Forces",
+            mathematical_formula="V(r) = -C₆/r⁶"
         )
-        self.llm_client = llm_client
+        self.dependency_optimizer = DependencyOptimizer()
+        self.C6_calculator = LondonCoefficientCalculator()
 
-    async def analyze_state(self, state: State) -> Proposal:
-        all_source_files = state.metadata.get("source_code_map", {})
-        if not all_source_files or len(all_source_files) < 2:
-            return Proposal(agent_name=self.name, task_type="dependency_optimization", payload={}, reason="Not enough source files to analyze.")
+    def apply_physics_principle(self, dependency_graph: DependencyGraph, **kwargs) -> DependencyOptimization:
+        """Optimize long-range dependencies using van der Waals model"""
+        num_nodes = len(dependency_graph.nodes)
+        if num_nodes < 2:
+            return DependencyOptimization(original_potential=0, optimized_moves=[], expected_potential_reduction=0, modularity_improvement=0)
 
-        dep_graph = ops.build_dependency_graph(all_source_files)
-        undirected_graph = dep_graph.graph.to_undirected()
+        london_coefficients = self._compute_all_london_coefficients(dependency_graph.nodes)
 
-        # Pre-calculate complexities to avoid redundant work
-        complexities = {
-            path: base_ops.calculate_cyclomatic_complexity(base_ops.parse_to_ast(code))
-            for path, code in all_source_files.items()
-        }
+        potential_matrix = np.zeros((num_nodes, num_nodes))
+        node_map = {node.id: i for i, node in enumerate(dependency_graph.nodes)}
 
-        module_path_map = {path.replace('/', '.').replace('.py', ''): path for path in all_source_files.keys()}
+        for i, node_i in enumerate(dependency_graph.nodes):
+            for j, node_j in enumerate(dependency_graph.nodes):
+                if i >= j: continue
 
-        most_attractive_pair = None
-        lowest_potential = 0
+                r_ij = self._compute_component_distance(node_i, node_j, dependency_graph)
 
-        for mod1, mod2 in itertools.combinations(dep_graph.graph.nodes(), 2):
-            if not nx.has_path(undirected_graph, mod1, mod2):
-                continue
+                if r_ij > 1e-9:
+                    C6_ij = london_coefficients.get((node_i.id, node_j.id), 1.0)
+                    potential = -C6_ij / (r_ij ** 6)
+                    potential_matrix[i][j] = potential
+                    potential_matrix[j][i] = potential
 
-            # r = distance
-            r = nx.shortest_path_length(undirected_graph, mod1, mod2)
+        optimization_moves = self.dependency_optimizer.find_optimal_structure(
+            current_graph=dependency_graph,
+            potential_matrix=potential_matrix,
+            constraints=self._extract_dependency_constraints(dependency_graph)
+        )
 
-            path1 = module_path_map.get(mod1)
-            path2 = module_path_map.get(mod2)
+        return DependencyOptimization(
+            original_potential=np.sum(potential_matrix) / 2, # Divide by 2 as matrix is symmetric
+            optimized_moves=optimization_moves,
+            expected_potential_reduction=self._compute_potential_reduction(optimization_moves),
+            modularity_improvement=self._compute_modularity_improvement(optimization_moves)
+        )
 
-            if not path1 or not path2: continue
+    def _compute_all_london_coefficients(self, nodes: List[Component]) -> Dict[tuple[str, str], float]:
+        """Pre-compute all C6 coefficients for all pairs."""
+        coeffs = {}
+        for i, node_i in enumerate(nodes):
+            for j, node_j in enumerate(nodes):
+                if i >= j: continue
+                C6_ij = self.C6_calculator.compute_coefficient(node_i, node_j)
+                coeffs[(node_i.id, node_j.id)] = C6_ij
+                coeffs[(node_j.id, node_i.id)] = C6_ij
+        return coeffs
 
-            # C6 = polarizability constant, proxied by product of complexities
-            c6 = complexities.get(path1, 1) * complexities.get(path2, 1)
+    def _compute_component_distance(self, comp_i: Component, comp_j: Component, graph: DependencyGraph) -> float:
+        """Compute effective distance between components based on coupling strength."""
+        coupling = self._measure_coupling_strength(comp_i, comp_j, graph)
+        return 1.0 / (coupling + 1e-6)
 
-            potential = ops.calculate_attraction_potential(r, c6)
+    def _measure_coupling_strength(self, comp_i: Component, comp_j: Component, graph: DependencyGraph) -> float:
+        """Placeholder to measure coupling strength between two components."""
+        # Check for a direct edge in the provided graph
+        for edge in graph.edges:
+            if (edge.source.id == comp_i.id and edge.target.id == comp_j.id) or \
+               (edge.source.id == comp_j.id and edge.target.id == comp_i.id):
+                return edge.strength
+        # If no direct edge, coupling is considered weak (but non-zero for potential calculation)
+        return 0.01
 
-            if potential < lowest_potential:
-                lowest_potential = potential
-                most_attractive_pair = (mod1, mod2)
+    def _extract_dependency_constraints(self, dependency_graph: DependencyGraph) -> List[Any]:
+        """Placeholder to extract dependency constraints."""
+        return []
 
-        if not most_attractive_pair:
-            return Proposal(agent_name=self.name, task_type="dependency_optimization", payload={}, reason="No coupled modules found to optimize.")
+    def _compute_potential_reduction(self, optimization_moves: List[DependencyOptimizationMove]) -> float:
+        """Computes the total expected potential reduction from moves."""
+        return sum(move.potential_reduction for move in optimization_moves)
 
-        prompt_spec = prompts.get_prompt("refactor_coupled_modules")
-        formatted_prompt = prompt_spec.format(module_a=most_attractive_pair[0], module_b=most_attractive_pair[1])
-        llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
+    def _compute_modularity_improvement(self, optimization_moves: List[DependencyOptimizationMove]) -> float:
+        """Placeholder to compute modularity improvement."""
+        return 0.05 * len(optimization_moves)
 
-        try:
-            plan = ops.parse_refactoring_proposal(llm_response["content"])
-            plan["original_potential"] = lowest_potential
-            return Proposal(
-                agent_name=self.name,
-                task_type="dependency_optimization",
-                payload={"optimization_plan": plan},
-                status=Status.SUCCESS,
-            )
-        except ops.LondonLinkError as e:
-            return Proposal(agent_name=self.name, task_type="dependency_optimization", payload={}, status=Status.FAILED, reason=str(e))
+    def measure_observable(self, system_state: SystemState) -> Observable:
+        """Measure the total dependency potential energy of the system."""
+        if system_state.module_count < 2:
+            return Observable(name="dependency_potential", value=0.0, unit="energy")
 
+        components = [Component(id=f'comp_{i}', properties={'polarizability': np.random.uniform(0.5, 1.5)}) for i in range(system_state.module_count)]
+        mock_graph = DependencyGraph(nodes=components, edges=[]) # Assume a graph with no explicit edges for this measurement
 
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        if proposal.status != Status.SUCCESS: return False
-        if not proposal.payload: return True
-        plan = proposal.payload.get("optimization_plan", {})
-        return all(k in plan for k in ["refactored_module_path", "refactored_code", "explanation"])
+        result = self.apply_physics_principle(mock_graph)
 
-    def execute(self, proposal: Proposal) -> Action:
-        plan = proposal.payload.get("optimization_plan")
-        if not plan:
-            return Action(task_id=proposal.id, agent_name=self.name, action_taken=False)
-
-        # The energy reduction is the change in potential energy.
-        # A successful refactoring should bring the potential closer to 0.
-        # So, energy reduction = 0 - original_potential
-        original_potential = plan.get("original_potential", 0)
-        energy_reduction = -original_potential
-
-        action_data = {
-            "optimization_plan": plan,
-            "energy_impact": { "interaction": -energy_reduction }
-        }
-
-        return Action(
-            task_id=proposal.id,
-            agent_name=self.name,
-            action_taken=True,
-            result=action_data,
-            status=Status.SUCCESS
+        return Observable(
+            name="dependency_potential",
+            value=result.original_potential,
+            unit="energy"
         )

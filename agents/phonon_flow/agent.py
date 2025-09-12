@@ -1,148 +1,100 @@
-# agents/phonon_flow/agent.py
-"""
-PhononFlow Agent: Optimizes code structure to improve information flow.
+import numpy as np
+from typing import List
 
-This agent analyzes the structural properties of the codebase, such as
-coupling and complexity, and proposes refactorings to improve the "speed of
-sound" (maintainability) of the code.
-"""
-import json
-from typing import Dict, Any, Optional
+from common.base_agent import PhysicsBasedAgent
+from common.data_models import (
+    CommunicationGraph, FlowOptimization, DispersionRelation, Lattice,
+    SystemState, Observable, OptimizedChannel, Node
+)
+from common.utils import LatticeFlowOptimizer
 
-from agents.base.agent import QuantumAgent
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action, Status
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
-
-from . import prompts
-from . import ops
-
-class PhononFlowAgent(QuantumAgent):
-    """
-    The PhononFlow Agent is a software architect focused on structural quality.
-
-    It uses the physics of phonons (lattice vibrations) as an analogy for how
-    changes propagate through a codebase. Its goal is to refactor code to
-    increase the "speed of sound" (v_s), making the code more maintainable.
-    """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
+class PhononFlowAgent(PhysicsBasedAgent):
+    def __init__(self):
         super().__init__(
-            name="phonon_flow",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
+            physics_principle="Lattice Dynamics",
+            mathematical_formula="ω = v_s·k"
         )
-        self.llm_client = llm_client
+        self.hbar = 1.0  # Effective Planck constant
+        self.flow_optimizer = LatticeFlowOptimizer()
+        self.min_efficiency_threshold = 0.5 # Corresponds to group velocity
 
-    async def analyze_state(self, state: State) -> Proposal:
-        """
-        Analyzes the codebase to find the component with the worst "speed of
-        sound" and proposes a refactoring to improve it.
-        """
-        all_source_files = state.metadata.get("source_code_map", {})
-        if not all_source_files:
-            return Proposal(agent_name=self.name, task_type="refactoring", payload={}, reason="No source code to analyze.")
+    def apply_physics_principle(self, communication_graph: CommunicationGraph, **kwargs) -> FlowOptimization:
+        """Optimize information flow using phonon dispersion relations"""
+        lattice = self._map_to_lattice(communication_graph)
 
-        # 1. Build dependency graph
-        dep_graph = ops.build_dependency_graph(all_source_files)
+        dispersion_relations = []
+        for mode_type in ["acoustic", "optical"]:
+            for k_vector in lattice.k_space_sampling():
+                if np.linalg.norm(k_vector) == 0:
+                    continue
 
-        # 2. Find the "slowest" file in the codebase
-        slowest_file = None
-        lowest_vs = float('inf')
+                v_s = self._compute_sound_velocity(lattice, mode_type)
+                ω = v_s * np.linalg.norm(k_vector)
 
-        for file_path, code in all_source_files.items():
-            module_name = file_path.replace('/', '.').replace('.py', '')
-            if module_name not in dep_graph.graph:
-                continue
+                dispersion_relations.append(DispersionRelation(
+                    k_vector=k_vector,
+                    frequency=ω,
+                    mode_type=mode_type,
+                    group_velocity=self._compute_group_velocity(v_s, k_vector),
+                    energy=self.hbar * ω
+                ))
 
-            coupling = dep_graph.graph.in_degree(module_name) + dep_graph.graph.out_degree(module_name)
-            density = ops.calculate_complexity_density(code)
-            vs = ops.calculate_speed_of_sound(coupling, density)
+        flow_optimizations = []
+        for relation in dispersion_relations:
+            if relation.group_velocity > self.min_efficiency_threshold:
+                optimization = self.flow_optimizer.create_flow_channel(
+                    k_vector=relation.k_vector,
+                    group_velocity=relation.group_velocity,
+                    bandwidth=self._compute_bandwidth(relation.frequency)
+                )
+                flow_optimizations.append(optimization)
 
-            if vs < lowest_vs:
-                lowest_vs = vs
-                slowest_file = {"path": file_path, "code": code}
+        return FlowOptimization(
+            dispersion_relations=dispersion_relations,
+            optimized_channels=flow_optimizations,
+            total_bandwidth=sum(opt.bandwidth for opt in flow_optimizations),
+            latency_improvement=self._compute_latency_improvement(communication_graph, flow_optimizations)
+        )
 
-        if not slowest_file:
-            return Proposal(agent_name=self.name, task_type="refactoring", payload={}, reason="Could not identify a file to refactor.")
+    def _map_to_lattice(self, communication_graph: CommunicationGraph) -> Lattice:
+        """Placeholder to map a communication graph to a lattice structure."""
+        print(f"Mapping graph with {len(communication_graph.nodes)} nodes to a mock lattice.")
+        return Lattice()
 
-        # 3. Generate a refactoring proposal for the slowest file
-        prompt_spec = prompts.get_prompt("refactor_for_decoupling")
-        formatted_prompt = prompt_spec.format(file_path=slowest_file["path"], code_block=slowest_file["code"])
-        llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
+    def _compute_sound_velocity(self, lattice: Lattice, mode_type: str) -> float:
+        """Compute effective sound velocity for information propagation"""
+        if mode_type == "acoustic":
+            return lattice.compute_acoustic_velocity()
+        else:
+            return lattice.compute_optical_velocity()
 
-        try:
-            proposal_data = ops.parse_refactoring_proposal(llm_response["content"])
-            proposal_data["file_to_update"] = slowest_file["path"]
+    def _compute_group_velocity(self, v_s: float, k_vector: np.ndarray) -> float:
+        """Compute group velocity v_g = dω/dk"""
+        # For linear dispersion ω = v_s*k, group velocity equals phase velocity v_s.
+        return v_s
 
-            return Proposal(
-                agent_name=self.name,
-                task_type="refactoring",
-                payload=proposal_data,
-                status=Status.SUCCESS,
-            )
-        except ops.PhononFlowError as e:
-            return Proposal(agent_name=self.name, task_type="refactoring", payload={}, status=Status.FAILED, reason=f"Failed to generate refactoring plan: {e}")
+    def _compute_bandwidth(self, frequency: float) -> float:
+        """Placeholder to compute bandwidth from frequency."""
+        return frequency * 1000
 
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """Validates the refactoring proposal."""
-        if proposal.status != Status.SUCCESS:
-            return False
-        if not proposal.payload:
-            return True # No-op is valid
+    def _compute_latency_improvement(self, communication_graph: CommunicationGraph, flow_optimizations: List[OptimizedChannel]) -> float:
+        """Placeholder for computing latency improvement."""
+        if not flow_optimizations:
+            return 0.0
+        old_velocity = 0.5 # Assumed old velocity
+        new_avg_velocity = sum(opt.group_velocity for opt in flow_optimizations) / len(flow_optimizations)
+        return (new_avg_velocity / old_velocity) - 1.0 if old_velocity > 0 else 0.0
 
-        return "refactored_code" in proposal.payload and "file_to_update" in proposal.payload
+    def measure_observable(self, system_state: SystemState) -> Observable:
+        """Measure the total potential information throughput (bandwidth)."""
+        # Mock measurement based on system state parameters
+        mock_nodes = [Node(id=f'n{i}') for i in range(system_state.module_count)]
+        mock_graph = CommunicationGraph(nodes=mock_nodes, edges=[])
 
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the proposal by calculating the interaction energy reduction based
-        on the quality of the proposed refactoring.
-        """
-        if not proposal.payload:
-            return Action(task_id=proposal.id, agent_name=self.name, action_taken=False, status=Status.SUCCESS, result={})
+        flow_optimization_result = self.apply_physics_principle(mock_graph)
 
-        refactored_code = proposal.payload["refactored_code"]
-
-        # Heuristic: Interaction energy reduction is proportional to the "quality"
-        # (speed of sound) of the newly proposed code.
-        # We assume coupling remains similar for this heuristic, and just measure density.
-        new_density = ops.calculate_complexity_density(refactored_code)
-
-        # Assume average coupling for the heuristic calculation of v_s
-        new_vs = ops.calculate_speed_of_sound(coupling=5.0, density=new_density)
-
-        # The energy of the change is analogous to h-bar * omega = h-bar * v_s * k
-        # We'll treat "k" (wavenumber) as a constant, so energy is proportional to v_s.
-        w_maintainability = self.energy_calculator.config.get("w_maintainability", 5.0)
-        energy_reduction = w_maintainability * new_vs
-
-        action_data = {
-            "refactoring_plan": proposal.payload,
-            "energy_impact": {
-                "interaction": -energy_reduction
-            }
-        }
-
-        return Action(
-            task_id=proposal.id,
-            agent_name=self.name,
-            action_taken=True,
-            result=action_data,
-            status=Status.SUCCESS
+        return Observable(
+            name="total_potential_bandwidth",
+            value=flow_optimization_result.total_bandwidth,
+            unit="kbps"
         )

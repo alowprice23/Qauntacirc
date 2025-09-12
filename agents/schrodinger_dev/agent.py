@@ -1,166 +1,69 @@
-import asyncio
 import numpy as np
-from typing import Dict, Any, Optional
+import scipy.linalg
+from typing import List
 
-from agents.base.agent import QuantumAgent
-from agents.base import ops as base_ops
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
+from common.base_agent import PhysicsBasedAgent
+from common.data_models import (
+    SystemState, Observable, CodeState, Hamiltonian,
+    CodeEvolution, UnitaryOperator, Proof
+)
+from common.utils import QuantumCodeGenerator, ProofSynthesizer
 
-from . import prompts, ops
-from .hamiltonian import HamiltonianBuilder
-from .code_generator import QuantumCodeGenerator
-
-class SchrodingerDevAgent(QuantumAgent):
-    """
-    The SchrodingerDev Agent generates code using a quantum-inspired methodology.
-
-    It creates a superposition of multiple code implementations, evolves them
-    under a Hamiltonian that represents the problem's energy landscape, and
-    collapses the state to the most optimal (lowest energy) implementation.
-    """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
+class SchrödingerDevAgent(PhysicsBasedAgent):
+    def __init__(self):
         super().__init__(
-            name="schrodinger_dev",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
+            physics_principle="Quantum State Evolution",
+            mathematical_formula="iℏ∂ψ/∂t = Ĥψ"
         )
-        self.llm_client = llm_client
-        self.code_generator = QuantumCodeGenerator(llm_client, num_superpositions=4)
+        self.hbar = 1.054571817e-34  # Reduced Planck constant
+        self.code_generator = QuantumCodeGenerator()
+        self.proof_synthesizer = ProofSynthesizer()
 
-        # Default weights for the Hamiltonian. These could be tuned or made configurable.
-        hamiltonian_weights = {
-            'complexity': 1.0,
-            'constraints': 10.0,
-            'length': 0.01,
-            'similarity': 0.5,
-        }
-        self.hamiltonian_builder = HamiltonianBuilder(weights=hamiltonian_weights)
+    def apply_physics_principle(self, current_state: CodeState, hamiltonian: Hamiltonian, dt: float, **kwargs) -> CodeEvolution:
+        """Evolve code state using Schrödinger equation"""
+        # Compute unitary evolution operator U = exp(-iĤt/ℏ)
+        unitary_operator = self._compute_unitary_operator(hamiltonian, dt)
 
-    async def analyze_state(self, state: State) -> Proposal:
-        """
-        Analyzes a state, generates a superposition of code, evolves it, and collapses it.
+        # Apply unitary transformation to current state vector
+        new_psi = unitary_operator.matrix @ current_state.state_vector
 
-        Args:
-            state: The current state, expected to have a 'task_dag' from PlanckForge.
+        # Generate code from evolved quantum state
+        generated_code = self.code_generator.materialize_from_state(new_psi)
 
-        Returns:
-            A proposal containing the single, optimal generated code and proof.
-        """
-        if "task_dag" not in state.metadata or "tasks" not in state.metadata.get("planck_forge_output", {}):
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="Task DAG or task list not found in state.")
+        # Synthesize formal proofs for generated code
+        proof_obligations = self._extract_proof_obligations(generated_code)
+        proofs = self.proof_synthesizer.generate_proofs(proof_obligations)
 
-        tasks = state.metadata["planck_forge_output"]["tasks"]
-
-        # For simplicity, we'll process the first task in the list.
-        # A more complex agent might handle multiple tasks or dependencies.
-        if not tasks:
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="No tasks found in planck_forge_output.")
-
-        task = tasks[0]
-
-        try:
-            # 1. Create a superposition of code implementations
-            implementations, psi_0 = await self.code_generator.create_initial_state(task)
-
-            # 2. Build the Hamiltonian based on the implementations and spec
-            hamiltonian = self.hamiltonian_builder.from_specification(implementations, task)
-
-            # 3. Evolve the state using the Schrodinger equation
-            psi_final = self.code_generator.evolve_state(psi_0, hamiltonian)
-
-            # 4. Collapse the state to the most probable implementation
-            final_code = self.code_generator.collapse_to_implementation(implementations, psi_final)
-
-            # 5. Generate a proof skeleton for the final, chosen code
-            proof_prompt = prompts.get_prompt("generate_proof").format(
-                task_description=task["description"],
-                verification_criteria=task["verification_criteria"]
-            )
-            proof_response = await self.llm_client.complete({"prompt": proof_prompt})
-            proof_skeleton = ops.extract_python_code(proof_response["content"])
-
-            # 6. Create file map for the final code and proof
-            file_map = ops.create_code_and_proof_files(final_code, proof_skeleton, task["id"])
-
-        except Exception as e:
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason=f"Failed during quantum evolution: {e}")
-
-        return Proposal(
-            agent_name=self.name,
-            task_type="analysis",
-            payload={"generated_files": file_map},
-            status=Status.SUCCESS
+        return CodeEvolution(
+            new_state=CodeState(state_vector=new_psi, code=generated_code),
+            proofs=proofs,
+            energy_change=self._compute_energy_change(current_state, new_psi),
+            unitary_operator=unitary_operator
         )
 
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """
-        Validates the generated code and proof in the proposal.
-        """
-        if proposal.status != Status.SUCCESS or "generated_files" not in proposal.payload:
-            return False
+    def _compute_unitary_operator(self, H: Hamiltonian, dt: float) -> UnitaryOperator:
+        """Compute U = exp(-iĤt/ℏ) using matrix exponential"""
+        matrix = -1j * H.matrix * dt / self.hbar
+        return UnitaryOperator(scipy.linalg.expm(matrix))
 
-        try:
-            for file_path, content in proposal.payload["generated_files"].items():
-                if file_path.endswith(".py"):
-                    ops.validate_python_syntax(content)
-            return True
-        except ops.CodeGenerationError as e:
-            self.logger.warning(f"Proposal validation failed for agent {self.name}: {e}")
-            return False
+    def _extract_proof_obligations(self, generated_code: str) -> List[str]:
+        """Placeholder to extract proof obligations from code."""
+        # A real implementation would parse the code for assertions, pre/post conditions etc.
+        return [f"obligation: Correctness of {generated_code[:20]}..."]
 
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the proposal by calculating the energy of the final generated code.
-        """
-        generated_files = proposal.payload["generated_files"]
+    def _compute_energy_change(self, current_state: CodeState, new_psi: np.ndarray) -> float:
+        """Placeholder to compute energy change."""
+        # This is a mock calculation. A real one might involve the Hamiltonian.
+        # For a unitary evolution, the norm should be conserved, so energy change would be calculated differently.
+        # E.g. <psi_new|H|psi_new> - <psi_old|H|psi_old>
+        # For now, this is a placeholder.
+        return np.linalg.norm(current_state.state_vector)**2 - np.linalg.norm(new_psi)**2
 
-        # Calculate static energy from the final collapsed code's complexity
-        total_complexity = 0
-        for content in generated_files.values():
-            try:
-                ast_tree = base_ops.parse_to_ast(content)
-                total_complexity += base_ops.calculate_cyclomatic_complexity(ast_tree)
-            except Exception:
-                continue
-
-        static_metrics = {'cyclomatic_complexity': float(total_complexity)}
-        static_energy = self.energy_calculator.compute_static_energy(static_metrics)
-
-        # The dynamic energy component is now implicitly handled by the evolution/collapse.
-        # We can set it to zero or a small constant.
-        dynamic_energy = 0.0
-
-        action_data = {
-            "files_to_create": generated_files,
-            "energy_impact": {
-                "static": static_energy,
-                "dynamic": dynamic_energy,
-            }
-        }
-
-        return Action(
-            task_id=proposal.id,
-            agent_name=self.name,
-            action_taken=True,
-            result=action_data,
-            status=Status.SUCCESS
+    def measure_observable(self, system_state: SystemState) -> Observable:
+        """Measure the fidelity of the generated code."""
+        # This is a mock measurement. A real one would involve running tests or static analysis.
+        return Observable(
+            name="code_fidelity",
+            value=np.random.uniform(0.9, 0.99), # Mock value
+            unit="fidelity_score"
         )

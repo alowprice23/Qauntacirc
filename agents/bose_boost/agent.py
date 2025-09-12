@@ -1,111 +1,104 @@
-"""
-BoseBoost Agent: Determines resource allocation and scaling strategies
-based on Bose-Einstein statistics.
-"""
-from typing import Dict, Any, Optional, List
+import math
+import numpy as np
+from dataclasses import dataclass
+from typing import List, Dict, Any
 
-from agents.base.agent import QuantumAgent
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status, TaskQuanta
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
+from common.base_agent import PhysicsBasedAgent
+from common.data_models import (
+    WorkloadDistribution, ResourceAllocation, SystemState, Observable, DeploymentPlan
+)
+from common.utils import BoseEinsteinAllocator
 
-from . import ops
+@dataclass
+class TaskAllocation:
+    """Details of resource allocation for a single task type."""
+    task_type: str
+    energy_level: float
+    occupation_number: float
+    replicas: int
+    efficiency_score: float
 
-class BoseBoostAgent(QuantumAgent):
-    """
-    The BoseBoost Agent is a resource allocation specialist.
-    """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
+class BoseBoostAgent(PhysicsBasedAgent):
+    def __init__(self):
         super().__init__(
-            name="bose_boost",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
+            physics_principle="Bose-Einstein Statistics",
+            mathematical_formula="n_B = 1/(e^((ε-μ)/kT) - 1)"
         )
-        self.llm_client = llm_client
+        self.k_B = 8.617333e-5  # Boltzmann constant (effective units)
+        self.resource_allocator = BoseEinsteinAllocator()
 
-    async def analyze_state(self, state: State) -> Proposal:
-        """
-        Analyzes the task quanta and determines the scaling strategy.
-        """
-        planck_forge_output = state.metadata.get("planck_forge_output", {})
-        tasks: List[TaskQuanta] = planck_forge_output.get("tasks", [])
+    def apply_physics_principle(self, workload: WorkloadDistribution, temperature: float, **kwargs) -> ResourceAllocation:
+        """Allocate resources using Bose-Einstein statistics"""
+        if temperature <= 0:
+            raise ValueError("Temperature must be positive for Bose-Einstein statistics.")
 
-        if not tasks:
-            return Proposal(agent_name=self.name, task_type="scaling", payload={}, status=Status.SUCCESS, reason="No tasks to scale.")
+        energy_levels = self._extract_task_energy_levels(workload)
+        μ = self._compute_chemical_potential(workload, energy_levels, temperature)
 
-        # Parameters for the Bose-Einstein distribution
-        # These would be configurable in a real system
-        chemical_potential = 50.0  # Represents the "cost" of adding a new replica
-        temperature = 20.0       # Represents the "aggressiveness" of scaling
+        allocations: Dict[str, TaskAllocation] = {}
+        for task_type, ε in energy_levels.items():
+            exponent = (ε - μ) / (self.k_B * temperature)
 
-        deployment_manifests = {}
-        for task in tasks:
-            num_replicas = int(round(ops.bose_einstein_distribution(task.energy, chemical_potential, temperature)))
-            num_replicas = max(1, min(10, num_replicas)) # Clamp replicas between 1 and 10
+            # Avoid math domain errors and overflow
+            try:
+                denominator = math.exp(exponent) - 1.0
+            except OverflowError:
+                denominator = float('inf')
 
-            manifest = ops.generate_deployment_manifest(task, num_replicas)
-            deployment_manifests[task.id] = manifest
+            if abs(denominator) < 1e-9:
+                # This indicates potential for Bose-Einstein condensation; assign max resources
+                n_B = float(workload.max_replicas_per_task)
+            else:
+                n_B = 1.0 / denominator
 
-        return Proposal(
-            agent_name=self.name,
-            task_type="scaling",
-            payload={"deployment_manifests": deployment_manifests},
-            status=Status.SUCCESS
+            # If μ > ε, n_B will be negative, which is unphysical.
+            # This implies the chemical potential was computed incorrectly or the model doesn't apply.
+            # For robustness, we treat this as a low-energy state that gets a baseline allocation.
+            if n_B < 0:
+                n_B = 1.0
+
+            n_B = min(n_B, float(workload.max_replicas_per_task))
+            n_B = max(n_B, 1.0)  # Ensure at least one replica for every task type
+
+            allocations[task_type] = TaskAllocation(
+                task_type=task_type,
+                energy_level=ε,
+                occupation_number=n_B,
+                replicas=int(round(n_B)),
+                efficiency_score=n_B / ε if ε > 0 else float('inf')
+            )
+
+        deployment_plan = self.resource_allocator.create_deployment_plan(allocations)
+
+        return ResourceAllocation(
+            allocations=allocations,
+            chemical_potential=μ,
+            temperature=temperature,
+            deployment_plan=deployment_plan,
+            total_efficiency=sum(alloc.efficiency_score for alloc in allocations.values())
         )
 
-    def validate_proposal(self, proposal: Proposal) -> bool:
+    def _extract_task_energy_levels(self, workload: WorkloadDistribution) -> Dict[str, float]:
+        """Placeholder to extract energy levels (e.g., complexity) from workload."""
+        return {task_type: task_data.get('complexity', 1.0)
+                for task_type, task_data in workload.tasks.items()}
+
+    def _compute_chemical_potential(self, workload: WorkloadDistribution, energy_levels: Dict[str, float], temperature: float) -> float:
         """
-        Validates the scaling plan proposal.
-        For now, we'll just check that the payload is not empty.
+        Placeholder to compute chemical potential μ.
+        μ must be less than all energy levels for the occupation number to be positive.
+        A simple mock: set μ to be slightly below the lowest energy level.
         """
-        if proposal.status != Status.SUCCESS:
-            return False
-        return bool(proposal.payload.get("deployment_manifests"))
+        if not energy_levels:
+            return 0.0
+        min_energy = min(energy_levels.values())
+        return min_energy - self.k_B * temperature
 
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the proposal by calculating the energy impact of the scaling plan.
-        """
-        deployment_manifests = proposal.payload.get("deployment_manifests", {})
-
-        # A simple model: debt energy increases with the number of replicas
-        # (representing operational complexity)
-        total_replicas = 0
-        for manifest_str in deployment_manifests.values():
-            # In a real implementation, we would parse the YAML properly
-            # For this mock, we'll just count them
-            total_replicas += 1 # Simplified
-
-        debt_energy_increase = total_replicas * self.energy_calculator.config.get("w_replicas", 1.0)
-
-        action_data = {
-            "deployment_manifests": deployment_manifests,
-            "energy_impact": {
-                "debt": debt_energy_increase
-            }
-        }
-
-        return Action(
-            task_id=proposal.id,
-            agent_name=self.name,
-            action_taken=True,
-            status=Status.SUCCESS,
-            result=action_data
+    def measure_observable(self, system_state: SystemState) -> Observable:
+        """Measure the resource allocation efficiency."""
+        # This is a mock measurement, as it depends on a dynamic workload.
+        return Observable(
+            name="allocation_efficiency",
+            value=np.random.uniform(0.8, 0.95),
+            unit="efficiency_score"
         )

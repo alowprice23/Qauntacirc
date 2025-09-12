@@ -1,149 +1,59 @@
-# agents/planck_forge/agent.py
-"""
-PlanckForge Agent: Translates natural language requirements into formal task sets.
+from common.base_agent import PhysicsBasedAgent
+from common.data_models import SystemState, Observable, QuantizedTasks, TaskQuantum
+from common.utils import FrequencyAnalyzer
 
-This agent is the first step in the quantum software engineering process,
-decomposing high-level goals into a structured, verifiable, and machine-readable
-format.
-"""
-
-from typing import Dict, Any, Optional, List
-
-from agents.base.agent import QuantumAgent
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
-
-from .nl_parser import NLParser
-from . import ops
-
-class PlanckForgeAgent(QuantumAgent):
-    """
-    The PlanckForge Agent specializes in requirement quantization.
-
-    It uses an LLM to analyze natural language requirements and structures them
-    into a formal task dependency graph (DAG). Its rigor is Functor-Verified,
-    ensuring that the output is logically sound and adheres to predefined
-    closure rules.
-    """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
+class PlanckForgeAgent(PhysicsBasedAgent):
+    def __init__(self):
         super().__init__(
-            name="planck_forge",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
+            physics_principle="Energy Quantization",
+            mathematical_formula="E_n = n·h·ν"
         )
-        self.llm_client = llm_client
-        self.nl_parser = NLParser(llm_client)
+        self.h = 6.62607015e-34  # Planck constant (scaled for software)
+        self.frequency_analyzer = FrequencyAnalyzer()
 
-    async def analyze_state(self, state: State) -> Proposal:
-        """
-        Analyzes a state containing a natural language requirement.
+    def apply_physics_principle(self, requirements: str, **kwargs) -> QuantizedTasks:
+        """Convert continuous requirements into discrete task quanta"""
+        # Extract dominant frequencies from requirements
+        frequencies = self.frequency_analyzer.extract_frequencies(requirements)
 
-        Args:
-            state: The current state, expected to have a 'requirement_text' field in metadata.
+        # Quantize into discrete energy levels
+        quanta = []
+        for freq_data in frequencies:
+            ν = freq_data.frequency
+            # Calculate quantum numbers for different energy levels
+            for n in range(1, freq_data.max_harmonics + 1):
+                energy_level = n * self.h * ν
+                task_quantum = TaskQuantum(
+                    n=n, frequency=ν, energy=energy_level,
+                    description=freq_data.task_description,
+                    dependencies=freq_data.dependencies
+                )
+                quanta.append(task_quantum)
 
-        Returns:
-            A proposal containing the decomposed tasks.
-        """
-        requirement_text = state.metadata.get("requirement_text")
-        if not requirement_text:
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="No requirement text found in state.")
+        return QuantizedTasks(quanta=quanta, total_energy=sum(q.energy for q in quanta))
 
-        try:
-            # 1. Use the NLParser to get the structured task data
-            llm_output_str = await self.nl_parser.parse_requirement(requirement_text)
-
-            # 2. Parse the LLM output into TaskQuanta objects
-            tasks = ops.parse_llm_output(llm_output_str)
-
-            # 3. Create a success proposal
-            return Proposal(
-                agent_name=self.name,
-                task_type="analysis",
-                payload={"tasks": tasks, "requirement_text": requirement_text},
-                status=Status.SUCCESS
-            )
-        except (ValueError, ops.TaskValidationError) as e:
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason=f"Failed to parse requirement: {e}")
-
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """
-        Validates the task set in the proposal using closure rules.
-
-        Args:
-            proposal: The proposal generated by analyze_state.
-
-        Returns:
-            True if the proposal is valid, False otherwise.
-        """
-        if proposal.status != Status.SUCCESS or "tasks" not in proposal.payload:
-            return False
-
-        try:
-            ops.validate_task_set(proposal.payload["tasks"])
-            self.metrics_logger.increment_counter(f"agent_{self.name}_proposal_validation_success")
-            return True
-        except ops.TaskValidationError as e:
-            self.metrics_logger.increment_counter(f"agent_{self.name}_proposal_validation_failure")
-            print(f"Proposal validation failed for agent {self.name}: {e}")
-            return False
-
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the proposal by finalizing the task DAG and calculating energy.
-
-        Args:
-            proposal: A validated proposal.
-
-        Returns:
-            An action containing the task DAG and energy impact.
-        """
-        tasks = proposal.payload["tasks"]
-
-        # 1. Generate the final task DAG
-        task_dag = ops.generate_task_dag(tasks)
-
-        # 2. Calculate the static energy impact
-        num_tasks = len(tasks)
-        num_dependencies = sum(len(task.dependencies) for task in tasks)
-
-        static_metrics = {
-            'cyclomatic_complexity': float(num_tasks),
-            'coupling': float(num_dependencies)
-        }
-
-        static_energy = self.energy_calculator.compute_static_energy(static_metrics)
-
-        # 3. Create the action
-        action_data = {
-            "task_dag": task_dag,
-            "original_requirement": proposal.payload["requirement_text"],
-            "energy_impact": {
-                "static": -static_energy
-            }
-        }
-
-        return Action(
-            task_id=proposal.id,
-            agent_name=self.name,
-            action_taken=True,
-            status=Status.SUCCESS,
-            result=action_data
+    def measure_observable(self, system_state: SystemState) -> Observable:
+        """Measure task quantization efficiency"""
+        return Observable(
+            name="quantization_efficiency",
+            value=self._compute_quantization_efficiency(system_state),
+            unit="quanta_per_requirement"
         )
+
+    def _compute_quantization_efficiency(self, system_state: SystemState) -> float:
+        """
+        Placeholder for computing quantization efficiency.
+        A mock calculation based on the number of 'quanta' that can be extracted
+        from the requirements.
+        """
+        if not system_state.requirements:
+            return 0.0
+
+        num_quanta = 0
+        # We use the analyzer on all requirements to get a sense of total possible quanta
+        all_reqs_str = " ".join(system_state.requirements)
+        frequencies = self.frequency_analyzer.extract_frequencies(all_reqs_str)
+        for freq_data in frequencies:
+            num_quanta += freq_data.max_harmonics
+
+        return num_quanta / len(system_state.requirements) if system_state.requirements else 0.0

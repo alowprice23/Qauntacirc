@@ -1,140 +1,119 @@
-# agents/fluctua_test/agent.py
-"""
-FluctuaTest Agent: Runs chaos tests to ensure system stability under stress.
+import numpy as np
+from typing import List, Dict
 
-This agent designs and executes chaos engineering experiments to proactively
-find weaknesses in a system's resilience.
-"""
-import asyncio
-import json
-from typing import Dict, Any, Optional, List
+from common.base_agent import PhysicsBasedAgent
+from common.data_models import (
+    SystemState, ChaosTestResult, ComplexResponse, ChaosScenario,
+    ChaosExperimentResult, ResilienceAnalysis, Observable
+)
+from common.utils import ChaosTestEngine
 
-from agents.base.agent import QuantumAgent
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action, Status
-from monitoring.metrics import MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
-
-from . import prompts
-from . import ops
-
-class FluctuaTestAgent(QuantumAgent):
-    """
-    The FluctuaTest Agent is a chaos engineer.
-
-    It designs experiments to inject faults into the system and observes the
-    impact, verifying that the system degrades gracefully rather than failing
-    catastrophically. A successful experiment increases confidence in the
-
-    system's resilience, thus lowering its dynamic energy.
-    """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
+class FluctuaTestAgent(PhysicsBasedAgent):
+    def __init__(self):
         super().__init__(
-            name="fluctua_test",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
+            physics_principle="Fluctuation-Dissipation Theorem",
+            mathematical_formula="S_AA(ω) = (2kT/ω)Im(χ_AA(ω))"
         )
-        self.llm_client = llm_client
+        self.k_B = 1.0  # Effective Boltzmann constant
+        self.chaos_engine = ChaosTestEngine()
+        self.chaos_threshold = 1.0
+        self.frequency_range = np.linspace(0.1, 10.0, 10) # 10 frequencies from 0.1 to 10 Hz
 
-    async def analyze_state(self, state: State) -> Proposal:
-        """
-        Analyzes the system architecture and proposes a chaos experiment.
+    def apply_physics_principle(self, system_state: SystemState, temperature: float, **kwargs) -> ChaosTestResult:
+        """Generate chaos tests using fluctuation-dissipation theorem"""
+        response_functions = self._measure_response_functions(system_state)
 
-        Args:
-            state: The current state, containing a map of all source code files.
+        chaos_scenarios = []
+        for frequency, response_function in response_functions.items():
+            if frequency == 0: continue
 
-        Returns:
-            A proposal containing a chaos engineering experiment plan.
-        """
-        all_source_files = state.get("source_code_map", {})
-        if not all_source_files:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.SUCCESS, reason="No source code to analyze.")
+            # Compute power spectral density using FDT
+            S_AA = (2 * self.k_B * temperature / frequency) * response_function.imaginary_part
 
-        # 1. Get a description of the system architecture (simulated)
-        architecture_description = ops.extract_architecture(all_source_files)
+            # Generate chaos scenario based on spectral density
+            if S_AA > self.chaos_threshold:
+                scenario = self.chaos_engine.generate_scenario(
+                    frequency=frequency,
+                    spectral_density=S_AA,
+                    response_magnitude=abs(response_function.value),
+                    system_components=self._identify_responsive_components(response_function)
+                )
+                chaos_scenarios.append(scenario)
 
-        # 2. Generate a chaos test plan using the LLM
-        prompt_spec = prompts.get_prompt("generate_chaos_test")
-        formatted_prompt = prompt_spec.format(architecture_description=architecture_description)
+        # Execute chaos experiments
+        experiment_results = [self._execute_chaos_experiment(s, system_state) for s in chaos_scenarios]
 
-        llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
+        # Analyze resilience metrics
+        resilience_analysis = self._analyze_resilience(experiment_results)
 
-        try:
-            plan = ops.parse_chaos_experiment_plan(llm_response["content"])
-            return Proposal(
-                agent_id=self.agent_id,
-                data={"chaos_experiment_plan": plan},
-                status=Status.SUCCESS
-            )
-        except ops.ChaosTestError as e:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.FAILED, reason=f"Failed to generate chaos test plan: {e}")
+        return ChaosTestResult(
+            scenarios_generated=len(chaos_scenarios),
+            experiments_executed=len(experiment_results),
+            resilience_score=resilience_analysis.overall_score,
+            failure_modes_discovered=resilience_analysis.failure_modes,
+            recovery_times=resilience_analysis.recovery_times,
+            stability_improvements=resilience_analysis.suggested_improvements
+        )
 
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """Validates the chaos experiment plan."""
-        if proposal.status != Status.SUCCESS:
-            return False
+    def _measure_response_functions(self, system_state: SystemState) -> Dict[float, ComplexResponse]:
+        """Measure χ_AA(ω) for different system observables"""
+        response_functions = {}
+        for frequency in self.frequency_range:
+            perturbation = self._generate_harmonic_perturbation(frequency)
+            perturbed_state = self._apply_perturbation(system_state, perturbation)
+            response = self._measure_response(system_state, perturbed_state)
+            response_functions[frequency] = response
+        return response_functions
 
-        if "chaos_experiment_plan" not in proposal.data:
-            return True # An empty proposal is a valid one
+    def _generate_harmonic_perturbation(self, frequency: float) -> Dict:
+        """Placeholder to generate a perturbation."""
+        return {"type": "cpu_load", "amplitude": 10.0, "frequency": frequency}
 
-        try:
-            ops.parse_chaos_experiment_plan(json.dumps(proposal.data["chaos_experiment_plan"]))
-            return True
-        except ops.ChaosTestError as e:
-            print(f"Chaos experiment plan validation failed: {e}")
-            return False
+    def _apply_perturbation(self, system_state: SystemState, perturbation: Dict) -> SystemState:
+        """Placeholder to apply a perturbation."""
+        new_state = SystemState() # Mock new state
+        new_state.total_energy = system_state.total_energy + np.random.randn() * 0.1
+        return new_state
 
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the chaos experiment and calculates the energy impact.
-        """
-        if "chaos_experiment_plan" not in proposal.data:
-            return Action(agent_id=self.agent_id, data={}, status=Status.SUCCESS)
+    def _measure_response(self, system_state: SystemState, perturbed_state: SystemState) -> ComplexResponse:
+        """Placeholder to measure the system's response."""
+        real_part = np.random.randn()
+        imag_part = np.random.uniform(0, 0.5) # Dissipation (imaginary part) should be positive
+        return ComplexResponse(value=complex(real_part, imag_part), imaginary_part=imag_part)
 
-        plan = proposal.data["chaos_experiment_plan"]
+    def _identify_responsive_components(self, response_function: ComplexResponse) -> List[str]:
+        """Placeholder to identify components related to a response function."""
+        return ["core_logic", "database_connector"]
 
-        # 1. Run the fault injection (simulated)
-        injection_result = ops.inject_fault(plan["fault_to_inject"])
+    def _execute_chaos_experiment(self, scenario: ChaosScenario, system_state: SystemState) -> ChaosExperimentResult:
+        """Placeholder to execute a chaos experiment."""
+        outcome = np.random.choice(['STABLE', 'DEGRADED', 'FAILURE'], p=[0.7, 0.2, 0.1])
+        recovery_time = np.random.uniform(1, 10) if outcome != 'STABLE' else 0.0
+        return ChaosExperimentResult(scenario=scenario, outcome=outcome, recovery_time=recovery_time)
 
-        # 2. Determine the outcome and calculate energy impact.
-        # For this simulation, we'll assume the experiment is always successful
-        # and confirms the system's resilience.
-        experiment_succeeded = injection_result["status"] == "SUCCESS"
+    def _analyze_resilience(self, experiment_results: List[ChaosExperimentResult]) -> ResilienceAnalysis:
+        """Placeholder to analyze resilience from chaos experiments."""
+        if not experiment_results:
+            return ResilienceAnalysis(overall_score=1.0, failure_modes=[], recovery_times={}, suggested_improvements=[])
 
-        energy_reduction = 0
-        if experiment_succeeded:
-            # A successful test reduces uncertainty about resilience.
-            # We model this as a reduction in dynamic energy.
-            resilience_confirmed_value = 1.0
-            energy_reduction = self.energy_calculator.config.get("w_resilience", 10.0) * resilience_confirmed_value
+        failures = [res for res in experiment_results if res.outcome == 'FAILURE']
+        failure_modes = list(set(f"Failure at {res.scenario.frequency:.2f}Hz" for res in failures))
+        recovery_times = {mode: np.mean([r.recovery_time for r in experiment_results if f"Failure at {r.scenario.frequency:.2f}Hz" == mode]) for mode in failure_modes}
+        score = 1.0 - (len(failures) / len(experiment_results))
 
-        # 3. Create the action
-        action_data = {
-            "chaos_experiment_plan": plan,
-            "experiment_result": injection_result,
-            "energy_impact": {
-                "dynamic": -energy_reduction
-            }
-        }
+        return ResilienceAnalysis(
+            overall_score=score,
+            failure_modes=failure_modes,
+            recovery_times=recovery_times,
+            suggested_improvements=["Increase redundancy in core_logic"] if failures else []
+        )
 
-        return Action(
-            agent_id=self.agent_id,
-            data=action_data,
-            status=Status.SUCCESS
+    def measure_observable(self, system_state: SystemState) -> Observable:
+        """Measure the system's resilience score."""
+        # For a quick measurement, we'll just return a random score.
+        # A full run would be too expensive for a simple observable.
+        return Observable(
+            name="resilience_score",
+            value=np.random.uniform(0.7, 1.0),
+            unit="score"
         )

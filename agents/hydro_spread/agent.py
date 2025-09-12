@@ -1,137 +1,111 @@
-# agents/hydro_spread/agent.py
-"""
-HydroSpread Agent: Models and forecasts system growth and complexity evolution.
+import math
+import numpy as np
+from typing import List, Tuple
 
-This agent analyzes historical trends to predict future complexity, allowing for
-proactive architectural decisions.
-"""
-import asyncio
-import json
-import re
-from typing import Dict, Any, Optional, List
+from common.base_agent import PhysicsBasedAgent
+from common.data_models import (
+    SystemState, GrowthParameters, GrowthPrediction, GrowthPredictionInstance,
+    ScalingRecommendation, Observable
+)
+from common.utils import HydrodynamicGrowthModeler
 
-from agents.base.agent import QuantumAgent
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action, Status
-from monitoring.metrics import MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
-
-from . import prompts
-from . import ops
-
-class HydroSpreadAgent(QuantumAgent):
-    """
-    The HydroSpread Agent is a quantitative analyst for software evolution.
-
-    It uses historical data to model growth patterns and forecasts future
-    increases in static energy (complexity), providing valuable insights for
-    long-term strategic planning. Its rigor is Heuristic-Inspired.
-    """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
+class HydroSpreadAgent(PhysicsBasedAgent):
+    def __init__(self):
         super().__init__(
-            name="hydro_spread",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
+            physics_principle="Viscous Spreading",
+            mathematical_formula="R(t) = (5ρg/3πμ)^(1/8)V^(3/8)t^(1/8)"
         )
-        self.llm_client = llm_client
+        self.growth_modeler = HydrodynamicGrowthModeler()
 
-    async def analyze_state(self, state: State) -> Proposal:
-        """
-        Analyzes historical data and proposes a complexity forecast.
+    def apply_physics_principle(self, current_state: SystemState, growth_parameters: GrowthParameters, **kwargs) -> GrowthPrediction:
+        """Predict system growth using viscous spreading model"""
+        ρ = growth_parameters.density
+        g = growth_parameters.gravity
+        μ = self._measure_effective_viscosity(current_state)
+        V = current_state.current_volume
 
-        Args:
-            state: The current state, expected to contain 'historical_states'.
+        if μ <= 0:
+            raise ValueError("Viscosity must be positive.")
 
-        Returns:
-            A proposal containing a complexity forecast.
-        """
-        historical_states = state.get("historical_states", [])
-        if len(historical_states) < 2:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.SUCCESS, reason="Not enough historical data to analyze.")
+        C = (5 * ρ * g / (3 * math.pi * μ)) ** (1/8)
 
-        # 1. Analyze growth patterns (simulated)
-        summary = ops.analyze_growth_patterns(historical_states)
+        predictions = []
+        for t in growth_parameters.time_horizons:
+            if t < 0: continue
+            # Handle t=0 case to avoid 0^(1/8) issues if they arise, though it's usually 0.
+            predicted_radius = C * (V ** (3/8)) * (t ** (1/8)) if t > 0 else 0
 
-        # 2. Generate a forecast using the LLM
-        prompt_spec = prompts.get_prompt("forecast_complexity")
-        formatted_prompt = prompt_spec.format(historical_data_summary=summary)
+            predicted_size = self._radius_to_system_size(predicted_radius)
+            predicted_complexity = self._radius_to_complexity(predicted_radius)
 
-        llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
+            predictions.append(GrowthPredictionInstance(
+                time=t,
+                predicted_radius=predicted_radius,
+                predicted_size=predicted_size,
+                predicted_complexity=predicted_complexity,
+                confidence_interval=self._compute_confidence_interval(predicted_radius, t)
+            ))
 
-        try:
-            forecast = ops.parse_complexity_forecast(llm_response["content"])
-            return Proposal(
-                agent_id=self.agent_id,
-                data={"complexity_forecast": forecast},
-                status=Status.SUCCESS
-            )
-        except ops.ForecastError as e:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.FAILED, reason=f"Failed to generate forecast: {e}")
+        scaling_recommendations = self._generate_scaling_recommendations(predictions)
 
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """Validates the complexity forecast."""
-        if proposal.status != Status.SUCCESS:
-            return False
+        return GrowthPrediction(
+            predictions=predictions,
+            viscosity=μ,
+            spreading_coefficient=C,
+            scaling_recommendations=scaling_recommendations,
+            growth_sustainability=self._assess_sustainability(predictions)
+        )
 
-        if "complexity_forecast" not in proposal.data:
-            return True
+    def _measure_effective_viscosity(self, state: SystemState) -> float:
+        """Measure system's resistance to change (effective viscosity)"""
+        if state.module_count == 0 or state.team_size == 0:
+            return float('inf') # Avoid division by zero
 
-        try:
-            ops.parse_complexity_forecast(json.dumps(proposal.data["complexity_forecast"]))
-            return True
-        except ops.ForecastError as e:
-            print(f"Complexity forecast validation failed: {e}")
-            return False
+        complexity_resistance = state.total_complexity / state.module_count
+        coupling_resistance = state.coupling_density ** 2
+        team_resistance = 1.0 / (state.team_size ** 0.5)
 
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the proposal by packaging the forecast. The energy impact is informational.
-        """
-        if "complexity_forecast" not in proposal.data:
-            return Action(agent_id=self.agent_id, data={}, status=Status.SUCCESS)
+        return complexity_resistance + coupling_resistance + team_resistance
 
-        forecast = proposal.data["complexity_forecast"]
+    def _radius_to_system_size(self, radius: float) -> float:
+        """Placeholder to convert growth radius to system size (e.g., lines of code)."""
+        return 1000 * (radius**2)
 
-        # This agent's action is purely informational. It forecasts a future
-        # energy change but doesn't cause one directly.
-        # We can add the forecast to the action data.
+    def _radius_to_complexity(self, radius: float) -> float:
+        """Placeholder to convert growth radius to system complexity."""
+        return 10 * (radius**3)
 
-        # A simple heuristic to quantify the forecast
-        forecast_text = forecast.get("complexity_forecast", "")
-        match = re.search(r'(\d+)%', forecast_text)
-        if match:
-            percent_increase = float(match.group(1))
-        else:
-            percent_increase = 0.0
+    def _compute_confidence_interval(self, predicted_radius: float, t: float) -> Tuple[float, float]:
+        """Placeholder to compute a confidence interval for the prediction."""
+        error_margin = predicted_radius * 0.1 * (t**0.5)
+        return (max(0, predicted_radius - error_margin), predicted_radius + error_margin)
 
-        # This isn't a change to the current state's energy, but a prediction.
-        predicted_static_energy_increase = self.energy_calculator.config.get("w_complexity", 1.0) * percent_increase
+    def _generate_scaling_recommendations(self, predictions: List[GrowthPredictionInstance]) -> List[ScalingRecommendation]:
+        """Placeholder to generate scaling recommendations."""
+        if not predictions: return []
+        last_prediction = predictions[-1]
+        if last_prediction.predicted_complexity > 1000:
+            return [ScalingRecommendation(recommendation="High complexity predicted. Consider refactoring.")]
+        return [ScalingRecommendation(recommendation="Projected growth appears manageable.")]
 
-        action_data = {
-            "forecast": forecast,
-            "predicted_energy_impact": {
-                "static": predicted_static_energy_increase
-            }
-        }
+    def _assess_sustainability(self, predictions: List[GrowthPredictionInstance]) -> float:
+        """Placeholder to assess growth sustainability."""
+        if not predictions or len(predictions) < 2: return 1.0
 
-        return Action(
-            agent_id=self.agent_id,
-            data=action_data,
-            status=Status.SUCCESS
+        start_complexity = predictions[0].predicted_complexity
+        end_complexity = predictions[-1].predicted_complexity
+        time_delta = predictions[-1].time - predictions[0].time
+
+        if time_delta < 1e-6: return 1.0
+
+        growth_rate = (end_complexity - start_complexity) / time_delta
+        return max(0, 1.0 - growth_rate / 1000.0)
+
+    def measure_observable(self, system_state: SystemState) -> Observable:
+        """Measure the system's effective viscosity."""
+        viscosity = self._measure_effective_viscosity(system_state)
+        return Observable(
+            name="effective_viscosity",
+            value=viscosity,
+            unit="viscosity_units"
         )
