@@ -5,7 +5,8 @@ from typing import Any, Dict, List, Optional
 
 import groq
 
-from .client import LLMClient, QuantumState, StandardChatResponse
+from .client import LLMClient, StandardChatResponse
+from core.types import QCState as QuantumState
 
 logger = logging.getLogger(__name__)
 

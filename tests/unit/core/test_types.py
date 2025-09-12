@@ -10,7 +10,12 @@ from core.types import (
     AgentTask,
     AgentResult,
     RunRecord,
+    Plan, PlanNode, PlanEdge, Intent, CNLValidation, CNLValidationStatus,
+    IntentContext, EnergyEstimate, RiskBound, QuantumSignatures,
+    Priority, EffortLevel, PlanMetadata, VerificationPoint, EnergyMetrics,
+    ConvergenceProof, LyapunovCertificate, Permission
 )
+import uuid
 
 def test_energy_components_total():
     """Tests the total energy calculation."""
@@ -164,4 +169,86 @@ def test_run_record_time_validator():
             status="completed",
             initial_state=qc_state,
             final_state=qc_state,
+        )
+
+
+def test_plan_dag_validation_success():
+    """Tests that a valid DAG plan validates successfully."""
+    # A simple mock intent
+    mock_intent = Intent(
+        goal="Test",
+        cnl_translation="Test",
+        cnl_validation=CNLValidation(status=CNLValidationStatus.AUTO_ACCEPT, confidence=1.0),
+        constraints={},
+        context=IntentContext(session_id=uuid.uuid4(), user_profile={}, system_state=QCState(software_state=SoftwareState(component_versions={}, config_hashes={}), energy=0, energy_components=EnergyComponents(static=0,dynamic=0,interaction=0), lyapunov_potential=0, contraction_factor=0.5)),
+        priority=Priority.LOW,
+        acceptance_criteria=[],
+        energy_estimate=EnergyEstimate(e_complexity=1, e_coupling=1, e_constraint=1, e_debt=1, total_estimated_energy=4),
+        risk_assessment=RiskBound(confidence_level=1, failure_probability=0, details=""),
+        requires_approval=False,
+        estimated_effort=EffortLevel.TRIVIAL,
+        quantum_signatures=QuantumSignatures(semantic_hash="", constraint_hash="")
+    )
+
+    nodes = [
+        PlanNode(id="A", description="", agent_name="", tool_call="", preconditions=[], postconditions=[], energy_barrier=1),
+        PlanNode(id="B", description="", agent_name="", tool_call="", preconditions=[], postconditions=[], energy_barrier=1),
+        PlanNode(id="C", description="", agent_name="", tool_call="", preconditions=[], postconditions=[], energy_barrier=1),
+    ]
+    edges = [
+        PlanEdge(from_node="A", to_node="B", transition_probability=1.0, condition=""),
+        PlanEdge(from_node="B", to_node="C", transition_probability=1.0, condition=""),
+    ]
+
+    # This should not raise an exception
+    Plan(
+        intent=mock_intent,
+        nodes=nodes,
+        edges=edges,
+        metadata=PlanMetadata(required_capabilities=set(), estimated_time_seconds=0, risk_assessment=mock_intent.risk_assessment),
+        verification_points=[],
+        energy_impact=EnergyMetrics(initial_energy=0, predicted_final_energy=0, delta_e=0),
+        convergence_proof=ConvergenceProof(proof_sketch=""),
+        lyapunov_certificate=LyapunovCertificate(function_definition="", descent_guarantee="")
+    )
+
+def test_plan_dag_validation_failure_cycle():
+    """Tests that a plan with a cycle fails validation."""
+    mock_intent = Intent(
+        goal="Test",
+        cnl_translation="Test",
+        cnl_validation=CNLValidation(status=CNLValidationStatus.AUTO_ACCEPT, confidence=1.0),
+        constraints={},
+        context=IntentContext(session_id=uuid.uuid4(), user_profile={}, system_state=QCState(software_state=SoftwareState(component_versions={}, config_hashes={}), energy=0, energy_components=EnergyComponents(static=0,dynamic=0,interaction=0), lyapunov_potential=0, contraction_factor=0.5)),
+        priority=Priority.LOW,
+        acceptance_criteria=[],
+        energy_estimate=EnergyEstimate(e_complexity=1, e_coupling=1, e_constraint=1, e_debt=1, total_estimated_energy=4),
+        risk_assessment=RiskBound(confidence_level=1, failure_probability=0, details=""),
+        requires_approval=False,
+        estimated_effort=EffortLevel.TRIVIAL,
+        quantum_signatures=QuantumSignatures(semantic_hash="", constraint_hash="")
+    )
+
+    nodes = [
+        PlanNode(id="A", description="", agent_name="", tool_call="", preconditions=[], postconditions=[], energy_barrier=1),
+        PlanNode(id="B", description="", agent_name="", tool_call="", preconditions=[], postconditions=[], energy_barrier=1),
+        PlanNode(id="C", description="", agent_name="", tool_call="", preconditions=[], postconditions=[], energy_barrier=1),
+    ]
+    # Edges create a cycle: A -> B -> C -> A
+    edges = [
+        PlanEdge(from_node="A", to_node="B", transition_probability=1.0, condition=""),
+        PlanEdge(from_node="B", to_node="C", transition_probability=1.0, condition=""),
+        PlanEdge(from_node="C", to_node="A", transition_probability=1.0, condition=""),
+    ]
+
+    with pytest.raises(ValidationError, match="Plan contains a cycle, it is not a valid DAG."):
+        Plan(
+            intent=mock_intent,
+            nodes=nodes,
+            edges=edges,
+            metadata=PlanMetadata(required_capabilities=set(), estimated_time_seconds=0, risk_assessment=mock_intent.risk_assessment),
+            verification_points=[],
+            energy_impact=EnergyMetrics(initial_energy=0, predicted_final_energy=0, delta_e=0),
+            convergence_proof=ConvergenceProof(proof_sketch=""),
+            lyapunov_certificate=LyapunovCertificate(function_definition="", descent_guarantee="")
         )

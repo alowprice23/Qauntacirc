@@ -5,25 +5,49 @@ of the QuantaCirc agentic system.
 from __future__ import annotations
 import json
 import uuid
-from typing import List, Dict, Any
+import asyncio
+from typing import List, Dict, Any, Optional, Type
+from pydantic import BaseModel
+from datetime import datetime, timedelta
 
-import numpy as np
-from scipy.linalg import expm
-
-from core.schemas import (
+# Corrected imports based on our project structure
+from core.types import (
     Intent, Plan, EnergyEstimate, RiskBound, QuantumSignatures,
     IntentContext, PlanNode, PlanEdge, VerificationPoint, EnergyMetrics,
-    ConvergenceProof, LyapunovCertificate, PlanMetadata, Priority, EffortLevel
+    ConvergenceProof, LyapunovCertificate, PlanMetadata, Priority, EffortLevel,
+    CapabilityToken, Permission, QCState, EnergyComponents, SoftwareState,
+    CNLValidation, CNLValidationStatus
 )
-from core.prompts import INTENT_PARSING_PROMPT, PLANNING_PROMPT
 from llm.client import LLMClient
-from llm.capability_tokens import CapabilityManager
-from agents.base.agent import QuantumAgent
 
+# --- Placeholder Classes ---
+# These would be defined in their own modules in a full application.
+
+class QuantumAgent:
+    """Placeholder for a specialist agent."""
+    def __init__(self, name: str):
+        self.name = name
+
+class CapabilityManager:
+    """
+    Issues cryptographically-secure capability tokens.
+    (In a real system, this would involve actual cryptography).
+    """
+    def issue_token(self, agent_id: str, allowed_tools: List[str], permissions: List[Permission]) -> CapabilityToken:
+        return CapabilityToken(
+            agent_id=agent_id,
+            allowed_tools=allowed_tools,
+            permissions=set(permissions),
+            expires_at=datetime.utcnow() + timedelta(hours=1),
+            energy_budget=1000.0, # High budget for now
+            signature=f"signed-by-capability-manager-for-{agent_id}"
+        )
+
+# --- Main Brain Class ---
 
 class QuantumAgentBrain:
     """
-    The QuantumAgentBrain processes intents through quantum evolution,
+    The QuantumAgentBrain processes intents through a simulated quantum evolution,
     manages agents, and orchestrates the entire software engineering process.
     """
 
@@ -32,123 +56,181 @@ class QuantumAgentBrain:
         llm_client: LLMClient,
         agents: Dict[str, QuantumAgent],
         capability_manager: CapabilityManager,
-        system_dimensionality: int = 4,
     ):
-        """
-        Initializes the QuantumAgentBrain.
-        """
+        """Initializes the QuantumAgentBrain."""
         print("QuantumAgentBrain initializing...")
         self.llm_client = llm_client
         self.agents = agents
         self.capability_manager = capability_manager
-        self.dimensionality = system_dimensionality
 
+        # The "Hamiltonian" is the system's configuration and operational constraints.
         self.hamiltonian = self._build_hamiltonian()
+        # The "psi_current" is the current quantum state of the system.
         self.psi_current = self._initialize_state()
+        self.prompts = self._load_prompts()
         print("QuantumAgentBrain initialized.")
 
-    def _build_hamiltonian(self) -> np.ndarray:
-        """Builds a sample Hamiltonian for the system."""
-        print("Building Hamiltonian...")
-        H = np.random.rand(self.dimensionality, self.dimensionality) + \
-            1j * np.random.rand(self.dimensionality, self.dimensionality)
-        return (H + H.conj().T) / 2
+    def _build_hamiltonian(self) -> Dict[str, Any]:
+        """Defines the 'energy landscape' (configuration) of the system."""
+        print("Building Hamiltonian (system configuration)...")
+        return {
+            "version": "1.0",
+            "max_recursion_depth": 10,
+            "energy_coefficients": {
+                "alpha": 1.0, # complexity
+                "beta": 1.0,  # coupling
+                "gamma": 1.0, # constraint
+                "delta": 1.0, # debt
+            }
+        }
 
-    def _initialize_state(self) -> np.ndarray:
-        """Initializes the quantum state vector (psi)."""
-        print("Initializing quantum state vector...")
-        psi = np.random.rand(self.dimensionality) + 1j * np.random.rand(self.dimensionality)
-        psi /= np.linalg.norm(psi)
-        return psi
+    def _initialize_state(self) -> QCState:
+        """Initializes the system's state vector (psi)."""
+        print("Initializing QCState (system state vector)...")
+        return QCState(
+            software_state=SoftwareState(component_versions={}, config_hashes={}),
+            energy=0.0,
+            energy_components=EnergyComponents(static=0.0, dynamic=0.0, interaction=0.0),
+            lyapunov_potential=1.0,
+            contraction_factor=1.0,
+        )
 
-    def extract_intent(self, user_input: str, session_id: str) -> Intent:
+    def _load_prompts(self) -> Dict[str, str]:
+        """Loads the structured prompts from the filesystem."""
+        prompt_files = [
+            "intent_parsing.md", "planning.md", "constraint_extraction.md",
+            "clarification.md", "verification.md"
+        ]
+        prompts = {}
+        for filename in prompt_files:
+            try:
+                with open(f"agent/prompts/{filename}", "r") as f:
+                    prompts[filename.split('.')[0]] = f.read()
+            except FileNotFoundError:
+                print(f"Warning: Prompt file {filename} not found.")
+                prompts[filename.split('.')[0]] = ""
+        return prompts
+
+    async def extract_intent(self, user_input: str, session_context: Dict[str, Any]) -> Intent:
         """
-        Extracts a detailed, structured Intent from user input.
+        Extracts a detailed, structured Intent from user input using an LLM.
         """
         print(f"\nExtracting intent from user input: '{user_input}'")
-        # In a real scenario, an LLM call would happen here.
-        # We simulate the creation of a detailed Intent object.
 
-        # Placeholder logic for creating the detailed fields
-        energy_estimate = EnergyEstimate(e_complexity=10.5, e_coupling=5.2, e_constraint=2.0, e_debt=1.5)
-        risk_assessment = RiskBound(risk_level=0.2, confidence=0.95, method="Chernoff")
-        quantum_signatures = QuantumSignatures(semantic_hash=str(uuid.uuid4()), complexity_spectrum=[0.1, 0.5, 1.2])
-        intent_context = IntentContext(session_id=session_id, current_energy=energy_estimate.total())
+        prompt = self.prompts.get("intent_parsing")
+        if not prompt:
+            raise ValueError("Intent parsing prompt not found.")
 
-        intent = Intent(
-            goal=user_input,
-            constraints={"security": "must use signed JWTs", "performance": "p99 < 250ms"},
-            context=intent_context,
-            priority=Priority.HIGH,
-            acceptance_criteria=[
-                "API is secured with JWTs.",
-                "Rate limiting is enforced per user.",
-                "All endpoints have integration tests."
-            ],
-            energy_estimate=energy_estimate,
-            risk_assessment=risk_assessment,
-            quantum_signatures=quantum_signatures,
-            estimated_effort=EffortLevel.COMPLEX
+        # The LLM is expected to generate an object that looks like an Intent, but might miss context.
+        # We define a temporary Pydantic model for the expected LLM response.
+        class LLMIntentResponse(BaseModel):
+            goal: str
+            cnl_translation: str
+            constraints: Dict[str, Any]
+            priority: Priority
+            acceptance_criteria: List[str]
+            energy_estimate: EnergyEstimate
+            risk_assessment: RiskBound
+            requires_approval: bool
+            estimated_effort: EffortLevel
+
+        # The prompt already contains instructions and examples. We just add the final user input.
+        full_prompt = f"{prompt}\n\nProcess this user input:\n\n{user_input}"
+
+        llm_response = await self.llm_client.generate_structured(
+            prompt=full_prompt,
+            response_model=LLMIntentResponse,
+            quantum_context=self.psi_current
         )
-        print("Detailed Intent extracted successfully.")
+
+        # Construct the full, valid Intent object, adding context not known to the LLM.
+        intent = Intent(
+            **llm_response.model_dump(),
+            cnl_validation=self.validate_cnl_translation(user_input, llm_response.cnl_translation),
+            context=IntentContext(
+                session_id=session_context.get("session_id", uuid.uuid4()),
+                user_profile={}, # Placeholder
+                system_state=self.psi_current
+            ),
+            quantum_signatures=QuantumSignatures(
+                semantic_hash=str(uuid.uuid5(uuid.NAMESPACE_DNS, llm_response.goal)),
+                constraint_hash=str(uuid.uuid5(uuid.NAMESPACE_DNS, json.dumps(llm_response.constraints, sort_keys=True)))
+            )
+        )
+
+        print("Detailed Intent extracted and validated successfully.")
         return intent
 
-    def generate_plan(self, intent: Intent) -> Plan:
+    async def generate_plan(self, intent: Intent, memories: Optional[List[str]] = None) -> Plan:
         """
-        Generates a detailed, executable Plan from an Intent.
+        Generates a detailed, executable Plan from an Intent using an LLM.
         """
         print("\nGenerating a detailed plan from the intent...")
-        # In a real scenario, an LLM call would generate the plan structure.
-        # We simulate the creation of a detailed Plan object.
+        prompt = self.prompts.get("planning")
+        if not prompt:
+            raise ValueError("Planning prompt not found.")
 
-        # Placeholder logic for creating the plan structure
-        nodes = [
-            PlanNode(id="node-1", description="Define API Schema", agent_name="PlanckForge", task_payload={"spec_language": "OpenAPI"}, energy_barrier=5.0),
-            PlanNode(id="node-2", description="Implement Rate Limiter", agent_name="SchrodingerDev", task_payload={"algorithm": "TokenBucket"}, energy_barrier=10.0),
-            PlanNode(id="node-3", description="Implement Payment Logic", agent_name="SchrodingerDev", task_payload={}, energy_barrier=15.0),
-            PlanNode(id="node-4", description="Integrate and Test", agent_name="PauliGuard", task_payload={}, energy_barrier=8.0),
-        ]
-        edges = [
-            PlanEdge(from_node="node-1", to_node="node-3", transition_probability=0.9, description="Schema must exist before implementation."),
-            PlanEdge(from_node="node-2", to_node="node-4", transition_probability=0.95, description="Rate limiter must be ready for integration."),
-            PlanEdge(from_node="node-3", to_node="node-4", transition_probability=0.95, description="Payment logic must be ready for integration."),
-        ]
-        metadata = PlanMetadata(required_capabilities={"api_design", "security", "testing"}, estimated_duration_seconds=3600.0, risk_mitigations=["Add extensive integration tests."])
-        verification_points = [VerificationPoint(node_id="node-4", proof_obligation="verify_end_to_end_security", verification_method="Coq")]
-        energy_impact = EnergyMetrics(delta_energy=-20.0, delta_entropy=5.0)
-        convergence_proof = ConvergenceProof(proof_certificate=str(uuid.uuid4()))
-        lyapunov_certificate = LyapunovCertificate(function_definition="V(x) = x^T * P * x", descent_guarantee=True)
+        intent_json = intent.model_dump_json(indent=2)
+        memory_str = "\n".join(memories) if memories else "No relevant memories found."
 
-        plan = Plan(
-            intent=intent,
-            nodes=nodes,
-            edges=edges,
-            metadata=metadata,
-            verification_points=verification_points,
-            energy_impact=energy_impact,
-            convergence_proof=convergence_proof,
-            lyapunov_certificate=lyapunov_certificate,
+        full_prompt = (
+            f"{prompt}\n\n"
+            f"Relevant memories from constellation query:\n{memory_str}\n\n"
+            f"Generate a complete plan for the following intent:\n{intent_json}"
         )
-        print("Detailed Plan generated successfully.")
+
+        plan = await self.llm_client.generate_structured(
+            prompt=full_prompt,
+            response_model=Plan,
+            quantum_context=self.psi_current
+        )
+        print("Detailed Plan generated and validated successfully.")
         return plan
 
     def retrieve_memories(self, intent: Intent) -> List[Any]:
         """Queries the constellation memory. (Placeholder)"""
         print("\nRetrieving memories related to the intent...")
+        # In a real system, this would involve vector search and graph traversal.
         print("No relevant memories found (placeholder).")
         return []
 
     def store_successful_pattern(self, plan: Plan, result: Any):
         """Stores a successful pattern in memory. (Placeholder)"""
         print("\nStoring successful pattern in memory...")
+        # In a real system, this would involve PCA, clustering, and graph updates.
         print("Pattern stored successfully (placeholder).")
 
-    def evolve_state(self, dt: float) -> np.ndarray:
-        """Evolves the system's quantum state over a time interval dt."""
-        print(f"\nEvolving quantum state with dt = {dt}...")
-        unitary_op = expm(-1j * self.hamiltonian * dt)
-        new_psi = unitary_op @ self.psi_current
-        new_psi /= np.linalg.norm(new_psi)
-        self.psi_current = new_psi
-        print("State evolved successfully.")
+    def evolve_state(self, plan: Plan) -> QCState:
+        """
+        Evolves the system's state based on the energy impact of a completed plan.
+        This is a simulation of the Schrödinger evolution.
+        """
+        print(f"\nEvolving QCState based on plan {plan.id}...")
+
+        new_energy = self.psi_current.energy + plan.energy_impact.delta_e
+        new_lyapunov = self.psi_current.lyapunov_potential + (plan.energy_impact.delta_e * 0.1)
+        if new_lyapunov < 0: new_lyapunov = 0
+        new_contraction = 1 - (1 / (1 + new_lyapunov)) if new_lyapunov > 0 else 0
+
+        self.psi_current.energy = new_energy
+        self.psi_current.lyapunov_potential = new_lyapunov
+        self.psi_current.contraction_factor = new_contraction
+        self.psi_current.timestamp = datetime.utcnow()
+
+        print(f"State evolved successfully. New energy: {new_energy:.2f}")
         return self.psi_current
+
+    def validate_cnl_translation(self, original: str, cnl: str) -> CNLValidation:
+        """
+        Validates the CNL translation. Placeholder for a real BLEU score calculation.
+        """
+        import difflib
+        score = difflib.SequenceMatcher(None, original.lower(), cnl.lower()).ratio()
+
+        if score >= 0.7:
+            return CNLValidation(status=CNLValidationStatus.AUTO_ACCEPT, confidence=score)
+        elif score >= 0.5:
+            return CNLValidation(status=CNLValidationStatus.HUMAN_REVIEW, confidence=score)
+        else:
+            return CNLValidation(status=CNLValidationStatus.REJECTED, confidence=score,
+                               reason="Translation quality below threshold")

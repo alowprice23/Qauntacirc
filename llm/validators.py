@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, Optional
 
-from .client import QuantumState
+from core.types import QCState as QuantumState
 
 logger = logging.getLogger(__name__)
 
@@ -75,9 +75,11 @@ class ResponseValidator:
         This is a placeholder for a complex validation logic that depends on the quantum state.
         """
         logger.info("Performing quantum constraint check on the response.")
-        if not quantum_context.is_coherent():
-            logger.warning("Quantum state is not coherent. Response may be unreliable.")
-            # Depending on the system's needs, we might want to fail here
+        # A stable system has low Lyapunov potential and a contraction factor < 1.
+        # This is a proxy for the old 'is_coherent()' check.
+        is_stable = quantum_context.lyapunov_potential < 500 and quantum_context.contraction_factor < 1.0
+        if not is_stable:
+            logger.warning(f"Quantum state is not stable (Lyapunov: {quantum_context.lyapunov_potential}, Contraction: {quantum_context.contraction_factor}). Response may be unreliable.")
             # For now, we'll just log a warning.
 
         if isinstance(response, str):
@@ -87,9 +89,9 @@ class ResponseValidator:
         else:
             content_to_check = str(response)
 
-        # Example constraint: If system urgency is high, the response should be concise.
-        if quantum_context.system_urgency > 0.8 and len(content_to_check) > 500:
-            logger.warning("Response is too long for a high-urgency quantum state.")
+        # Example constraint: If system energy is high (proxy for urgency), the response should be concise.
+        if quantum_context.energy > 200 and len(content_to_check) > 500:
+            logger.warning(f"Response is too long for a high-energy state (E={quantum_context.energy}).")
             return False
 
         return True
