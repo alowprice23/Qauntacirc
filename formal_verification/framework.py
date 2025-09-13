@@ -57,15 +57,14 @@ class MultiLogicVerificationFramework:
 
     def _generate_smt_verification_tasks(self, properties: List[SystemProperty]) -> List[SystemProperty]:
         """
-        Converts arithmetic properties to SMT verification tasks.
-        This implementation assumes the property's specification is already in a format
-        that the Z3SMTSolver can process: a dict with 'variables' and 'constraints'.
+        Validates that arithmetic properties have the correct specification format
+        for the enhanced Z3SMTSolver, which expects an 'expression'.
         """
         print("Generating SMT verification tasks...")
         for prop in properties:
-            if not isinstance(prop.specification, dict) or "variables" not in prop.specification or "constraints" not in prop.specification:
-                # In a real system, we might try to convert it, but here we'll just raise an error.
-                raise ValueError(f"Invalid specification for SMT property {prop.id}")
+            if not isinstance(prop.specification, dict) or "expression" not in prop.specification:
+                raise ValueError(f"Invalid specification for SMT property {prop.id}. Expected a dict with 'expression' key.")
+        # The tasks are already in the correct format, so we just return them.
         return properties
 
     def _generate_uppaal_verification_tasks(self, properties: List[SystemProperty]) -> List[SystemProperty]:
