@@ -83,22 +83,45 @@ def test_compute_comprehensive_risk_high_risk_scenario(risk_system, sample_syste
     assert "Tighter Chernoff Bound Calculation" in assessment.mathematical_certificate
 
 @pytest.mark.asyncio
-async def test_optimize_error_budget_allocation(risk_system, sample_system_state_low_risk):
+async def test_optimize_error_budget_allocation_real(risk_system, sample_system_state_high_risk):
     """
-    Tests the (mocked) budget optimization logic.
+    Tests the real budget optimization logic.
+    We use the high-risk scenario as it provides a better case for optimization.
     """
     from core.risk_quantification import ErrorBudgetAllocation
+    import numpy as np
+
+    # Start with a non-optimal allocation (e.g., equal split)
+    total_budget = risk_system.total_budget
+    initial_budget_per_surface = total_budget / 3.0
 
     current_alloc = ErrorBudgetAllocation(
-        verified_surface_budget=0.01e-4,
-        empirical_surface_budget=0.89e-4,
-        security_surface_budget=0.1e-4,
-        optimization_proof="",
+        verified_surface_budget=initial_budget_per_surface,
+        empirical_surface_budget=initial_budget_per_surface,
+        security_surface_budget=initial_budget_per_surface,
+        optimization_proof="Initial equal allocation.",
         expected_risk_reduction=0
     )
 
-    optimized_result = await risk_system.optimize_error_budget_allocation(current_alloc, sample_system_state_low_risk)
+    # Run the optimization
+    optimized_result = await risk_system.optimize_error_budget_allocation(current_alloc, sample_system_state_high_risk)
 
+    # 1. Check the output is valid
     assert optimized_result is not None
+    assert isinstance(optimized_result.optimized_allocation, ErrorBudgetAllocation)
+
+    # 2. Check that the new budget allocation is valid and sums to the total budget
+    new_alloc = optimized_result.optimized_allocation
+    total_allocated_budget = new_alloc.verified_surface_budget + new_alloc.empirical_surface_budget + new_alloc.security_surface_budget
+    assert np.isclose(total_allocated_budget, total_budget)
+
+    # 3. Check that the optimization actually improved the situation
+    # In a high-risk scenario, we expect a significant improvement
     assert optimized_result.improvement_factor > 1.0
-    assert "Mock proof" in optimized_result.optimized_allocation.optimization_proof
+    assert new_alloc.expected_risk_reduction > 0
+
+    # 4. Check that the proofs are no longer mocked
+    assert "Mock proof" not in new_alloc.optimization_proof
+    assert "SLSQP solver" in new_alloc.optimization_proof
+    assert "Mock optimality" not in optimized_result.mathematical_optimality_certificate
+    assert "Karush-Kuhn-Tucker" in optimized_result.mathematical_optimality_certificate

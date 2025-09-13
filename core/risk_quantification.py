@@ -7,6 +7,9 @@ import math
 from dataclasses import dataclass
 from typing import Dict, Any, Optional
 
+import numpy as np
+from scipy.optimize import minimize
+
 from core.error_budget import ErrorBudget
 
 # --- Helper Classes ---
@@ -196,22 +199,79 @@ class MathematicalRiskQuantificationSystem:
         )
 
     async def optimize_error_budget_allocation(self, current_allocation: ErrorBudgetAllocation, system_state: SystemState) -> OptimizedBudgetAllocation:
-        """MOCK: Optimize error budget allocation using mathematical optimization"""
-        # This is a mock implementation. A real one would involve a solver.
-        # For now, it returns a slightly adjusted allocation.
+        """Optimize error budget allocation using mathematical optimization."""
+        # 1. Analyze risk reduction efficiency to get model parameters
+        analysis = self._analyze_risk_reduction_efficiency(system_state)
 
-        new_allocation = ErrorBudgetAllocation(
-            verified_surface_budget=current_allocation.verified_surface_budget * 0.9,
-            empirical_surface_budget=current_allocation.empirical_surface_budget * 1.1,
-            security_surface_budget=current_allocation.security_surface_budget,
-            optimization_proof="Mock proof: Reallocated 10% from verified to empirical based on mock efficiency analysis.",
-            expected_risk_reduction=0.000005
+        # 2. Define the optimization problem for scipy
+        def objective_function(budgets):
+            risk_v = analysis['verified']['base_risk'] * np.exp(-analysis['verified']['efficiency'] * budgets[0])
+            risk_e = analysis['empirical']['base_risk'] * np.exp(-analysis['empirical']['efficiency'] * budgets[1])
+            risk_s = analysis['security']['base_risk'] * np.exp(-analysis['security']['efficiency'] * budgets[2])
+            return risk_v + risk_e + risk_s
+
+        # Constraint: sum of budgets must equal total budget
+        constraints = ({'type': 'eq', 'fun': lambda budgets: np.sum(budgets) - self.total_budget})
+
+        # Bounds: budgets cannot be negative or exceed the total budget
+        bounds = [(0, self.total_budget), (0, self.total_budget), (0, self.total_budget)]
+
+        # Initial guess: the current allocation, normalized to be safe
+        initial_guess = np.array([
+            current_allocation.verified_surface_budget,
+            current_allocation.empirical_surface_budget,
+            current_allocation.security_surface_budget
+        ])
+        if not np.isclose(np.sum(initial_guess), self.total_budget):
+            initial_guess = initial_guess / np.sum(initial_guess) * self.total_budget if np.sum(initial_guess) > 0 else np.array([self.total_budget/3.0]*3)
+
+        # 3. Solve using mathematical programming (scipy.optimize.minimize)
+        result = minimize(
+            objective_function,
+            initial_guess,
+            method='SLSQP',
+            bounds=bounds,
+            constraints=constraints
+        )
+
+        if not result.success:
+            raise RuntimeError(f"Budget optimization failed: {result.message}")
+
+        optimal_budgets = result.x
+
+        # 4. Generate optimized allocation with mathematical justification
+        initial_risk = objective_function(initial_guess)
+        optimized_risk = result.fun
+        risk_reduction = initial_risk - optimized_risk
+        improvement_factor = initial_risk / optimized_risk if optimized_risk > 1e-12 else float('inf')
+
+        optimization_proof = (
+            f"Optimization completed using SLSQP solver.\n"
+            f"  - Status: {result.message}\n"
+            f"  - Iterations: {result.nit}\n"
+            f"  - Initial Predicted Risk: {initial_risk:.6e}\n"
+            f"  - Optimized Predicted Risk: {optimized_risk:.6e}\n"
+            f"  - Expected Risk Reduction: {risk_reduction:.6e}"
+        )
+
+        optimized_allocation = ErrorBudgetAllocation(
+            verified_surface_budget=optimal_budgets[0],
+            empirical_surface_budget=optimal_budgets[1],
+            security_surface_budget=optimal_budgets[2],
+            optimization_proof=optimization_proof,
+            expected_risk_reduction=risk_reduction
+        )
+
+        optimality_certificate = (
+            f"Mathematical optimality certificate based on Karush-Kuhn-Tucker (KKT) conditions.\n"
+            f"Solver status '{result.status}' indicates that the optimality conditions are satisfied.\n"
+            f"Final objective function value (total risk): {result.fun:.6e}"
         )
 
         return OptimizedBudgetAllocation(
-            optimized_allocation=new_allocation,
-            improvement_factor=1.05,
-            mathematical_optimality_certificate="Mock optimality certificate based on mock convex optimization."
+            optimized_allocation=optimized_allocation,
+            improvement_factor=improvement_factor,
+            mathematical_optimality_certificate=optimality_certificate
         )
 
     def _compute_verified_surface_risk(self, formal_verification_results: Any) -> float:
@@ -263,32 +323,41 @@ class MathematicalRiskQuantificationSystem:
         )
         return certificate
 
-    def _analyze_risk_reduction_efficiency(self, current_allocation: ErrorBudgetAllocation, system_state: SystemState) -> Any:
-        """Mock analysis of risk reduction efficiency."""
-        # This would be a complex function in a real system.
-        class MockEfficiency:
-            current_risks = {
-                "verified": self._compute_verified_surface_risk(system_state.formal_verification_results),
-                "empirical": self.chernoff_calculator.compute_chernoff_bound(
-                    system_state.total_statistical_tests, system_state.observed_test_failures, 0.95, 0.01),
-                "security": self._compute_security_surface_risk(system_state.chaos_test_results, system_state.penetration_test_results)
-            }
-            marginal_efficiencies = {"verified": 1e-3, "empirical": 5e-3, "security": 2e-3}
-        return MockEfficiency()
+    def _analyze_risk_reduction_efficiency(self, system_state: SystemState) -> Dict[str, Dict[str, float]]:
+        """
+        Analyzes the efficiency of budget allocation for risk reduction on different surfaces.
+        This implementation provides a plausible heuristic model for optimization.
 
-    def _formulate_budget_optimization_problem(self, total_budget: float, current_risks: Any, marginal_efficiencies: Any) -> Any:
-        """Mock formulation of the optimization problem."""
-        return {"objective": "minimize_total_risk", "constraints": "total_budget"}
+        Returns:
+            A dictionary containing the 'base_risk' (risk with current investment) and
+            'efficiency' (how effectively *additional* budget reduces risk) for each surface.
+        """
+        # Calculate current risks, which will serve as our base_risk for the model.
+        base_risks = {
+            "verified": self._compute_verified_surface_risk(system_state.formal_verification_results),
+            "empirical": self.chernoff_calculator.compute_chernoff_bound(
+                system_state.total_statistical_tests, system_state.observed_test_failures, 0.95, 0.01),
+            "security": self._compute_security_surface_risk(system_state.chaos_test_results, system_state.penetration_test_results)
+        }
 
-    async def _solve_budget_optimization(self, optimization_problem: Any) -> Any:
-        """Mock solution of the budget optimization."""
-        # In a real system, this would call an optimization solver like scipy.optimize
-        class MockSolution:
-            verified_allocation = 0.009
-            empirical_allocation = 0.090
-            security_allocation = 0.010
-            mathematical_proof = "Mock proof from mock solver"
-            total_risk_reduction = 5e-6
-            improvement_factor = 1.05
-            optimality_certificate = "Mock optimality certificate"
-        return MockSolution()
+        # Heuristic for efficiency (k in risk = base * exp(-k * budget))
+        # A higher 'k' means budget is more effective at reducing risk.
+
+        # Verified surface: Efficiency is higher if there are fewer proofs. More to gain.
+        num_proofs = len(system_state.formal_verification_results.get("proofs", [])) if system_state.formal_verification_results else 0
+        verified_efficiency = 1e5 / (1 + num_proofs * 5)
+
+        # Empirical surface: Efficiency is higher if observed failure rate is high (low-hanging fruit).
+        p_hat = (system_state.observed_test_failures / system_state.total_statistical_tests
+                 if system_state.total_statistical_tests > 0 else 0)
+        empirical_efficiency = 5e5 * (p_hat * 100 + 0.1)
+
+        # Security surface: Efficiency is higher with more vulnerabilities found.
+        num_vulnerabilities = len(system_state.penetration_test_results.get("vulnerabilities", [])) if system_state.penetration_test_results else 0
+        security_efficiency = 2e5 * (1 + num_vulnerabilities * 2)
+
+        return {
+            "verified": {"base_risk": base_risks["verified"], "efficiency": verified_efficiency},
+            "empirical": {"base_risk": base_risks["empirical"], "efficiency": empirical_efficiency},
+            "security": {"base_risk": base_risks["security"], "efficiency": security_efficiency}
+        }
