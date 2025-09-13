@@ -13,7 +13,7 @@ import math
 import random
 from typing import List, Any, Optional, Dict, Tuple
 from uuid import UUID, uuid4
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 from pydantic import BaseModel, Field
@@ -60,7 +60,7 @@ class PhaseBResult(BaseModel):
     iterations: int
     contraction_factors: List[float]
     measured_lambda: float
-    convergence_verification: Dict[str, Any] # Placeholder for verification results
+    convergence_verification: "ConvergenceVerification"
 
     class Config:
         arbitrary_types_allowed = True
@@ -76,7 +76,7 @@ class TransitionAnalysis(BaseModel):
 class MathematicalCertificate(BaseModel):
     """A verifiable certificate of mathematical convergence."""
     certificate_id: UUID = Field(default_factory=uuid4)
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     engine_version: str = "1.0.0"
     theorem_used: str
     conditions_verified: Dict[str, Any]
@@ -124,17 +124,18 @@ class BasinIndicators(BaseModel):
 class ConvergenceVerification(BaseModel):
     """Represents result of phase B convergence"""
     verified: bool
+    message: str
 
 
 # --- Helper Components for the Engine ---
 
 class GlobalBasinSearchController:
     """Manages parameters for Phase A."""
-    def __init__(self, max_iterations: int = 10000, min_iterations: int = 2000):
+    def __init__(self, max_iterations: int = 20000, min_iterations: int = 5000):
         self.max_phase_a_iterations = max_iterations
         self.min_phase_a_iterations = min_iterations
         # This constant is critical for tuning. A smaller value leads to faster cooling.
-        self.c_constant = 1.0
+        self.c_constant = 10.0 # Back to a moderate value
 
 
 class LocalContractionController:
@@ -240,7 +241,7 @@ class MathematicalConvergenceMonitor:
         self.log_entries = []
 
     def log(self, message: str):
-        entry = f"[{datetime.utcnow()}] {message}"
+        entry = f"[{datetime.now(timezone.utc)}] {message}"
         self.log_entries.append(entry)
         print(entry) # For real-time feedback
 
@@ -268,20 +269,22 @@ class TwoPhaseConvergenceEngine:
     async def execute_two_phase_optimization(self, initial_state: SystemState, target_tolerance: float) -> ConvergenceResult:
         """Execute complete two-phase optimization with mathematical guarantees"""
         self.mathematical_monitor.log("Starting two-phase optimization.")
-        initial_state.energy = self.energy_fn(initial_state.position)
+        initial_energy = self.energy_fn(initial_state.position)
+        initial_state.energy = initial_energy
 
         # Phase A: Global Basin Capture with Logarithmic Cooling
         self.mathematical_monitor.log("Entering Phase A: Global Basin Search.")
         phase_a_result = await self._execute_phase_a_global_search(initial_state)
-        self.mathematical_monitor.log(f"Phase A finished after {phase_a_result.iterations} iterations.")
+        self.mathematical_monitor.log(f"Phase A finished after {phase_a_result.iterations} iterations with final energy {phase_a_result.final_state.energy:.4f}.")
 
         # Detect Phase A → Phase B Transition
         transition_analysis = self.transition_detector.analyze_basin_capture(
             energy_trajectory=phase_a_result.energy_history,
             gradient_trajectory=phase_a_result.gradient_history,
             current_state=phase_a_result.final_state,
-            variance_threshold=0.1,  # Relaxed threshold
-            gradient_norm_threshold=1.0 # Relaxed threshold
+            variance_threshold=1e-3,  # Relaxed threshold
+            gradient_norm_threshold=0.5, # Relaxed threshold
+            window_size=50
         )
         self.mathematical_monitor.log(f"Transition analysis: {transition_analysis.message}")
 
@@ -304,48 +307,51 @@ class TwoPhaseConvergenceEngine:
 
         # Generate mathematical convergence proof
         self.mathematical_monitor.log("Generating convergence proof.")
-        convergence_proof, certificate = self.convergence_prover.prove_banach_convergence(
+        proof, certificate = self.convergence_prover.prove_banach_convergence(
             phase_a_result=phase_a_result,
             phase_b_result=phase_b_result,
             transition_analysis=transition_analysis
         )
+        self.mathematical_monitor.log(f"Proof status: {'Verified' if proof.is_verified else 'Not Verified'}")
 
         return ConvergenceResult(
-            success=phase_b_result.converged,
+            success=proof.is_verified and phase_b_result.converged,
             final_state=phase_b_result.final_state,
-            total_energy_reduction=(initial_state.energy - phase_b_result.final_energy),
+            total_energy_reduction=(initial_energy - phase_b_result.final_energy),
             phase_a_iterations=phase_a_result.iterations,
             phase_b_iterations=phase_b_result.iterations,
             contraction_factor=phase_b_result.measured_lambda,
-            convergence_proof=convergence_proof,
+            convergence_proof=proof,
             mathematical_certificate=certificate,
             mathematical_analysis=transition_analysis
         )
 
     async def _execute_phase_a_global_search(self, initial_state: SystemState) -> PhaseAResult:
         """Phase A: Logarithmic cooling T_k = c/log(k+2) for global basin capture"""
-        current_state = initial_state.copy(deep=True)
+        current_state = initial_state.model_copy(deep=True)
         energy_history = [current_state.energy]
         gradient_history = [self._compute_energy_gradient(current_state)]
 
         iteration = 0
         for iteration in range(self.phase_a_controller.max_phase_a_iterations):
             temperature = self.phase_a_controller.c_constant / math.log(iteration + 2)
+            if iteration > self.phase_a_controller.min_phase_a_iterations:
+                temperature *= 0.995 ** (iteration - self.phase_a_controller.min_phase_a_iterations)
 
             proposals = await self._generate_agent_proposals(current_state, temperature)
+            # Select the best proposal (lowest energy) from the list
+            best_proposal = min(proposals, key=lambda p: p.energy)
 
-            proposal = proposals[0]
-
-            energy_delta = self._compute_energy_delta(current_state, proposal)
+            energy_delta = self._compute_energy_delta(current_state, best_proposal)
             acceptance_probability = min(1.0, math.exp(-energy_delta / temperature))
 
             if random.random() < acceptance_probability:
-                new_state = await self._apply_proposals_with_verification(current_state, [proposal])
-                conservation_check = self._verify_proposal_energy_conservation(current_state, new_state, [proposal])
+                # In a real system, verification would be more complex.
+                new_state = await self._apply_proposals_with_verification(current_state, [best_proposal])
+                conservation_check = self._verify_proposal_energy_conservation(current_state, new_state, [best_proposal])
                 if conservation_check.verified:
                     current_state = new_state
 
-            current_state.energy = self.energy_fn(current_state.position)
             energy_history.append(current_state.energy)
             gradient_history.append(self._compute_energy_gradient(current_state))
 
@@ -365,126 +371,158 @@ class TwoPhaseConvergenceEngine:
 
     async def _execute_phase_b_local_contraction(self, basin_state: SystemState, contraction_requirement: float, tolerance: float) -> PhaseBResult:
         """Phase B: Local contraction with λ < 1 mathematical guarantee"""
-        current_state = basin_state.copy(deep=True)
+        current_state = basin_state.model_copy(deep=True)
         contraction_factors = []
-        previous_distance = self._compute_distance_to_optimum(current_state)
         convergence_achieved = False
         iteration = 0
 
         for iteration in range(self.phase_b_controller.max_phase_b_iterations):
+            distance_to_optimum_old = self._compute_distance_to_optimum(current_state)
+            if distance_to_optimum_old < tolerance:
+                convergence_achieved = True
+                self.mathematical_monitor.log(f"Convergence achieved at iteration {iteration} (within tolerance).")
+                break
+
             energy_gradient = self._compute_energy_gradient(current_state)
-
             descent_step = self._compute_pl_descent_step(current_state, energy_gradient)
+
             candidate_state = await self._apply_descent_step(current_state, descent_step)
+            distance_to_optimum_new = self._compute_distance_to_optimum(candidate_state)
 
-            current_distance = self._compute_distance_to_optimum(candidate_state)
-            if previous_distance > 1e-9:
-                lambda_factor = current_distance / previous_distance
-                contraction_factors.append(lambda_factor)
+            lambda_factor = distance_to_optimum_new / distance_to_optimum_old if distance_to_optimum_old > 1e-9 else 1.0
+            contraction_factors.append(lambda_factor)
 
-                if lambda_factor >= contraction_requirement:
-                    adjusted_step = self._adjust_step_for_contraction(descent_step, lambda_factor, contraction_requirement)
-                    candidate_state = await self._apply_descent_step(current_state, adjusted_step)
+            # If contraction is violated, adjust the step and re-evaluate
+            if lambda_factor >= contraction_requirement:
+                self.mathematical_monitor.log(f"Warning: Contraction violated (λ={lambda_factor:.4f}). Adjusting step.")
+                descent_step = self._adjust_step_for_contraction(descent_step, lambda_factor, contraction_requirement)
+                candidate_state = await self._apply_descent_step(current_state, descent_step)
 
-            candidate_energy = self.energy_fn(candidate_state.position)
-            energy_delta = candidate_energy - self.energy_fn(current_state.position)
-
-            if energy_delta <= 0:
+            # Accept step only if it reduces energy
+            energy_delta = candidate_state.energy - current_state.energy
+            if energy_delta < 0:
                 current_state = candidate_state
-                current_state.energy = candidate_energy
-                previous_distance = current_distance
-
-                if abs(energy_delta) < tolerance and current_distance < tolerance:
-                    convergence_achieved = True
-                    self.mathematical_monitor.log(f"Convergence achieved at iteration {iteration}.")
-                    break
-
-        final_energy = self.energy_fn(current_state.position)
 
         return PhaseBResult(
             final_state=current_state,
-            final_energy=final_energy,
+            final_energy=current_state.energy,
             converged=convergence_achieved,
             iterations=iteration + 1,
             contraction_factors=contraction_factors,
-            measured_lambda=np.median(contraction_factors[-10:]) if contraction_factors else 1.0,
+            measured_lambda=np.median(contraction_factors[-10:]) if len(contraction_factors) > 10 else 1.0,
             convergence_verification=self._verify_phase_b_convergence(basin_state, current_state, contraction_factors)
         )
 
-    # --- Placeholder Implementations for a Testable System ---
 
-    async def _generate_agent_proposals(self, current_state: SystemState, temperature: float) -> List[SystemState]:
-        """Generates a proposal. A smaller step size is used for more precise exploration."""
-        proposal_state = current_state.copy(deep=True)
-        # Adaptive step size based on temperature could be an improvement.
-        # For now, a smaller fixed step size.
-        step_size = 0.05
-        proposal_state.position += np.random.randn(len(current_state.position)) * step_size
-        return [proposal_state]
+    # --- Helper Methods for the Engine ---
+
+    async def _generate_agent_proposals(self, current_state: SystemState, temperature: float, num_proposals: int = 3) -> List[SystemState]:
+        """Generates multiple proposals to simulate different agents."""
+        proposals = []
+        for _ in range(num_proposals):
+            gradient = self._compute_energy_gradient(current_state)
+            noise = np.random.normal(scale=np.sqrt(temperature) * 0.1, size=current_state.position.shape)
+            step_size = 0.001
+
+            proposal_position = current_state.position - step_size * gradient + noise
+            proposal_state = current_state.model_copy(deep=True)
+            proposal_state.position = proposal_position
+            proposal_state.energy = self.energy_fn(proposal_position)
+            proposals.append(proposal_state)
+        return proposals
+
+    def _compute_distance_to_optimum(self, state: SystemState) -> float:
+        """Computes the Euclidean distance to the known optimum position."""
+        return np.linalg.norm(state.position - self.optimum_position)
+
+    def _adjust_step_for_contraction(self, step: np.ndarray, lambda_factor: float, requirement: float) -> np.ndarray:
+        """Adjusts the descent step to try to meet the contraction requirement."""
+        # Reduce step size proportionally to the violation, with a small buffer.
+        return step * (requirement / lambda_factor) * 0.9
 
     def _compute_energy_delta(self, old_state: SystemState, new_state: SystemState) -> float:
+        """Computes the energy difference between two states."""
         return self.energy_fn(new_state.position) - self.energy_fn(old_state.position)
 
     async def _apply_proposals_with_verification(self, current_state: SystemState, proposals: List[SystemState]) -> SystemState:
+        """Applies the first valid proposal."""
+        # In a real system, this would involve more complex verification.
         return proposals[0]
 
     def _verify_proposal_energy_conservation(self, old_state: SystemState, new_state: SystemState, proposals: List[SystemState]) -> ConservationCheck:
+        """Placeholder for energy conservation verification."""
         return ConservationCheck(verified=True)
 
     def _compute_energy_gradient(self, state: SystemState) -> np.ndarray:
+        """Computes the energy gradient at a given state."""
         return self.gradient_fn(state.position)
 
     def _check_basin_capture_indicators(self, energy_history: List[float], gradient_history: List[np.ndarray], current_state: SystemState) -> BasinIndicators:
+        """Uses the detector to check for basin capture."""
         analysis = self.transition_detector.analyze_basin_capture(
             energy_trajectory=energy_history,
             gradient_trajectory=gradient_history,
             current_state=current_state,
-            variance_threshold=0.1,
-            gradient_norm_threshold=1.0
+            variance_threshold=1e-3,
+            gradient_norm_threshold=0.5,
+            window_size=50
         )
         return BasinIndicators(basin_likely_captured=analysis.basin_captured)
 
     def _compute_basin_capture_confidence(self, energy_history: List[float], window_size: int = 100) -> float:
+        """Computes a confidence score for basin capture based on energy variance."""
         if len(energy_history) < window_size:
             return 0.0
         variance = np.var(energy_history[-window_size:])
-        return math.exp(-variance * 10)
+        # Exponential decay of confidence with variance
+        return math.exp(-variance)
 
     def _compute_pl_descent_step(self, state: SystemState, gradient: np.ndarray) -> np.ndarray:
-        step_size = 0.01 # Smaller step size for finer control in Phase B
+        """Computes a gradient descent step. A real PL step might be more complex."""
+        step_size = 0.01  # A small, fixed step size for Phase B
         return -step_size * gradient
 
     async def _apply_descent_step(self, state: SystemState, step: np.ndarray) -> SystemState:
-        new_state = state.copy(deep=True)
+        """Applies a descent step to the state."""
+        new_state = state.model_copy(deep=True)
         new_state.position += step
+        new_state.energy = self.energy_fn(new_state.position)
         return new_state
 
-    def _compute_distance_to_optimum(self, state: SystemState) -> float:
-        return np.linalg.norm(state.position - self.optimum_position)
+    def _verify_phase_b_convergence(self, initial_state: SystemState, final_state: SystemState, factors: List[float]) -> ConvergenceVerification:
+        """Verifies the mathematical properties of Phase B convergence."""
+        if not factors:
+            return ConvergenceVerification(verified=False, message="No contraction factors measured.")
 
-    def _adjust_step_for_contraction(self, step: np.ndarray, lambda_factor: float, requirement: float) -> np.ndarray:
-        return step * (requirement / lambda_factor) * 0.9
+        median_lambda = np.median(factors[-10:])
+        if median_lambda < 1.0:
+            return ConvergenceVerification(verified=True, message=f"Median contraction factor λ = {median_lambda:.4f} < 1.")
+        else:
+            return ConvergenceVerification(verified=False, message=f"Median contraction factor λ = {median_lambda:.4f} >= 1.")
 
-    def _verify_phase_b_convergence(self, initial_state: SystemState, final_state: SystemState, factors: List[float]) -> Dict:
-        return {"verified": True, "reason": "Placeholder verification"}
+# Resolve forward references in Pydantic models
+PhaseBResult.model_rebuild()
 
 
 if __name__ == '__main__':
     # --- Demonstration of the TwoPhaseConvergenceEngine ---
 
-    # 1. Define a challenging energy landscape: the Rastrigin function
-    def rastrigin_energy(position: np.ndarray):
-        A = 10
-        n = len(position)
-        return A * n + np.sum(position**2 - A * np.cos(2 * np.pi * position))
+    # 1. Define a double-well energy landscape.
+    # This function has a local minimum at (0,0) and global minima at (1,1) and (-1,-1).
+    # A simple gradient descent would get stuck at (0,0).
+    def double_well_energy(pos: np.ndarray):
+        x, y = pos[0], pos[1]
+        return (x**2 - 1)**2 + (y - x)**2
 
-    def rastrigin_gradient(position: np.ndarray):
-        A = 10
-        return 2 * position + 2 * np.pi * A * np.sin(2 * np.pi * position)
+    def double_well_gradient(pos: np.ndarray):
+        x, y = pos[0], pos[1]
+        grad_x = 4 * x**3 - 4 * x - 2 * (y - x)
+        grad_y = 2 * (y - x)
+        return np.array([grad_x, grad_y])
 
-    # 2. Set up the initial state
-    initial_position = np.array([3.5, -4.2])
-    initial_energy = rastrigin_energy(initial_position)
+    # 2. Set up the initial state near the local minimum to test basin escape.
+    initial_position = np.array([0.1, 0.1])
+    initial_energy = double_well_energy(initial_position)
 
     initial_system_state = SystemState(
         energy=initial_energy,
@@ -493,12 +531,13 @@ if __name__ == '__main__':
 
     # 3. Instantiate and run the engine
     print("--- Starting Mathematical Convergence Engine Demonstration ---")
+    print(f"Test Function: Double-well potential with local min at (0,0) and global min at (1,1).")
     print(f"Initial State: Position={initial_system_state.position}, Energy={initial_system_state.energy:.4f}")
 
     engine = TwoPhaseConvergenceEngine(
-        energy_fn=rastrigin_energy,
-        gradient_fn=rastrigin_gradient,
-        optimum_position=np.array([0.0, 0.0])
+        energy_fn=double_well_energy,
+        gradient_fn=double_well_gradient,
+        optimum_position=np.array([1.0, 1.0])
     )
 
     async def main():
