@@ -2,7 +2,7 @@
 Operations for the HydroSpread Agent.
 """
 from typing import List
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 
 def forecast_code_growth(tasks: List[TaskQuanta], viscosity: float, time_horizon: float) -> float:
     """

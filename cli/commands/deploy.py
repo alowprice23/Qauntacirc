@@ -8,7 +8,7 @@ import subprocess
 import yaml
 import asyncio
 
-# from core.types import AppContext, DeploymentConfig, DeploymentResult
+# from core.data_models import AppContext, DeploymentConfig, DeploymentResult
 # from core.orchestrator import AgentOrchestrator
 from deployment.deployer import QuantaCircDeployer, DeploymentResult
 # from monitoring.health.readiness import ReadinessProbe

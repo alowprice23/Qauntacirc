@@ -10,7 +10,7 @@ from rich.table import Table
 from typing import Optional
 import asyncio
 
-# from core.types import AppContext, AgentTask, GenerationRequest
+# from core.data_models import AppContext, AgentTask, GenerationRequest
 # from core.orchestrator import AgentOrchestrator
 # from core.energy_calculator import EnergyCalculator
 # from core.lyapunov_monitor import LyapunovMonitor

@@ -4,7 +4,7 @@ import requests
 from typing import Any, Dict, List, Optional
 
 from .client import LLMClient, StandardChatResponse
-from core.types import QCState as QuantumState
+from core.data_models import QCState as QuantumState
 
 logger = logging.getLogger(__name__)
 

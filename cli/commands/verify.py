@@ -5,7 +5,7 @@ from typing import List, Optional
 import subprocess
 import json
 
-# from core.types import AppContext, VerificationReport, ProofResult
+# from core.data_models import AppContext, VerificationReport, ProofResult
 # from core.constraint_solver import SMTSolver
 from proofs.validators import CoqValidator, AgdaValidator, SMTValidator
 # from core.closure_rules import ClosureRuleSet

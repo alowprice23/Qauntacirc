@@ -31,4 +31,4 @@ def test_analyze_performance_improvement():
     throughput_improvement = next((i for i in improvements if i.metric_name == "throughput"), None)
     assert throughput_improvement is not None
     assert throughput_improvement.is_statistically_significant is True
-    assert throughput_improvement.improvement_percentage < -20 # Throughput increased, so percentage is negative
+    assert throughput_improvement.improvement_percentage > 20

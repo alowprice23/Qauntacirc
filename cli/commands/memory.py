@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, List
 import json
 
-# from core.types import AppContext
+# from core.data_models import AppContext
 from memory.constellation import ConstellationMemory
 from memory.query import MemoryQuery, QueryBuilder
 from memory.patterns import PatternAnalyzer

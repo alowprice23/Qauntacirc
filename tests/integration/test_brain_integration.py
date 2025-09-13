@@ -9,7 +9,7 @@ from pydantic import BaseModel
 # --- Imports from the application ---
 from agent.brain import QuantumAgentBrain, QuantumAgent, CapabilityManager
 from llm.client import LLMClient
-from core.types import Intent, Plan, QCState, CapabilityToken, Permission
+from core.data_models import Intent, Plan, QCState, CapabilityToken, Permission
 
 # --- Mock Clients for Integration Testing ---
 

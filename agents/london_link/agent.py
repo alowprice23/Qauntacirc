@@ -2,7 +2,7 @@ import numpy as np
 from typing import List, Dict, Any
 
 from agents.base.agent import QuantumAgent
-from core.types import (
+from core.data_models import (
     SystemState, DependencyGraph, DependencyOptimization, Component,
     DependencyOptimizationMove, Observable
 )

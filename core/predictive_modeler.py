@@ -39,14 +39,19 @@ class PredictivePerformanceModeler:
 
         baseline_latency = baseline_latency_metric.value
 
-        # Calculate the total estimated energy reduction from optimizations
-        total_energy_reduction = sum(
-            opt.opportunity.estimated_impact for opt in applied_optimizations
-        )
-
-        # Use the same energy-to-latency conversion factor as in SLAManager
         latency_per_energy_point = 0.2  # ms
-        predicted_latency_reduction = total_energy_reduction * latency_per_energy_point
+
+        if not applied_optimizations:
+            predicted_latency_reduction = 0.0
+        else:
+            # Reverse-engineer the initial energy from the baseline latency
+            initial_energy = (baseline_latency - 50) / latency_per_energy_point
+
+            # Get the final energy from the last applied optimization
+            final_energy = applied_optimizations[-1].result.get("final_energy", initial_energy)
+
+            actual_energy_reduction = initial_energy - final_energy
+            predicted_latency_reduction = actual_energy_reduction * latency_per_energy_point
         predicted_future_latency = baseline_latency - predicted_latency_reduction
 
         # Create a simple descriptive model equation

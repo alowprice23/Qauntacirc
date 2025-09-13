@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 import asyncio
 
-# from core.types import AppContext
+# from core.data_models import AppContext
 from demos.scenarios import DEMO_SCENARIOS
 from demos.runner import DemoRunner
 # from artifacts.generator import ArtifactGenerator

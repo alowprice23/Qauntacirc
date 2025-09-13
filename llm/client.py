@@ -8,7 +8,7 @@ from uuid import uuid4
 from datetime import datetime
 
 # Project-specific imports
-from core.types import CapabilityToken, Permission, QCState
+from core.data_models import CapabilityToken, Permission, QCState
 # Assuming these modules exist from the original file structure
 from .rate_limiter import RateLimiter
 from .validators import ResponseValidator

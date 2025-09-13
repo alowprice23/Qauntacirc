@@ -66,9 +66,16 @@ class StatisticalPerformanceAnalyzer:
             t_stat, p_value = ttest_ind(baseline_data, optimized_data, equal_var=False)
 
             is_significant = p_value < statistical_significance_threshold
-            improvement_percentage = (
-                (baseline_metric.value - optimized_metric.value) / baseline_metric.value
-            ) * 100
+            if baseline_metric.name == "latency":
+                # For latency, lower is better
+                improvement_percentage = (
+                    (baseline_metric.value - optimized_metric.value) / baseline_metric.value
+                ) * 100
+            else:
+                # For other metrics like throughput, higher is better
+                improvement_percentage = (
+                    (optimized_metric.value - baseline_metric.value) / baseline_metric.value
+                ) * 100
 
             improvement = PerformanceImprovement(
                 metric_name=baseline_metric.name,

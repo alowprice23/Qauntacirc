@@ -3,7 +3,7 @@ import math
 from typing import List
 
 from agents.base.agent import QuantumAgent
-from core.types import (
+from core.data_models import (
     SystemState, CommunicationGraph, FlowOptimization, DispersionRelation,
     OptimizedChannel, Node, Edge, Observable
 )

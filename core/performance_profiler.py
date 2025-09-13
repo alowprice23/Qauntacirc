@@ -12,18 +12,26 @@ class MathematicalPerformanceProfiler:
 
     async def _collect_performance_data(self, system: SystemState, duration: float) -> dict[str, np.ndarray]:
         """
-        Simulates the collection of performance data over a given duration.
-        In a real system, this would involve hooking into monitoring tools.
+        Simulates the collection of performance data over a given duration
+        by deriving performance metrics from the system's energy state.
         """
-        # Placeholder: Simulate collecting data for some key metrics.
-        # Let's assume we are measuring latency and throughput.
         await asyncio.sleep(duration)  # Simulate the measurement period
 
-        # Simulate latency data (in ms)
-        latency_data = np.random.normal(loc=100, scale=10, size=100)
+        total_energy = system.energy_breakdown.total
 
-        # Simulate throughput data (in requests per second)
-        throughput_data = np.random.normal(loc=1000, scale=50, size=100)
+        # Define a deterministic relationship between energy and performance metrics
+        # Lower energy should result in lower latency and higher throughput
+        base_latency = 50
+        latency_per_energy_point = 0.2
+        mean_latency = base_latency + (latency_per_energy_point * total_energy)
+
+        base_throughput = 1500
+        throughput_per_energy_point = 2
+        mean_throughput = base_throughput - (throughput_per_energy_point * total_energy)
+
+        # Generate a stable dataset based on these means
+        latency_data = np.random.normal(loc=mean_latency, scale=mean_latency * 0.05, size=100)
+        throughput_data = np.random.normal(loc=mean_throughput, scale=mean_throughput * 0.05, size=100)
 
         return {
             "latency": latency_data,

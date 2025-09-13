@@ -8,7 +8,7 @@ from pathlib import Path
 
 from . import __version__
 from .commands import init, generate, verify, deploy, demo, status, memory, chat
-from core.types import AppContext, QuantaCircConfig
+from core.data_models import AppContext, QuantaCircConfig
 from core.config_loader import load_config
 from core.exceptions import QuantaCircError
 from monitoring.logging import setup_logging

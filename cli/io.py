@@ -17,7 +17,7 @@ from rich.spinner import Spinner
 from rich.table import Table
 # import sacrobleu # Temporarily removed to debug ModuleNotFoundError
 
-from core.types import AppContext, TaskQuanta
+from core.data_models import AppContext, TaskQuanta
 from cli.state import SessionState
 
 class QuantaCircIO:

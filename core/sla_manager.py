@@ -39,11 +39,7 @@ class SLAMathematicalManager:
         throughput_per_energy_point = 2  # rps
         throughput = base_throughput - (throughput_per_energy_point * total_energy)
 
-        # Add some random noise to make it more realistic
-        latency *= (1 + (asyncio.get_event_loop().time() % 0.05 - 0.025)) # up to 2.5% noise
-        throughput *= (1 + (asyncio.get_event_loop().time() % 0.05 - 0.025))
-
-        # Assume a 5% confidence interval width
+        # Assume a 5% confidence interval width based on the deterministic value
         latency_ci = (latency * 0.975, latency * 1.025)
         throughput_ci = (throughput * 0.975, throughput * 1.025)
 

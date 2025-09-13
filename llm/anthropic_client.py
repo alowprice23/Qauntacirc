@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Optional
 import anthropic
 
 from .client import LLMClient, StandardChatResponse
-from core.types import QCState as QuantumState
+from core.data_models import QCState as QuantumState
 
 logger = logging.getLogger(__name__)
 

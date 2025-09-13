@@ -7,7 +7,7 @@ import yaml
 
 # Assuming these modules exist and are implemented correctly.
 # I have created dummy versions for artifacts and templates.
-# from core.types import AppContext, ProjectConfig
+# from core.data_models import AppContext, ProjectConfig
 # from core.energy_calculator import initialize_energy_function
 # from core.lyapunov_monitor import initialize_lyapunov_potential
 # from artifacts.generator import ArtifactGenerator

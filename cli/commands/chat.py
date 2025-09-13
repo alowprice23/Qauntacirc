@@ -9,7 +9,7 @@ from core.mathematics import (
     calculate_lyapunov_potential,
     software_to_quantum_functor
 )
-from core.types import AppContext, QuantumState
+from core.data_models import AppContext, QuantumState
 
 app = typer.Typer(
     name="chat",

@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, Optional
 
-from core.types import QCState as QuantumState
+from core.data_models import QCState as QuantumState
 
 logger = logging.getLogger(__name__)
 

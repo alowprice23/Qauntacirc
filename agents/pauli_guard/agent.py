@@ -3,7 +3,7 @@ from typing import List, Tuple
 from itertools import combinations
 
 from agents.base.agent import QuantumAgent
-from core.types import (
+from core.data_models import (
     SystemState, ModuleState, OrthogonalizationResult, OrthogonalityViolation,
     SharedComponent, Observable
 )

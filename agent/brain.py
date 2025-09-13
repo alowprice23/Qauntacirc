@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from datetime import datetime, timedelta
 
 # Corrected imports based on our project structure
-from core.types import (
+from core.data_models import (
     Intent, Plan, EnergyEstimate, RiskBound, QuantumSignatures,
     IntentContext, PlanNode, PlanEdge, VerificationPoint, EnergyMetrics,
     ConvergenceProof, LyapunovCertificate, PlanMetadata, Priority, EffortLevel,

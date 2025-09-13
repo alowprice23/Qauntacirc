@@ -1,7 +1,7 @@
 from typing import Dict, Any, List, Tuple
 import re
 
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 
 # --- Constants for mock physics calculations ---
 # Planck's constant in a mock unit system

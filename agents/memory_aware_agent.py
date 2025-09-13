@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 
 from agents.base.agent import QuantumAgent
-from core.types import SystemState, PhysicsResult, Observable, AgentAction
+from core.data_models import SystemState, PhysicsResult, Observable, AgentAction
 from memory.constellation import ConstellationMemory
 from memory.contracts import MemoryGuidance, MemoryUpdate, ActionResult
 from memory.types import ConstellationQuery, Intent, Plan, ExecutionResult

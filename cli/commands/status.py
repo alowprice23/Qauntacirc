@@ -5,7 +5,7 @@ from rich.columns import Columns
 from rich.live import Live
 import time
 
-# from core.types import AppContext
+# from core.data_models import AppContext
 # from core.energy_calculator import EnergyCalculator
 # from core.lyapunov_monitor import LyapunovMonitor
 # from core.convergence_engine import ConvergenceEngine

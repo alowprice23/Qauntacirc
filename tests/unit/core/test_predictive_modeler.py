@@ -23,7 +23,7 @@ async def test_create_mathematical_performance_model():
             estimated_impact=50.0, # Corresponds to 10ms reduction
             mathematical_constraints=[]
         ),
-        result={},
+        result={"final_energy": 200.0}, # (100ms latency -> E=250. 90ms latency -> E=200)
         mathematically_verified=True
     )
 

@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from cryptography.fernet import Fernet
 from pydantic import BaseModel, Field
 
-from core.types import QCState, SoftwareState, EnergyComponents
+from core.data_models import QCState, SoftwareState, EnergyComponents
 
 # --- Configuration for persistence ---
 SESSION_DIR = Path.home() / ".quantacirc" / "sessions"

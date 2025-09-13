@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Optional, Type
 from pydantic import BaseModel
 
 from agent.brain import QuantumAgentBrain, QuantumAgent, CapabilityManager
-from core.types import Intent, Plan, QCState
+from core.data_models import Intent, Plan, QCState
 from llm.client import LLMClient, OpenAIClient
 
 # This is a placeholder for a more sophisticated agent management system.
