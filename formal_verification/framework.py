@@ -48,6 +48,38 @@ class MultiLogicVerificationFramework:
         print("Partitioning complete.")
         return partition
 
+    def _generate_coq_verification_tasks(self, properties: List[SystemProperty]) -> List[SystemProperty]:
+        """Converts functional properties to Coq verification tasks."""
+        print("Generating Coq verification tasks...")
+        # In a real system, this would involve generating Gallina code from specifications.
+        # For this mock, we just pass the properties through.
+        return properties
+
+    def _generate_smt_verification_tasks(self, properties: List[SystemProperty]) -> List[SystemProperty]:
+        """
+        Converts arithmetic properties to SMT verification tasks.
+        This implementation assumes the property's specification is already in a format
+        that the Z3SMTSolver can process: a dict with 'variables' and 'constraints'.
+        """
+        print("Generating SMT verification tasks...")
+        for prop in properties:
+            if not isinstance(prop.specification, dict) or "variables" not in prop.specification or "constraints" not in prop.specification:
+                # In a real system, we might try to convert it, but here we'll just raise an error.
+                raise ValueError(f"Invalid specification for SMT property {prop.id}")
+        return properties
+
+    def _generate_uppaal_verification_tasks(self, properties: List[SystemProperty]) -> List[SystemProperty]:
+        """Converts temporal properties to UPPAAL verification tasks."""
+        print("Generating UPPAAL verification tasks...")
+        # In a real system, this would involve generating UPPAAL models (XML) and TCTL queries.
+        return properties
+
+    def _generate_prism_verification_tasks(self, properties: List[SystemProperty]) -> List[SystemProperty]:
+        """Converts probabilistic properties to PRISM verification tasks."""
+        print("Generating PRISM verification tasks...")
+        # In a real system, this would involve generating PRISM models and PCTL queries.
+        return properties
+
     def _get_composition_rules(self):
         # In a real system, these rules would be complex and configurable
         return {"level": "strict"}
@@ -81,18 +113,24 @@ class MultiLogicVerificationFramework:
         # 1. Partition system properties by optimal verification logic
         property_partition = self._partition_properties_by_logic(system.properties)
 
-        # 2. Execute verification in parallel across all logic systems
+        # 2. Generate verification tasks for each logic system
+        coq_tasks = self._generate_coq_verification_tasks(property_partition.functional_properties)
+        smt_tasks = self._generate_smt_verification_tasks(property_partition.arithmetic_properties)
+        uppaal_tasks = self._generate_uppaal_verification_tasks(property_partition.temporal_properties)
+        prism_tasks = self._generate_prism_verification_tasks(property_partition.probabilistic_properties)
+
+        # 3. Execute verification in parallel across all logic systems
         print("Executing verification tasks in parallel...")
         verification_results = await asyncio.gather(
-            self.coq_kernel.execute_batch(property_partition.functional_properties),
-            self.z3_smt_solver.execute_batch(property_partition.arithmetic_properties),
-            self.uppaal_model_checker.execute_batch(property_partition.temporal_properties),
-            self.prism_probabilistic_checker.execute_batch(property_partition.probabilistic_properties),
+            self.coq_kernel.execute_batch(coq_tasks),
+            self.z3_smt_solver.execute_batch(smt_tasks),
+            self.uppaal_model_checker.execute_batch(uppaal_tasks),
+            self.prism_probabilistic_checker.execute_batch(prism_tasks),
         )
         coq_results, smt_results, uppaal_results, prism_results = verification_results
         print("All verification tasks executed.")
 
-        # 3. Compose results using rely-guarantee contracts
+        # 4. Compose results using rely-guarantee contracts
         composed_verification = self.rely_guarantee_composer.compose_cross_logic_results(
             coq_results=coq_results,
             smt_results=smt_results,

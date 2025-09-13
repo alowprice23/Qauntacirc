@@ -8,3 +8,4 @@ neo4j
 zstandard
 pytest
 pytest-mock
+z3-solver
