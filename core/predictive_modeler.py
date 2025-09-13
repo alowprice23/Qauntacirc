@@ -18,34 +18,52 @@ class PredictivePerformanceModeler:
         prediction_horizon: timedelta,
     ) -> PredictiveModel:
         """
-        Creates a mathematical performance model.
-
-        Args:
-            historical_performance: The historical performance data.
-            applied_optimizations: The list of applied optimizations.
-            prediction_horizon: The time horizon for the prediction.
-
-        Returns:
-            A PredictiveModel object.
+        Creates a simple predictive model based on the estimated impact of
+        the applied optimizations.
         """
-        # Placeholder: For this implementation, we'll create a simple linear regression model
-        # for latency based on some mock historical data.
-        await asyncio.sleep(0.1) # Simulate async work
+        await asyncio.sleep(0.1)  # Simulate async work
 
-        # Mock historical data (e.g., latency over the last 5 time steps)
-        time_steps = np.array([1, 2, 3, 4, 5])
-        latency_data = np.array([120, 115, 110, 105, 100]) # Latency improving over time
+        # Find the baseline latency from the historical performance
+        baseline_latency_metric = next(
+            (m for m in historical_performance.baseline_metrics if m.name == "latency"), None
+        )
 
-        # Fit a linear model (degree 1 polynomial)
-        coeffs = np.polyfit(time_steps, latency_data, 1)
-        slope, intercept = coeffs[0], coeffs[1]
+        if not baseline_latency_metric:
+            # Return a default model if latency is not being tracked
+            return PredictiveModel(
+                model_type="Default",
+                equation="N/A",
+                parameters={},
+                prediction_horizon=prediction_horizon,
+            )
 
-        model_equation = f"latency(t) = {slope:.2f} * t + {intercept:.2f}"
+        baseline_latency = baseline_latency_metric.value
 
-        parameters = {"slope": slope, "intercept": intercept}
+        # Calculate the total estimated energy reduction from optimizations
+        total_energy_reduction = sum(
+            opt.opportunity.estimated_impact for opt in applied_optimizations
+        )
+
+        # Use the same energy-to-latency conversion factor as in SLAManager
+        latency_per_energy_point = 0.2  # ms
+        predicted_latency_reduction = total_energy_reduction * latency_per_energy_point
+        predicted_future_latency = baseline_latency - predicted_latency_reduction
+
+        # Create a simple descriptive model equation
+        model_equation = (
+            f"latency_pred = {baseline_latency:.2f} - {predicted_latency_reduction:.2f} "
+            f"* (1 - exp(-t/τ))"
+        )
+
+        parameters = {
+            "initial_latency": baseline_latency,
+            "predicted_reduction": predicted_latency_reduction,
+            "predicted_final_latency": predicted_future_latency,
+            "tau_hours": prediction_horizon.total_seconds() / 3600,
+        }
 
         return PredictiveModel(
-            model_type="Linear Regression",
+            model_type="Exponential Decay to Target",
             equation=model_equation,
             parameters=parameters,
             prediction_horizon=prediction_horizon,

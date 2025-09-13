@@ -3,6 +3,8 @@ import asyncio
 from datetime import timedelta
 from typing import List, Any
 
+import numpy as np
+
 from core.data_models import (
     SystemState,
     PerformanceProfile,
@@ -19,6 +21,9 @@ from core.performance_profiler import MathematicalPerformanceProfiler
 from core.sla_manager import SLAMathematicalManager
 from core.predictive_modeler import PredictivePerformanceModeler
 from core.statistical_analyzer import StatisticalPerformanceAnalyzer
+from core.two_phase_annealer import TwoPhaseAnnealer
+from core.convergence_engine import ConvergenceEngine
+from core.lyapunov_monitor import LyapunovMonitor
 
 class PhysicsBasedPerformanceOptimizer:
     """
@@ -124,15 +129,60 @@ class MathematicalPerformanceOptimizationSystem:
         mathematical_constraints: List[str],
     ) -> AppliedOptimization:
         """
-        Applies a performance optimization and verifies its correctness.
-        This is a placeholder for a more complex implementation that would
-        use the TwoPhaseConvergenceEngine.
+        Applies a performance optimization by running a simulated annealing
+        process and verifies its convergence.
         """
-        await asyncio.sleep(0.2)  # Simulate applying optimization
+        annealer = TwoPhaseAnnealer()
+        convergence_engine = ConvergenceEngine()
+        # Initialize with default penalty coefficients
+        lyapunov_monitor = LyapunovMonitor(kappa=1.0, xi=1.0)
+
+        current_state = system_state.copy(deep=True)
+        state_history = [current_state]
+        energy_history = [current_state.energy_breakdown.total]
+        gradient_history = []  # Not used in Phase A, but needed for detector
+
+        # Simulate a short optimization run
+        num_steps = 20
+        temperature = 10.0  # Initial temperature for annealing
+        for i in range(num_steps):
+            annealing_result = annealer.phase_a_step(current_state, temperature)
+            current_state = annealing_result.state
+            state_history.append(current_state)
+            energy_history.append(current_state.energy_breakdown.total)
+            # Simulate gradient for basin capture detection
+            gradient_history.append(annealer._compute_energy_gradient(current_state))
+
+            # Correctly use the Lyapunov monitor
+            metrics = lyapunov_monitor.compute(current_state)
+            lyapunov_monitor.track(metrics)
+
+            # Simple cooling schedule
+            temperature *= 0.9
+
+        # Check for convergence after the run
+        # Note: In a real scenario, this would be more complex, but for simulation,
+        # we check if a basin was captured, which implies stability.
+        basin_captured = annealer.detect_basin_capture(energy_history, gradient_history)
+
+        # The optimization is "mathematically_verified" if it reached a stable basin
+        is_verified = basin_captured
+
+        # Mutate the original system state to reflect the optimization
+        # This is crucial for the rest of the pipeline
+        system_state.modules = current_state.modules
+        system_state.energy_breakdown = current_state.energy_breakdown
+        system_state.lyapunov_metrics = current_state.lyapunov_metrics
+
         return AppliedOptimization(
             opportunity=opportunity,
-            result={"status": "success", "message": "Optimization applied."},
-            mathematically_verified=True,
+            result={
+                "status": "success" if is_verified else "converged_unverified",
+                "message": "Simulated annealing process completed.",
+                "final_energy": current_state.energy_breakdown.total,
+                "basin_captured": basin_captured,
+            },
+            mathematically_verified=is_verified,
         )
 
     def _generate_performance_certificate(
