@@ -8,7 +8,7 @@ based on the "energy" of task quanta.
 import math
 import yaml
 from typing import Dict, Any, List
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 
 def bose_einstein_distribution(energy: float, chemical_potential: float, temperature: float) -> float:
     """

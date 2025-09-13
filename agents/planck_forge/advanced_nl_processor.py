@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import List, Dict, Any
 from pydantic import BaseModel, Field
 
-from core.types import SystemState, TaskQuanta, DependencyGraph
+from core.data_models import SystemState, TaskQuanta, DependencyGraph
 
 # Placeholder for a more sophisticated session context
 class SessionContext(BaseModel):
@@ -100,7 +100,7 @@ class SemanticWorkflowDecomposer:
         llm_response = self.llm_client.complete(messages)
         return llm_response.get("response", '{"tasks": []}')
 
-from core.types import Component, Dependency, DependencyGraph
+from core.data_models import Component, Dependency, DependencyGraph
 from agents.planck_forge.dependencies import validate_dag
 
 class DependencyAnalysisResult(BaseModel):

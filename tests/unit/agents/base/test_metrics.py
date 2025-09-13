@@ -3,7 +3,7 @@ from unittest.mock import Mock, call
 import uuid
 
 from agents.base.metrics import AgentMetrics
-from core.types import AgentResult, QCState, SoftwareState, EnergyBreakdown, LyapunovMetrics
+from core.data_models import AgentResult, QCState, SoftwareState, EnergyBreakdown, LyapunovMetrics
 
 @pytest.fixture
 def mock_logger():

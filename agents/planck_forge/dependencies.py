@@ -3,7 +3,7 @@ Dependency Analysis for PlanckForge Agent
 """
 
 from typing import List, Dict, Set
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 
 class TaskValidationError(Exception):
     """Custom exception for task validation errors."""

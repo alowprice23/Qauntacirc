@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import List, Tuple
 
-from core.types import QCState, RunRecord, SoftwareState
+from core.data_models import QCState, RunRecord, SoftwareState
 
 class ValidationError(Exception):
     """Custom exception for validation failures."""
@@ -115,7 +115,7 @@ def validate_software_state(software_state: SoftwareState) -> None:
 if __name__ == '__main__':
     from uuid import uuid4
     from datetime import datetime
-    from core.types import EnergyBreakdown, QuantumState, LyapunovMetrics, SoftwareState
+    from core.data_models import EnergyBreakdown, QuantumState, LyapunovMetrics, SoftwareState
 
     # --- Test QCState Validator ---
     print("--- Testing QCState Validator ---")

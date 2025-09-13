@@ -14,7 +14,7 @@ from __future__ import annotations
 import random
 from typing import Dict, Any
 
-from core.types import SoftwareState
+from core.data_models import SoftwareState
 
 def compute_static_metrics(software_state: SoftwareState, raw_code_data: Dict[str, Any] = None) -> Dict[str, float]:
     """

@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Tuple
 from collections import namedtuple
 
 # Import data models needed for return types
-from core.types import (
+from core.data_models import (
     Observable, SystemState, Proof, ModuleState, SharedComponent, OrthogonalityViolation,
     RiskBounds, PerformanceBarrier, TunnelingOpportunity, AppliedOptimization, DeploymentPlan, ResourceAllocation,
     OptimizedChannel, ChaosScenario, ChaosExperimentResult, ResilienceAnalysis,

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from agents.tunnel_fix.agent import TunnelFixAgent
-from core.types import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, Module, PerformanceProfile, SoftwareState
+from core.data_models import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, Module, PerformanceProfile, SoftwareState
 from datetime import datetime
 
 @pytest.fixture

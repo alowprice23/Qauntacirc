@@ -13,7 +13,7 @@ from scipy.linalg import expm
 import networkx as nx
 from typing import Dict, Any, List, Optional
 
-from core.types import SoftwareState, QuantumState
+from core.data_models import SoftwareState, QuantumState
 from core.energy_calculator import EnergyCalculator
 
 class Functor:

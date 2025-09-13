@@ -1,5 +1,5 @@
 from typing import Set, Dict, List, Optional
-from core.types import Obligation, ClosureResult, ObligationStatus, ProofWitness
+from core.data_models import Obligation, ClosureResult, ObligationStatus, ProofWitness
 
 class ClosureValidator:
     """

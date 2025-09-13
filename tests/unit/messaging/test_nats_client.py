@@ -11,7 +11,7 @@ from tests.conftest import TestDiagnostic
 import asyncio
 from unittest.mock import AsyncMock, patch, PropertyMock, MagicMock
 from uuid import uuid4
-from core.types import QCState, SoftwareState, EnergyBreakdown, LyapunovMetrics
+from core.data_models import QCState, SoftwareState, EnergyBreakdown, LyapunovMetrics
 from nats.aio.msg import Msg
 
 from messaging.nats_client import NATSClient

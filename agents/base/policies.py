@@ -1,5 +1,5 @@
 from typing import List
-from core.types import AgentTask as Proposal
+from core.data_models import AgentTask as Proposal
 
 class Policy:
     def check(self, proposal: Proposal) -> bool:

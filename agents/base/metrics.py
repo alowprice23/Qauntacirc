@@ -5,7 +5,7 @@ of the core monitoring framework.
 """
 
 from monitoring.metrics import QuantumMetrics as MetricsLogger
-from core.types import QCState as State, AgentResult as Action
+from core.data_models import QCState as State, AgentResult as Action
 from core.energy_calculator import EnergyCalculator
 
 

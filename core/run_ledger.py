@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import List, Optional
 from uuid import UUID
 
-from core.types import RunRecord
+from core.data_models import RunRecord
 
 class RunLedger:
     """
@@ -105,7 +105,7 @@ class RunLedger:
 if __name__ == '__main__':
     from uuid import uuid4
     from datetime import datetime
-    from core.types import QCState, SoftwareState, EnergyComponents
+    from core.data_models import QCState, SoftwareState, EnergyComponents
 
     # Create a dummy ledger in a temporary directory
     temp_dir = Path("./temp_ledger_storage")

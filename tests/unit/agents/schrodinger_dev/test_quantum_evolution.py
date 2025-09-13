@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, AsyncMock
 from agents.schrodinger_dev.hamiltonian import HamiltonianBuilder
 from agents.schrodinger_dev.code_generator import QuantumCodeGenerator
 from agents.schrodinger_dev.agent import SchrodingerDevAgent
-from core.types import SystemState, EnergyBreakdown, LyapunovMetrics, Status, SoftwareState
+from core.data_models import SystemState, EnergyBreakdown, LyapunovMetrics, Status, SoftwareState
 
 @pytest.fixture
 def hamiltonian_builder():

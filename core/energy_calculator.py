@@ -6,7 +6,7 @@ import lzma
 from datetime import datetime
 from typing import Dict
 
-from core.types import SystemState, EnergyBreakdown, Module
+from core.data_models import SystemState, EnergyBreakdown, Module
 
 class EnergyCalculator:
     def __init__(self, alpha: float, beta: float, gamma: float, delta: float, tau: float = 3.154e+7):

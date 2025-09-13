@@ -6,7 +6,7 @@ from agents.base.policies import (
     RigorPolicy,
     EnergyBudgetPolicy,
 )
-from core.types import AgentTask
+from core.data_models import AgentTask
 
 @pytest.fixture
 def mock_proposal():

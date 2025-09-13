@@ -6,7 +6,7 @@ import numpy as np
 from typing import Optional
 
 from core.convergence_engine import ConvergenceEngine, ConvergenceCriteria
-from core.types import QCState, LyapunovResult, SoftwareState, EnergyComponents, EnergyBreakdown, LyapunovMetrics, QuantumState
+from core.data_models import QCState, LyapunovResult, SoftwareState, EnergyComponents, EnergyBreakdown, LyapunovMetrics, QuantumState
 from core.lyapunov_monitor import LyapunovMonitor
 from core.lyapunov_function import LyapunovFunction
 from core.two_phase_annealer import TwoPhaseAnnealer

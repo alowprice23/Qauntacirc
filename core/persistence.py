@@ -16,7 +16,7 @@ from typing import TypeVar, Type, Optional
 
 from pydantic import BaseModel
 
-from core.types import QCState, RunRecord
+from core.data_models import QCState, RunRecord
 from core.serialization import save_model_to_json, load_model_from_json
 from core.run_ledger import RunLedger
 
@@ -136,7 +136,7 @@ class PersistenceManager:
 if __name__ == '__main__':
     from uuid import uuid4
     from datetime import datetime
-    from core.types import SoftwareState, EnergyComponents, QuantumState
+    from core.data_models import SoftwareState, EnergyComponents, QuantumState
 
     # Setup persistence manager in a temporary directory
     temp_storage = Path("./temp_persistence_storage")

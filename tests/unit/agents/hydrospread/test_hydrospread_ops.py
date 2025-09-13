@@ -1,6 +1,6 @@
 import pytest
 from agents.hydrospread.ops import forecast_code_growth
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 
 def test_forecast_code_growth():
     tasks = [

@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from agents.phonon_flow.agent import PhononFlowAgent
-from core.types import (
+from core.data_models import (
     SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, Module,
     DependencyGraph, Component, Dependency, SoftwareState
 )

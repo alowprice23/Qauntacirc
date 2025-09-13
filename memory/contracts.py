@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from typing import List, Any, Dict, Optional
 
 from memory.types import FactNode
-from core.types import AgentAction, SystemState
+from core.data_models import AgentAction, SystemState
 
 class MemoryGuidance(BaseModel):
     """Guidance provided by the memory system to an agent."""

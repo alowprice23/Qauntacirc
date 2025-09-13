@@ -2,7 +2,7 @@ import pytest
 from agents.planck_forge.nl_parser import NLParser
 from agents.planck_forge.quantization import EnergyQuantizer
 from agents.planck_forge.dependencies import validate_dag, TaskValidationError
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 
 from unittest.mock import AsyncMock
 

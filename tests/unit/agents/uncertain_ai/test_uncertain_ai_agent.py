@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from agents.uncertain_ai.agent import UncertainAIAgent
-from core.types import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, Module, SoftwareState
+from core.data_models import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, Module, SoftwareState
 from datetime import datetime
 
 @pytest.fixture

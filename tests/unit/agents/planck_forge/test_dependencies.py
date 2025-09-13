@@ -1,6 +1,6 @@
 import pytest
 from agents.planck_forge.dependencies import validate_dag, generate_task_dag, TaskValidationError, calculate_node_levels
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 
 @pytest.fixture
 def valid_dag_tasks():

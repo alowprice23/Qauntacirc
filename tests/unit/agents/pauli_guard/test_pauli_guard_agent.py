@@ -2,7 +2,7 @@ import pytest
 import json
 from unittest.mock import AsyncMock, MagicMock
 from agents.pauli_guard.agent import PauliGuardAgent
-from core.types import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, Module, SoftwareState
+from core.data_models import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, Module, SoftwareState
 from datetime import datetime
 
 @pytest.fixture

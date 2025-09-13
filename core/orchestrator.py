@@ -4,7 +4,7 @@ import random
 from core.energy_calculator import EnergyCalculator
 from core.lyapunov_monitor import LyapunovMonitor
 from core.closure_validator import ClosureValidator
-from core.types import (
+from core.data_models import (
     SystemState, SystemEvolution, AgentAction, QuantizedTasks, CodeEvolution,
     OrthogonalizationResult, UncertaintyAnalysis, TunnelingResult,
     ResourceAllocation, FlowOptimization, ChaosTestResult,

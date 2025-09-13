@@ -1,6 +1,6 @@
 import pytest
 from datetime import datetime, timedelta
-from core.types import (
+from core.data_models import (
     QCState,
     SoftwareState,
     EnergyBreakdown,

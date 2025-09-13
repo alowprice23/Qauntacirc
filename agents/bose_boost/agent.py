@@ -3,7 +3,7 @@ import numpy as np
 from typing import Dict, List
 
 from agents.base.agent import QuantumAgent
-from core.types import (
+from core.data_models import (
     SystemState, WorkloadDistribution, ResourceAllocation, Observable, DeploymentPlan
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee

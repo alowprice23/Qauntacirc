@@ -11,7 +11,7 @@ import time
 from typing import Any, Dict, Optional
 
 from nats.aio.msg import Msg
-from core.types import QCState
+from core.data_models import QCState
 
 # Use structlog if available for better structured logging, otherwise use standard logging.
 try:

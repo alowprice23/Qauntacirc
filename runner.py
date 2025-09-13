@@ -9,7 +9,7 @@ from core.energy_calculator import EnergyCalculator
 from core.lyapunov_monitor import LyapunovMonitor
 from core.closure_validator import ClosureValidator
 from communication.protocol import AgentCommunicationProtocol
-from core.types import (
+from core.data_models import (
     SystemState, Module, DependencyGraph, Constraint, Obligation,
     EnergyBreakdown, LyapunovMetrics, ObligationType, ObligationStatus, SoftwareState
 )

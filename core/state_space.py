@@ -3,7 +3,7 @@ State Space
 """
 from typing import List
 import numpy as np
-from core.types import QCState
+from core.data_models import QCState
 
 class StateSpace:
     def __init__(self, dimension: int):

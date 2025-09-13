@@ -1,7 +1,7 @@
 import abc
 from typing import List, Any
 
-from core.types import QCState as State, AgentResult as Action
+from core.data_models import QCState as State, AgentResult as Action
 from core.constraint_solver import ConstraintSolver
 from math_utils.lyapunov import is_lyapunov_stable
 from core.closure_rules import ClosureRule

@@ -2,7 +2,7 @@ import math
 from typing import List
 
 from agents.base.agent import QuantumAgent
-from core.types import (
+from core.data_models import (
     SystemState, PerformanceProfile, TunnelingResult, TunnelingOpportunity,
     AppliedOptimization, PerformanceBarrier, Observable
 )

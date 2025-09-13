@@ -3,7 +3,7 @@ import scipy.linalg
 from typing import List
 
 from agents.base.agent import QuantumAgent
-from core.types import (
+from core.data_models import (
     SystemState, CodeState, Hamiltonian, CodeEvolution, UnitaryOperator, Proof, Observable
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee

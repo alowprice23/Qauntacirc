@@ -2,7 +2,7 @@ from typing import List, Dict, Any
 import math
 
 from agents.base.agent import QuantumAgent
-from core.types import (
+from core.data_models import (
     SystemState, ChaosTestResult, ComplexResponse, ResilienceAnalysis,
     ChaosScenario, ChaosExperimentResult, Observable
 )

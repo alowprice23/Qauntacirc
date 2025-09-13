@@ -1,6 +1,6 @@
 import pytest
 from agents.planck_forge.quantization import EnergyQuantizer
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 
 @pytest.fixture
 def sample_tasks():

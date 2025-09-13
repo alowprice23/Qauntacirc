@@ -17,7 +17,7 @@ from typing import Type, TypeVar, Any
 import numpy as np
 
 from pydantic import BaseModel
-from core.types import QCState, RunRecord
+from core.data_models import QCState, RunRecord
 
 # Generic type variable for Pydantic models
 T = TypeVar('T', bound=BaseModel)
@@ -111,7 +111,7 @@ def load_model_from_json(file_path: Path | str, model_class: Type[T]) -> T:
 if __name__ == '__main__':
     from uuid import uuid4
     from datetime import datetime
-    from core.types import SoftwareState, EnergyComponents, QuantumState
+    from core.data_models import SoftwareState, EnergyComponents, QuantumState
 
     # Create a QCState object
     qc_state = QCState(

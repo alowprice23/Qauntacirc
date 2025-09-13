@@ -1,5 +1,5 @@
 import pytest
-from core.types import SoftwareState, QCState, EnergyComponents, EnergyBreakdown, LyapunovMetrics
+from core.data_models import SoftwareState, QCState, EnergyComponents, EnergyBreakdown, LyapunovMetrics
 from core.edit_distance import software_state_edit_distance, qcstate_edit_distance
 
 @pytest.fixture

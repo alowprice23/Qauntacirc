@@ -4,7 +4,7 @@ import numpy as np
 from typing import List, Any, Optional
 
 from pydantic import BaseModel
-from core.types import SystemState, AnnealingResult, ContractionResult
+from core.data_models import SystemState, AnnealingResult, ContractionResult
 
 class TwoPhaseAnnealer:
     """

@@ -4,7 +4,7 @@ import numpy as np
 import uuid
 
 from agents.base.memory import AgentMemory, Constellation
-from core.types import QCState, AgentTask, AgentResult, SoftwareState, EnergyComponents, LyapunovMetrics, EnergyBreakdown
+from core.data_models import QCState, AgentTask, AgentResult, SoftwareState, EnergyComponents, LyapunovMetrics, EnergyBreakdown
 
 @pytest.fixture
 def mock_state():

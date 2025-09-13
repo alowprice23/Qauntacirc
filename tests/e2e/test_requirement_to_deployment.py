@@ -174,10 +174,10 @@ class TestCompleteQuantaCircPipeline:
             annealer = TwoPhaseAnnealer({})
             annealer.should_accept = MagicMock(return_value=True)
 
-            from core.types import AgentResult, Status
+            from core.data_models import AgentResult, Status
 
             import uuid
-            from core.types import AgentResult, Status, AgentTask
+            from core.data_models import AgentResult, Status, AgentTask
 
             # Configure the mock agent to return a result with energy impact
             mock_agent = PlanckForgeAgent(MagicMock(), MagicMock(), MagicMock(), MagicMock(), MagicMock(), AsyncMock())

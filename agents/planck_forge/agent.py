@@ -1,5 +1,5 @@
 from agents.base.agent import QuantumAgent
-from core.types import SystemState, QuantizedTasks, TaskQuantum, Observable
+from core.data_models import SystemState, QuantizedTasks, TaskQuantum, Observable
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from llm.client import LLMClient
 from .advanced_nl_processor import AdvancedQuantumNLProcessor, SessionContext

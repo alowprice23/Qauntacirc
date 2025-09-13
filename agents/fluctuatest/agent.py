@@ -7,7 +7,7 @@ from typing import Dict, Any, Optional
 from agents.base.agent import QuantumAgent
 from core.state_space import StateSpace
 from core.energy_calculator import EnergyCalculator
-from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
+from core.data_models import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
 from monitoring.metrics import QuantumMetrics as MetricsLogger
 from agents.base.policies import PolicyEngine
 from agents.base.memory import AgentMemory

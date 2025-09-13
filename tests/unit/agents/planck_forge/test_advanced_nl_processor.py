@@ -11,7 +11,7 @@ from agents.planck_forge.advanced_nl_processor import (
     DependencyAnalysisResult,
     ExecutionPlan,
 )
-from core.types import TaskQuanta, DependencyGraph, SystemState, EnergyBreakdown, LyapunovMetrics, Component, Dependency
+from core.data_models import TaskQuanta, DependencyGraph, SystemState, EnergyBreakdown, LyapunovMetrics, Component, Dependency
 from llm.client import LLMClient
 
 @pytest.fixture

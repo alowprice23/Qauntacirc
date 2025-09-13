@@ -1,6 +1,6 @@
 # core/lyapunov_function.py
 
-from core.types import QCState
+from core.data_models import QCState
 
 class LyapunovFunction:
     def __init__(self, kappa: float, xi: float):

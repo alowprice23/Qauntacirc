@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from agents.fluctua_test.agent import FluctuaTestAgent
-from core.types import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, SoftwareState
+from core.data_models import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, SoftwareState
 from datetime import datetime
 
 @pytest.fixture

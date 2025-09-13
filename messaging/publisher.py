@@ -16,7 +16,7 @@ from typing import Any, List, Optional
 from pydantic import BaseModel
 
 from core.exceptions import MessagingError, QuantumStateError
-from core.types import QCState
+from core.data_models import QCState
 from messaging.nats_client import NATSClient
 from messaging.serialization import MessageSerializer, SerializationFormat
 

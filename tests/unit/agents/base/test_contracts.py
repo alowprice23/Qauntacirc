@@ -9,7 +9,7 @@ from agents.base.contracts import (
     LyapunovCondition,
     ClosureRuleCondition,
 )
-from core.types import QCState, AgentResult, SoftwareState, EnergyComponents, QuantumState, LyapunovMetrics, EnergyBreakdown, QuantumState
+from core.data_models import QCState, AgentResult, SoftwareState, EnergyComponents, QuantumState, LyapunovMetrics, EnergyBreakdown, QuantumState
 
 @pytest.fixture
 def mock_state():

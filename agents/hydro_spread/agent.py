@@ -2,7 +2,7 @@ import math
 from typing import List, Tuple
 
 from agents.base.agent import QuantumAgent
-from core.types import (
+from core.data_models import (
     SystemState, GrowthParameters, GrowthPrediction, GrowthPredictionInstance,
     ScalingRecommendation, Observable
 )

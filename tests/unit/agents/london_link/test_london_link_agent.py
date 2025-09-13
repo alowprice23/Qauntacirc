@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from agents.london_link.agent import LondonLinkAgent
-from core.types import (
+from core.data_models import (
     SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status,
     DependencyGraph, Component, Dependency, SoftwareState
 )

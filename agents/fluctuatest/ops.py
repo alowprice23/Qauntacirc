@@ -4,7 +4,7 @@ Operations for the FluctuaTest Agent.
 import json
 import random
 from typing import Dict, Any
-from core.types import QCState
+from core.data_models import QCState
 
 class ChaosExperimentError(Exception):
     """Custom exception for chaos experiment errors."""

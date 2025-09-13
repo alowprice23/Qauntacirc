@@ -2,7 +2,7 @@ import pytest
 import numpy as np
 from unittest.mock import AsyncMock, MagicMock
 from agents.schrodinger_dev.agent import SchrodingerDevAgent
-from core.types import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, CodeEvolution, CodeState, UnitaryOperator, SoftwareState
+from core.data_models import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, CodeEvolution, CodeState, UnitaryOperator, SoftwareState
 
 @pytest.fixture
 def mock_llm_client():

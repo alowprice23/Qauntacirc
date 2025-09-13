@@ -3,7 +3,7 @@ import json
 from uuid import uuid4
 from datetime import datetime
 from core.run_ledger import RunLedger
-from core.types import RunRecord, QCState, SoftwareState, EnergyComponents, EnergyBreakdown, LyapunovMetrics
+from core.data_models import RunRecord, QCState, SoftwareState, EnergyComponents, EnergyBreakdown, LyapunovMetrics
 
 @pytest.fixture
 def dummy_run_record():

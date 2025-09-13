@@ -20,7 +20,7 @@ from nats.js.client import JetStreamContext
 
 from core.exceptions import MessagingError
 from core.serialization import deserialize_model, serialize_model
-from core.types import QCState
+from core.data_models import QCState
 
 log = logging.getLogger(__name__)
 

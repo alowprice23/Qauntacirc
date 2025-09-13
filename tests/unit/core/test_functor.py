@@ -4,7 +4,7 @@ import networkx as nx
 from datetime import datetime
 
 from core.functor import Functor
-from core.types import SoftwareState, QuantumState, Module
+from core.data_models import SoftwareState, QuantumState, Module
 
 class TestFunctor:
     def test_functor_mapping_produces_valid_quantum_state(self):

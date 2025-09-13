@@ -1,6 +1,6 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
-from core.types import SystemState, PhysicsResult, Observable
+from core.data_models import SystemState, PhysicsResult, Observable
 from common.verification import AgentCertificate
 
 # A placeholder for MeasurementApparatus as it was in the prompt's __init__

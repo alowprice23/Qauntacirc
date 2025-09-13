@@ -15,7 +15,7 @@ from pybreaker import CircuitBreaker as circuit
 from nats.aio.msg import Msg
 
 from core.exceptions import QuantumStateError
-from core.types import QCState
+from core.data_models import QCState
 from messaging.nats_client import NATSClient, QuantumAwareCallback
 from messaging.serialization import MessageSerializer, SerializationFormat
 

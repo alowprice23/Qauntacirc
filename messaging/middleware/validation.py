@@ -12,7 +12,7 @@ from pydantic import BaseModel, ValidationError
 
 from core.exceptions import QuantumStateError, SchemaValidationError
 from core.state_space import StateSpace
-from core.types import QCState
+from core.data_models import QCState
 from messaging.topic_manager import TopicManager
 
 log = logging.getLogger(__name__)

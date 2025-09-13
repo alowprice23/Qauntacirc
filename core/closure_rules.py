@@ -1,7 +1,7 @@
 """
 Closure rules for the system.
 """
-from core.types import QCState as State, AgentResult as Action
+from core.data_models import QCState as State, AgentResult as Action
 
 class ClosureRule:
     """

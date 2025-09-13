@@ -1,7 +1,7 @@
 import pytest
 import yaml
 from agents.bose_boost.ops import bose_einstein_distribution, generate_deployment_manifest
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 
 def test_bose_einstein_distribution():
     # High energy -> low replicas

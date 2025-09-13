@@ -3,7 +3,7 @@
 import pytest
 from unittest.mock import MagicMock
 from core.lyapunov_monitor import LyapunovMonitor
-from core.types import SystemState, EnergyBreakdown, Obligation, ObligationStatus, LyapunovMetrics, SoftwareState
+from core.data_models import SystemState, EnergyBreakdown, Obligation, ObligationStatus, LyapunovMetrics, SoftwareState
 
 # Mock SystemState for testing purposes
 @pytest.fixture

@@ -3,7 +3,7 @@ from unittest.mock import Mock, call, patch, MagicMock
 import uuid
 
 from agents.base.agent import QuantumAgent
-from core.types import QCState as State, AgentTask as Proposal, AgentResult as Action, SoftwareState, EnergyComponents, LyapunovMetrics, EnergyBreakdown
+from core.data_models import QCState as State, AgentTask as Proposal, AgentResult as Action, SoftwareState, EnergyComponents, LyapunovMetrics, EnergyBreakdown
 
 # A concrete implementation of the abstract QuantumAgent for testing
 class ConcreteQuantumAgent(QuantumAgent):

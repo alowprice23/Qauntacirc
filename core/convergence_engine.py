@@ -13,7 +13,7 @@ from __future__ import annotations
 from typing import List, Dict, Any
 import numpy as np
 
-from core.types import QCState
+from core.data_models import QCState
 from core.lyapunov_monitor import LyapunovMonitor
 from core.two_phase_annealer import TwoPhaseAnnealer
 

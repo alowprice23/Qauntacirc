@@ -1,7 +1,7 @@
 from typing import List, Dict, Any, NamedTuple
 import numpy as np
 
-from core.types import QCState as State, AgentTask as Proposal, AgentResult as Action
+from core.data_models import QCState as State, AgentTask as Proposal, AgentResult as Action
 
 class Constellation:
     """

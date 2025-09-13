@@ -4,7 +4,7 @@ Implements the E_n = n * h * v model for task energy calculation.
 """
 
 from typing import List, Dict
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 from .dependencies import calculate_node_levels
 
 class EnergyQuantizer:

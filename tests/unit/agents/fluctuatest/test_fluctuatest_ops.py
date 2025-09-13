@@ -1,6 +1,6 @@
 import pytest
 from agents.fluctuatest.ops import parse_chaos_experiment_proposal, ChaosSimulator, ChaosExperimentError
-from core.types import QCState, SoftwareState, EnergyComponents, LyapunovMetrics, EnergyBreakdown
+from core.data_models import QCState, SoftwareState, EnergyComponents, LyapunovMetrics, EnergyBreakdown
 
 def test_parse_chaos_experiment_proposal_success():
     llm_output = '{"hypothesis": "h", "experiment_type": "e", "magnitude": "m", "duration_seconds": 1}'

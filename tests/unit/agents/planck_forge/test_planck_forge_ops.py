@@ -7,7 +7,7 @@ from agents.planck_forge.ops import (
     generate_spec_stub,
     TaskValidationError,
 )
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 
 @pytest.fixture
 def llm_output_json_str():

@@ -10,7 +10,7 @@ separate two classical software states.
 
 from __future__ import annotations
 
-from core.types import SoftwareState, QCState
+from core.data_models import SoftwareState, QCState
 
 def software_state_edit_distance(state_a: SoftwareState, state_b: SoftwareState) -> int:
     """

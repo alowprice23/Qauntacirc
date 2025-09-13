@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
 from core.state_space import StateSpace
-from core.types import QCState, QuantumState, SoftwareState, EnergyComponents, EnergyBreakdown, LyapunovMetrics
+from core.data_models import QCState, QuantumState, SoftwareState, EnergyComponents, EnergyBreakdown, LyapunovMetrics
 
 # Helper to create a dummy QCState for testing
 def create_dummy_qc_state(vector):

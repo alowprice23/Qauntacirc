@@ -9,7 +9,7 @@ graph is a DAG), and structuring them for downstream consumption.
 import json
 from typing import List, Dict, Any
 
-from core.types import TaskQuanta
+from core.data_models import TaskQuanta
 from .quantization import EnergyQuantizer
 from . import dependencies
 

@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 from datetime import datetime
 from uuid import UUID
-from core.types import (
+from core.data_models import (
     EnergyComponents,
     SoftwareState,
     QuantumState,

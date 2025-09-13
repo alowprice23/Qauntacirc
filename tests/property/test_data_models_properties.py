@@ -2,7 +2,7 @@ import pytest
 from hypothesis import given, strategies as st
 from pydantic import ValidationError
 
-from core.types import (
+from core.data_models import (
     Plan, PlanNode, PlanEdge, Intent, CNLValidation, CNLValidationStatus,
     IntentContext, QCState, EnergyEstimate, RiskBound, QuantumSignatures,
     Priority, EffortLevel, PlanMetadata, VerificationPoint, EnergyMetrics,

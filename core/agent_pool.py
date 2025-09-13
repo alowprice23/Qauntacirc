@@ -1,6 +1,6 @@
 from typing import List, Dict, Any, Tuple
 from collections import defaultdict
-from core.types import Agent, AgentAction, ComposedAction
+from core.data_models import Agent, AgentAction, ComposedAction
 
 class AgentPool:
     """

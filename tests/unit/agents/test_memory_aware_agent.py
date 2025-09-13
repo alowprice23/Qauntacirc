@@ -4,7 +4,7 @@ import numpy as np
 
 from agents.memory_aware_agent import MemoryAwareAgent
 from memory.constellation import ConstellationMemory
-from core.types import SystemState, AgentAction, SoftwareState, EnergyBreakdown, LyapunovMetrics
+from core.data_models import SystemState, AgentAction, SoftwareState, EnergyBreakdown, LyapunovMetrics
 from memory.contracts import ActionResult
 from memory.types import ConstellationConfig, Fact, FactNode, OptimalEncoding, FactType
 

@@ -8,7 +8,7 @@ from core.metrics import (
     compute_interaction_metrics,
     collect_all_metrics,
 )
-from core.types import SoftwareState
+from core.data_models import SoftwareState
 
 @pytest.fixture
 def nominal_state():
