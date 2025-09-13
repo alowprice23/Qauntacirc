@@ -131,13 +131,16 @@ class SystemEvolution(BaseModel):
     energy_delta: float
 
 class TaskQuanta(BaseModel):
-    id: str
+    id: str = Field(..., alias='task_id')
     description: str
     dependencies: List[str] = Field(default_factory=list)
     verification_criteria: List[str]
     spec_stub: Optional[str] = None
     energy: float = 0.0
     priority: int = Field(5, ge=1, le=10)
+    # Fields for physics-based properties
+    n: Optional[int] = None
+    frequency: Optional[float] = None
 
 class Status(str, Enum):
     SUCCESS = "SUCCESS"

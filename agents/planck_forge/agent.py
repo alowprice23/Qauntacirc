@@ -1,7 +1,9 @@
 from agents.base.agent import QuantumAgent
 from core.types import SystemState, QuantizedTasks, TaskQuantum, Observable
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
-from common.utils import FrequencyAnalyzer
+from llm.client import LLMClient
+from .advanced_nl_processor import AdvancedQuantumNLProcessor, SessionContext
+from .quantization import EnergyQuantizer
 
 class PlanckForgeAgent(QuantumAgent):
     def __init__(self):
@@ -16,12 +18,15 @@ class PlanckForgeAgent(QuantumAgent):
         )
         # Using a scaled Planck constant for software modeling purposes
         self.h = 6.62607015e-34
-        self.frequency_analyzer = FrequencyAnalyzer()
 
-    def apply_physics_principle(self, system_state: SystemState) -> QuantizedTasks:
+        # Initialize the LLM client and the advanced NL processor
+        llm_client = LLMClient() # Assuming a default constructor
+        self.nl_processor = AdvancedQuantumNLProcessor(llm_client)
+        self.energy_quantizer = EnergyQuantizer(planck_constant=self.h)
+
+    async def apply_physics_principle(self, system_state: SystemState) -> QuantizedTasks:
         """
-        Convert continuous requirements into discrete task quanta.
-        This is the core application of the E_n = n·h·ν principle.
+        Convert continuous requirements into discrete task quanta using the advanced NL processor.
         """
         requirements_str = " ".join(system_state.requirements) if system_state.requirements else ""
 
@@ -32,34 +37,38 @@ class PlanckForgeAgent(QuantumAgent):
             # Return an empty result if there are no requirements to process
             return QuantizedTasks(quanta=[], total_energy=0.0)
 
-        # Extract dominant frequencies (ν) from the requirements text
-        frequencies = self.frequency_analyzer.extract_frequencies(requirements_str)
+        # Create a session context
+        session_context = SessionContext(session_id="placeholder_session", quantum_state=system_state)
 
-        # Quantize into discrete energy levels (E_n)
-        quanta = []
-        for freq_data in frequencies:
-            ν = freq_data.frequency
-            # Calculate quantum numbers (n) for different energy levels
-            for n in range(1, freq_data.max_harmonics + 1):
-                energy_level = n * self.h * ν
-                task_quantum = TaskQuantum(
-                    n=n, frequency=ν, energy=energy_level,
-                    description=freq_data.task_description,
-                    dependencies=freq_data.dependencies
-                )
-                quanta.append(task_quantum)
+        # Process the command using the advanced NL processor
+        # Note: This is an async call now
+        result = await self.nl_processor.process_complex_multi_step_command(requirements_str, session_context)
 
-        total_energy = sum(q.energy for q in quanta)
-        return QuantizedTasks(quanta=quanta, total_energy=total_energy)
+        # The result contains TaskQuanta objects. We need to quantize their energy.
+        task_quanta_list = self.energy_quantizer.quantize_batch(result.decomposed_operations)
 
-    def measure_observable(self, system_state: SystemState) -> Observable:
+        # Convert TaskQuanta to TaskQuantum
+        task_quantum_list = []
+        for tq in task_quanta_list:
+            task_quantum_list.append(TaskQuantum(
+                n=tq.n,
+                frequency=tq.frequency,
+                energy=tq.energy,
+                description=tq.description,
+                dependencies=tq.dependencies
+            ))
+
+        total_energy = sum(q.energy for q in task_quantum_list)
+        return QuantizedTasks(quanta=task_quantum_list, total_energy=total_energy)
+
+    async def measure_observable(self, system_state: SystemState) -> Observable:
         """
         Measure the task quantization efficiency.
         This observable measures how many discrete tasks (quanta) are generated
         per requirement, providing insight into the agent's effectiveness.
         """
         # We must apply the principle to determine the number of quanta generated.
-        quantized_tasks_result = self.apply_physics_principle(system_state)
+        quantized_tasks_result = await self.apply_physics_principle(system_state)
         num_quanta = len(quantized_tasks_result.quanta)
 
         # Avoid division by zero if there are no requirements.
@@ -72,14 +81,14 @@ class PlanckForgeAgent(QuantumAgent):
             unit="quanta_per_requirement"
         )
 
-    def verify_conservation_laws(self, before: SystemState, after: SystemState) -> bool:
+    async def verify_conservation_laws(self, before: SystemState, after: SystemState) -> bool:
         """
         For PlanckForge, a primary conservation check is that the energy increase
         in the system state corresponds to the energy of the tasks created.
         This check relies on the orchestrator correctly updating the 'after' state.
         """
         # The energy of the newly created tasks
-        created_tasks_energy = self.apply_physics_principle(before).total_energy
+        created_tasks_energy = (await self.apply_physics_principle(before)).total_energy
 
         # The actual energy change in the system
         energy_delta = after.energy_breakdown.total - before.energy_breakdown.total

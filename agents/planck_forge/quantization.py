@@ -81,11 +81,14 @@ class EnergyQuantizer:
         # 1. Calculate the quantum level 'n' for each task.
         node_levels = calculate_node_levels(adj_list)
 
-        # 2. Calculate and assign energy for each task.
+        # 2. Calculate and assign energy and other physics properties for each task.
         for task_id, task in task_map.items():
             n = node_levels.get(task_id, 1)  # Default to level 1 if not in graph
             v = self._calculate_base_frequency(task)
             energy = n * self.planck_constant * v
+
+            task.n = n
+            task.frequency = v
             task.energy = energy
 
         return list(task_map.values())

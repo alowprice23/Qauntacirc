@@ -6,17 +6,50 @@ requirements into formal, verifiable task specifications.
 
 from agents.base.prompts import PromptSpec
 
-# V1 of the requirement decomposition prompt
-# This prompt guides the LLM to break down a high-level requirement
-# into a series of smaller, more manageable tasks.
-DECOMPOSE_REQUIREMENT_V1 = PromptSpec(
-    name="planck_forge_decompose_requirement",
+# V1 of the high-level goal decomposition prompt
+DECOMPOSE_GOALS_V1 = PromptSpec(
+    name="planck_forge_decompose_goals",
     version="1.0",
     template="""\
-You are an expert systems engineer. Your task is to decompose a high-level natural language requirement into a structured set of formal tasks.
+You are an expert systems engineer. Your task is to decompose a complex, multi-step command into a short list of high-level goals.
 
-Requirement:
-"{requirement_text}"
+Complex Command:
+"{complex_command}"
+
+Decomposition Rules:
+1.  **Identify Major Stages**: Break down the command into the primary stages of a software project (e.g., "Build Microservices", "Generate Tests", "Optimize for Production").
+2.  **Sequential Order**: List the goals in a logical, sequential order.
+3.  **Clarity**: Each goal should be a clear, high-level objective.
+
+Output Format:
+Provide the output as a JSON object with a single key "goals", which is a list of strings.
+
+Example:
+Complex Command: "Build microservices with auth, rate limiting, monitoring, deployment automation, then generate comprehensive tests and optimize for 10k RPS"
+Output:
+{{
+  "goals": [
+    "Build microservices with authentication, rate limiting, monitoring, and deployment automation.",
+    "Generate comprehensive tests for the microservices.",
+    "Optimize the microservices for 10,000 requests per second."
+  ]
+}}
+
+Now, decompose the provided complex command into high-level goals.
+""",
+    variables=["complex_command"]
+)
+
+
+# V1 of the goal-to-tasks decomposition prompt
+DECOMPOSE_GOAL_TO_TASKS_V1 = PromptSpec(
+    name="planck_forge_decompose_goal_to_tasks",
+    version="1.0",
+    template="""\
+You are an expert systems engineer. Your task is to decompose a high-level goal into a structured set of formal tasks.
+
+High-Level Goal:
+"{goal_text}"
 
 Decomposition Rules:
 1.  **Atomicity**: Each task should be atomic and represent a single, verifiable unit of work.
@@ -32,7 +65,7 @@ Provide the output as a JSON object containing a list of tasks. Each task should
 - "verification_criteria": A clear statement of what constitutes successful completion.
 
 Example:
-Requirement: "Build a user authentication system."
+High-Level Goal: "Build a user authentication system."
 Output:
 {{
   "tasks": [
@@ -51,16 +84,19 @@ Output:
   ]
 }}
 
-Now, decompose the provided requirement.
+Now, decompose the provided high-level goal.
 """,
-    variables=["requirement_text"]
+    variables=["goal_text"]
 )
 
 # A central registry of all prompts for this agent
 # This makes it easy to manage and access different versions
 PROMPT_REGISTRY = {
-    "decompose_requirement": {
-        "1.0": DECOMPOSE_REQUIREMENT_V1
+    "decompose_goals": {
+        "1.0": DECOMPOSE_GOALS_V1
+    },
+    "decompose_goal_to_tasks": {
+        "1.0": DECOMPOSE_GOAL_TO_TASKS_V1
     }
 }
 
