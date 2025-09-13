@@ -1,0 +1,16 @@
+PyYAML
+msgpack
+z3-solver
+hypothesis
+opentelemetry-sdk
+opentelemetry-propagator-b3
+scikit-learn
+python-Levenshtein
+typer[all]
+pytest-asyncio
+openai
+pybreaker
+anthropic
+groq
+cryptography
+google-generativeai

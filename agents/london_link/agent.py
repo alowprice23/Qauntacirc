@@ -1,7 +1,7 @@
 import numpy as np
 from typing import List, Dict, Any
 
-from agents.base.agent import PhysicsBasedAgent
+from agents.base.agent import QuantumAgent
 from core.types import (
     SystemState, DependencyGraph, DependencyOptimization, Component,
     DependencyOptimizationMove, Observable
@@ -9,7 +9,7 @@ from core.types import (
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from common.utils import DependencyOptimizer, LondonCoefficientCalculator
 
-class LondonLinkAgent(PhysicsBasedAgent):
+class LondonLinkAgent(QuantumAgent):
     def __init__(self):
         """
         Initializes agent to optimize dependencies using a van der Waals force model.

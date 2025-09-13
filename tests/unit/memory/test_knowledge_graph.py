@@ -2,11 +2,6 @@ import pytest
 from memory.knowledge_graph import QuantumKnowledgeGraph
 from memory.types import Knowledge, Relationship, RelationshipType
 
-@pytest.fixture
-def knowledge_graph():
-    """Provides a QuantumKnowledgeGraph instance for testing."""
-    return QuantumKnowledgeGraph()
-
 def test_create_node(knowledge_graph: QuantumKnowledgeGraph):
     """Tests creating a knowledge node."""
     knowledge = Knowledge(content="Socrates is a man.")

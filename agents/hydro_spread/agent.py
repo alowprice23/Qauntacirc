@@ -1,14 +1,14 @@
 import math
 from typing import List, Tuple
 
-from agents.base.agent import PhysicsBasedAgent
+from agents.base.agent import QuantumAgent
 from core.types import (
     SystemState, GrowthParameters, GrowthPrediction, GrowthPredictionInstance,
     ScalingRecommendation, Observable
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 
-class HydroSpreadAgent(PhysicsBasedAgent):
+class HydroSpreadAgent(QuantumAgent):
     def __init__(self):
         """
         Initializes agent to model system growth using viscous spreading.

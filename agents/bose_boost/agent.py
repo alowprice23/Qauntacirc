@@ -2,13 +2,13 @@ import math
 import numpy as np
 from typing import Dict, List
 
-from agents.base.agent import PhysicsBasedAgent
+from agents.base.agent import QuantumAgent
 from core.types import (
     SystemState, WorkloadDistribution, ResourceAllocation, Observable, DeploymentPlan
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 
-class BoseBoostAgent(PhysicsBasedAgent):
+class BoseBoostAgent(QuantumAgent):
     def __init__(self):
         """
         Initializes the BoseBoostAgent.

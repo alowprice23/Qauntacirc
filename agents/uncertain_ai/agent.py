@@ -3,14 +3,14 @@ import math
 from collections import Counter
 from typing import List
 
-from agents.base.agent import PhysicsBasedAgent
+from agents.base.agent import QuantumAgent
 from core.types import (
     SystemState, UncertaintyAnalysis, Module, Observable, RiskBounds
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from common.utils import UncertaintyGuidedTestGenerator, RiskQuantifier
 
-class UncertainAIAgent(PhysicsBasedAgent):
+class UncertainAIAgent(QuantumAgent):
     def __init__(self):
         """
         Initializes the UncertainAIAgent.

@@ -2,17 +2,17 @@ import numpy as np
 import scipy.linalg
 from typing import List
 
-from agents.base.agent import PhysicsBasedAgent
+from agents.base.agent import QuantumAgent
 from core.types import (
     SystemState, CodeState, Hamiltonian, CodeEvolution, UnitaryOperator, Proof, Observable
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from common.utils import QuantumCodeGenerator, ProofSynthesizer
 
-class SchrödingerDevAgent(PhysicsBasedAgent):
+class SchrodingerDevAgent(QuantumAgent):
     def __init__(self):
         """
-        Initializes the SchrödingerDevAgent.
+        Initializes the SchrodingerDevAgent.
         This agent is responsible for code synthesis through quantum state evolution,
         governed by the Schrödinger equation.
         """

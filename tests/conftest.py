@@ -657,3 +657,21 @@ def integration_environment(temp_workspace):
     }
     
     return env
+
+@pytest.fixture
+def knowledge_graph():
+    """Provides a QuantumKnowledgeGraph instance for testing."""
+    from memory.knowledge_graph import QuantumKnowledgeGraph
+    return QuantumKnowledgeGraph()
+
+@pytest.fixture
+def constellation_memory():
+    """Provides a fresh ConstellationMemory instance for testing."""
+    from memory.constellation import ConstellationMemory
+    from memory.types import ConstellationConfig
+    config = ConstellationConfig(
+        neo4j_uri="bolt://localhost:7687",
+        embedding_dimension=4,
+        database_path=":memory:"
+    )
+    return ConstellationMemory(config)

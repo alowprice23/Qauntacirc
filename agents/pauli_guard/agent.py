@@ -2,14 +2,14 @@ import numpy as np
 from typing import List, Tuple
 from itertools import combinations
 
-from agents.base.agent import PhysicsBasedAgent
+from agents.base.agent import QuantumAgent
 from core.types import (
     SystemState, ModuleState, OrthogonalizationResult, OrthogonalityViolation,
     SharedComponent, Observable
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 
-class PauliGuardAgent(PhysicsBasedAgent):
+class PauliGuardAgent(QuantumAgent):
     def __init__(self):
         """
         Initializes the PauliGuardAgent.

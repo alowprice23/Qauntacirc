@@ -3,23 +3,35 @@ import gzip
 import bz2
 import lzma
 import hashlib
+import numpy as np
+from collections import Counter
 from typing import Dict, Any
 
 from memory.types import Fact, OptimalEncoding
 
 class ShannonEntropyCalculator:
-    """Placeholder for Shannon entropy calculator."""
+    """Calculates the Shannon entropy of a given data source."""
     def compute(self, data: bytes) -> float:
-        """Computes a placeholder for Shannon entropy."""
+        """
+        Computes the Shannon entropy for the given data.
+        Entropy is calculated in bits per byte.
+        """
         if not data:
             return 0.0
-        # A more accurate implementation would analyze byte frequencies.
-        # This is a simple placeholder.
-        return len(set(data)) / 256.0 * len(data)
+
+        counts = Counter(data)
+        total_bytes = len(data)
+        entropy = 0.0
+        for count in counts.values():
+            p_x = count / total_bytes
+            entropy -= p_x * np.log2(p_x)
+
+        return entropy
 
 class InformationTheoreticEncoder:
     """
-    Finds the optimal encoding for knowledge, minimizing description length.
+    Finds the optimal encoding for knowledge, minimizing description length
+    based on information-theoretic principles.
     """
     def __init__(self):
         self.compression_algorithms = ["zstd", "lzma", "bz2", "gzip"]
@@ -39,31 +51,52 @@ class InformationTheoreticEncoder:
             raise ValueError(f"Unknown compression algorithm: {algorithm}")
 
     def _verify_compression_bound(self, entropy: float, compressed_size: int, original_size: int) -> Dict[str, Any]:
-        """Placeholder for verifying compression bound."""
-        return {"verified": True, "details": f"Entropy={entropy:.2f}, Size={compressed_size}"}
+        """
+        Verifies that the compression is reasonably close to the theoretical limit.
+        The theoretical limit is H(X) * n bits, where H(X) is entropy in bits/byte.
+        """
+        theoretical_limit_bytes = (entropy * original_size) / 8.0
 
-    def _generate_optimality_proof(self, compression_results: Dict[str, Any], optimal_algorithm: str) -> str:
-        """Generates a placeholder optimality proof."""
-        return f"Optimal algorithm '{optimal_algorithm}' selected based on minimum compressed size."
+        # We allow for some overhead, as practical compressors have headers and other metadata.
+        # A simple check is to see if the compressed size is not excessively larger than the limit.
+        is_verified = compressed_size < theoretical_limit_bytes * 1.5 + 100 # 50% margin + 100 bytes fixed overhead
+
+        return {
+            "verified": is_verified,
+            "theoretical_limit_bytes": theoretical_limit_bytes,
+            "actual_compressed_bytes": compressed_size,
+            "details": f"Entropy={entropy:.4f} bits/byte. Theoretical limit: {theoretical_limit_bytes:.2f} bytes. Actual: {compressed_size} bytes."
+        }
+
+    def _generate_optimality_proof(self, compression_results: Dict[str, Any], optimal_algorithm: str) -> Dict[str, Any]:
+        """Generates a proof of optimality by showing the results of all tested algorithms."""
+        proof = {
+            "optimal_algorithm": optimal_algorithm,
+            "reason": "Selected algorithm with the minimum compressed size.",
+            "results": {
+                alg: {"size": res["size"], "ratio": f"{res['ratio']:.4f}"}
+                for alg, res in compression_results.items()
+            }
+        }
+        return proof
 
     def encode(self, fact: Fact) -> OptimalEncoding:
         """
-        Finds the optimal encoding for a fact, minimizing description length.
-        The method is named 'encode' to match its usage in the ConstellationMemory class.
+        Finds the optimal encoding for a fact by selecting the best compression algorithm.
         """
         knowledge_bytes = fact.model_dump_json().encode('utf-8')
         if not knowledge_bytes:
-            # Handle empty content
             return OptimalEncoding(
                 algorithm='none',
                 compressed_data=b'',
                 compression_ratio=1.0,
                 entropy=0.0,
                 bound_verification={"verified": True, "details": "empty content"},
-                optimality_proof="No data to compress",
+                optimality_proof={"reason": "No data to compress"},
                 hash=hashlib.sha256(b'').hexdigest()
             )
 
+        # Entropy is in bits per byte
         entropy = self.entropy_calculator.compute(knowledge_bytes)
 
         compression_results = {}
@@ -71,7 +104,7 @@ class InformationTheoreticEncoder:
             compressed_data = self._compress_with_algorithm(knowledge_bytes, algorithm)
             compression_results[algorithm] = {
                 "size": len(compressed_data),
-                "ratio": len(compressed_data) / len(knowledge_bytes),
+                "ratio": len(compressed_data) / len(knowledge_bytes) if len(knowledge_bytes) > 0 else 1.0,
                 "data": compressed_data,
             }
 

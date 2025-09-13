@@ -13,7 +13,7 @@ class MeasurementApparatus:
         """
         return Observable(name=observable_name, value=0, unit="undefined")
 
-class PhysicsBasedAgent(ABC):
+class QuantumAgent(ABC):
     """
     Base agent with physics principles.
     Each agent implements a specific physics principle as a computational operator.

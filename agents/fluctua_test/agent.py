@@ -1,7 +1,7 @@
 from typing import List, Dict, Any
 import math
 
-from agents.base.agent import PhysicsBasedAgent
+from agents.base.agent import QuantumAgent
 from core.types import (
     SystemState, ChaosTestResult, ComplexResponse, ResilienceAnalysis,
     ChaosScenario, ChaosExperimentResult, Observable
@@ -9,7 +9,7 @@ from core.types import (
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from common.utils import ChaosTestEngine
 
-class FluctuaTestAgent(PhysicsBasedAgent):
+class FluctuaTestAgent(QuantumAgent):
     def __init__(self):
         """
         Initializes agent that uses the Fluctuation-Dissipation Theorem

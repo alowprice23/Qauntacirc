@@ -12,16 +12,6 @@ def memory_store():
     with tempfile.TemporaryDirectory() as tmpdir:
         yield DurableMemoryStore(storage_path=Path(tmpdir))
 
-@pytest.fixture
-def constellation_memory():
-    """Provides a fresh ConstellationMemory instance for testing."""
-    config = ConstellationConfig(
-        neo4j_uri="bolt://localhost:7687",
-        embedding_dimension=4,
-        database_path=":memory:"
-    )
-    return ConstellationMemory(config)
-
 def test_persist_and_restore(memory_store: DurableMemoryStore, constellation_memory: ConstellationMemory):
     """Tests persisting and then restoring a ConstellationMemory instance."""
     # Add a fact to the memory to have some state
@@ -34,7 +24,7 @@ def test_persist_and_restore(memory_store: DurableMemoryStore, constellation_mem
     assert result.backup_id is not None
 
     # Restore the state
-    restored_memory = memory_store.restore_memory_state(result.backup_id)
+    restored_memory = memory_store.restore_memory_state(result.backup_id, ConstellationMemory)
 
     # Check if the restored state is correct
     assert isinstance(restored_memory, ConstellationMemory)

@@ -1,7 +1,6 @@
 from typing import List, Dict
 import random
 
-from agents.base.agent import PhysicsBasedAgent
 from core.energy_calculator import EnergyCalculator
 from core.lyapunov_monitor import LyapunovMonitor
 from core.closure_validator import ClosureValidator
@@ -20,12 +19,13 @@ class Orchestrator:
     """
     def __init__(
         self,
-        agents: List[PhysicsBasedAgent],
+        agents: List['QuantumAgent'],
         energy_calculator: EnergyCalculator,
         lyapunov_monitor: LyapunovMonitor,
         closure_validator: ClosureValidator,
         communication_protocol: AgentCommunicationProtocol
     ):
+        from agents.base.agent import PhysicsBasedAgent
         self.agents = agents
         self.energy_calculator = energy_calculator
         self.lyapunov_monitor = lyapunov_monitor
@@ -34,8 +34,9 @@ class Orchestrator:
         self.agent_selector_strategy = "round-robin"
         self.last_agent_idx = -1
 
-    def select_agent(self) -> PhysicsBasedAgent:
+    def select_agent(self) -> 'QuantumAgent':
         """Selects an agent to run based on the chosen strategy."""
+        from agents.base.agent import QuantumAgent
         if self.agent_selector_strategy == "round-robin":
             self.last_agent_idx = (self.last_agent_idx + 1) % len(self.agents)
             return self.agents[self.last_agent_idx]
@@ -69,11 +70,12 @@ class Orchestrator:
         self.verify_evolution(evolution)
         return evolution
 
-    def _apply_result_to_state(self, current_state: SystemState, result: PhysicsResult, agent: PhysicsBasedAgent) -> SystemState:
+    def _apply_result_to_state(self, current_state: SystemState, result: PhysicsResult, agent: 'QuantumAgent') -> SystemState:
         """
         Applies the result from an agent's operation to the system state.
         This function dispatches to a handler based on the result type.
         """
+        from agents.base.agent import QuantumAgent
         new_state = current_state.model_copy(deep=True)
 
         match result:

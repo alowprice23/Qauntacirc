@@ -1,10 +1,10 @@
 # agents/base/__init__.py
 """Exports for agent base framework."""
 
-from .agent import PhysicsBasedAgent
+from .agent import QuantumAgent
 from .router import AgentRouter
 
 __all__ = [
-    "PhysicsBasedAgent",
+    "QuantumAgent",
     "AgentRouter",
 ]

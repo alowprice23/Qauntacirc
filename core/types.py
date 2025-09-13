@@ -257,6 +257,9 @@ class Observable(BaseModel):
 
 class PhysicsResult(BaseModel):
     """Base class for results from physics-based operations."""
+    status: Optional[str] = None
+    new_state: Optional[SystemState] = None
+
     class Config:
         arbitrary_types_allowed = True
 

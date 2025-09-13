@@ -2,7 +2,7 @@ import numpy as np
 import math
 from typing import List
 
-from agents.base.agent import PhysicsBasedAgent
+from agents.base.agent import QuantumAgent
 from core.types import (
     SystemState, CommunicationGraph, FlowOptimization, DispersionRelation,
     OptimizedChannel, Node, Edge, Observable
@@ -42,7 +42,7 @@ class LatticeModel:
         strengths = self.adj_matrix[self.adj_matrix > 0]
         return np.var(strengths) if strengths.size > 0 else 0.0
 
-class PhononFlowAgent(PhysicsBasedAgent):
+class PhononFlowAgent(QuantumAgent):
     def __init__(self):
         """Initializes agent to optimize communication using lattice dynamics."""
         super().__init__(

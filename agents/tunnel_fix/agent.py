@@ -1,7 +1,7 @@
 import math
 from typing import List
 
-from agents.base.agent import PhysicsBasedAgent
+from agents.base.agent import QuantumAgent
 from core.types import (
     SystemState, PerformanceProfile, TunnelingResult, TunnelingOpportunity,
     AppliedOptimization, PerformanceBarrier, Observable
@@ -9,7 +9,7 @@ from core.types import (
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from common.utils import PerformanceBarrierDetector, TunnelingOptimizer
 
-class TunnelFixAgent(PhysicsBasedAgent):
+class TunnelFixAgent(QuantumAgent):
     def __init__(self):
         """
         Initializes the TunnelFixAgent.

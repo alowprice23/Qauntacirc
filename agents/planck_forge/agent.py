@@ -1,9 +1,9 @@
-from agents.base.agent import PhysicsBasedAgent
+from agents.base.agent import QuantumAgent
 from core.types import SystemState, QuantizedTasks, TaskQuantum, Observable
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from common.utils import FrequencyAnalyzer
 
-class PlanckForgeAgent(PhysicsBasedAgent):
+class PlanckForgeAgent(QuantumAgent):
     def __init__(self):
         """
         Initializes the PlanckForgeAgent.
