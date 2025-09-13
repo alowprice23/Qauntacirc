@@ -292,7 +292,7 @@ class MathematicalRiskQuantificationSystem:
         A real implementation would quantify risk based on the number and severity
         of vulnerabilities found.
         """
-        # Assume chaos tests report the system's resilience (higher is better)
+        # Assume chaos tests report the's resilience (higher is better)
         resilience_score = chaos_test_results.get("resilience_score", 0.9) if chaos_test_results else 0.9
         # Assume penetration tests find a number of vulnerabilities
         num_vulnerabilities = len(penetration_test_results.get("vulnerabilities", [])) if penetration_test_results else 0
