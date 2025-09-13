@@ -517,6 +517,83 @@ class CoordinationResult(BaseModel):
     approved: bool
     modifications: List[Any]
 
+# --- Performance Optimization Data Models ---
+
+class SLARequirement(BaseModel):
+    """Defines a Service Level Agreement requirement."""
+    metric_name: str
+    target_value: float
+    operator: Literal["<=", ">=", "=="]
+
+
+class PerformanceMetric(BaseModel):
+    """Represents a single performance metric with statistical information."""
+    name: str
+    value: float
+    unit: str
+    confidence_interval: Optional[Tuple[float, float]] = None
+    confidence_level: Optional[float] = None
+
+
+class PerformanceProfile(BaseModel):
+    """A profile of system performance, including multiple metrics."""
+    baseline_metrics: List[PerformanceMetric]
+    measured_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+class OptimizationOpportunity(BaseModel):
+    """Represents an opportunity for performance optimization."""
+    id: str
+    description: str
+    component_name: str
+    estimated_impact: float  # e.g., energy reduction
+    mathematical_constraints: List[str]
+
+
+class AppliedOptimization(BaseModel):
+    """Represents an optimization that has been applied."""
+    opportunity: OptimizationOpportunity
+    result: Any
+    mathematically_verified: bool
+
+
+class SLACompliance(BaseModel):
+    """Represents the result of an SLA compliance check."""
+    requirement: SLARequirement
+    measured_performance: PerformanceMetric
+    is_compliant: bool
+    statistical_confidence: float
+
+
+class PredictiveModel(BaseModel):
+    """Represents a predictive performance model."""
+    model_type: str
+    equation: str
+    parameters: Dict[str, float]
+    prediction_horizon: timedelta
+
+
+class PerformanceImprovement(BaseModel):
+    """Analyzes the performance improvement with statistical significance."""
+    metric_name: str
+    baseline_value: float
+    optimized_value: float
+    improvement_percentage: float
+    is_statistically_significant: bool
+    p_value: float
+
+
+class PerformanceOptimizationResult(BaseModel):
+    """The final result of the performance optimization process."""
+    baseline_performance: PerformanceProfile
+    applied_optimizations: List[AppliedOptimization]
+    sla_compliance: List[SLACompliance]
+    predictive_model: PredictiveModel
+    improvement_analysis: List[PerformanceImprovement]
+    mathematical_performance_certificate: Any
+    meets_all_sla_requirements: bool
+
+
 # Final forward reference resolution
 Component.model_rebuild()
 Dependency.model_rebuild()
