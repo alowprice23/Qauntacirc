@@ -138,5 +138,17 @@ async def main():
     )
     await run_scenario(framework, bad_sbom_op, "Blocked SBOM Dependency")
 
+    # --- Scenario 6: Contradictory Mathematical Constraint ---
+    # This test is designed to fail the mathematical verification. The constraint "(not deploy_service)"
+    # contradicts the granted capability "deploy_service". This failure is caught early by the
+    # CapabilityBasedSecurityEngine, demonstrating a defense-in-depth approach.
+    math_fail_op = success_op.model_copy(
+        update={
+            "mathematical_security_constraints": ["(not deploy_service)"]
+        }
+    )
+    await run_scenario(framework, math_fail_op, "Contradictory Mathematical Constraint")
+
+
 if __name__ == "__main__":
     asyncio.run(main())

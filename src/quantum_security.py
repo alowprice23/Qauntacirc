@@ -141,16 +141,24 @@ class CapabilityBasedSecurityEngine:
 
         # Verify mathematical constraints using Z3
         solver = z3.Solver()
-        all_caps_vars = {cap: z3.Bool(cap) for cap in (all_granted_capabilities | set(operation_capabilities))}
+        all_caps = all_granted_capabilities | set(operation_capabilities)
+
+        # Build a single SMT-LIB string with all declarations and assertions
+        smt_lib_parts = []
+        # 1. Declare all capabilities as boolean constants
+        for cap in all_caps:
+            smt_lib_parts.append(f"(declare-const {cap} Bool)")
+        # 2. Assert the capabilities that have been granted
         for cap in all_granted_capabilities:
-            solver.add(all_caps_vars[cap] == True)
+            smt_lib_parts.append(f"(assert {cap})")
+        # 3. Add the user-provided mathematical constraints
+        for constraint in mathematical_constraints:
+            smt_lib_parts.append(f"(assert {constraint})")
+
+        full_smt_lib_script = "\n".join(smt_lib_parts)
 
         try:
-            for constraint in mathematical_constraints:
-                # This is a simplified way to handle constraints. A real system might need a safer parser.
-                # Assuming constraints are simple like `(> db_connections 5)` and we declare vars.
-                # For this implementation, we'll assume constraints are valid SMT-LIB2 assertions.
-                solver.from_string(f"(assert {constraint})")
+            solver.from_string(full_smt_lib_script)
         except z3.Z3Exception as e:
              return CapabilityVerification(verified=False, reason=f"Failed to parse mathematical constraint: {e}")
 
