@@ -18,7 +18,7 @@ from .agent_pool import AgentPool
 
 
 # --- Core Data Types ---
-from .types import (
+from .data_models import (
     SystemState,
     EnergyBreakdown,
     LyapunovMetrics,

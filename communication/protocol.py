@@ -7,7 +7,7 @@ import nats
 from nats.aio.client import Client as NATSClient
 
 # Assuming data models are in core.types
-from core.types import EnergyDelta, AgentProposal, CoordinationResult
+from core.data_models import EnergyDelta, AgentProposal, CoordinationResult
 
 class AgentCommunicationProtocol:
     def __init__(self):
