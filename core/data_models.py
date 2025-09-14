@@ -253,6 +253,22 @@ class ContractionResult(BaseModel):
     lambda_factor: float
     converged: bool
 
+
+class PhaseMarker(str, Enum):
+    """Defines the outcome of Phase A of the annealing process."""
+    BASIN_CAPTURED = "BASIN_CAPTURED"
+    MAX_ITERATIONS_REACHED = "MAX_ITERATIONS_REACHED"
+
+
+class OptimizationResult(BaseModel):
+    """Represents the final result of the two-phase optimization."""
+    final_state: SystemState
+    iterations: int
+    contraction_factor: Optional[float] = None
+    convergence_status: str
+    phase_switch_point: Optional[int] = None
+
+
 class Observable(BaseModel):
     name: str
     value: Any
