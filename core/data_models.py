@@ -1,9 +1,10 @@
 from __future__ import annotations
-from typing import Dict, Any, List, Optional, Literal, Set, Tuple
+from typing import Dict, Any, List, Optional, Literal, Set, Tuple, TypeAlias
 from uuid import UUID, uuid4
 from datetime import datetime, timedelta
 from pydantic import field_validator, model_validator, BaseModel, Field, validator
 from enum import Enum
+import numpy as np
 
 class EnergyBreakdown(BaseModel):
     total: float
@@ -230,17 +231,28 @@ class SoftwareState(BaseModel):
     config_hashes: Dict[str, str] = Field(default_factory=dict)
     status: str = "nominal"
 
-class QuantumState(BaseModel):
-    state_vector: List[complex] = Field(default_factory=list)
+class DensityMatrix(BaseModel):
+    matrix: Any  # np.ndarray
+    dimension: int
 
     class Config:
         arbitrary_types_allowed = True
+
+
+class QuantumState(BaseModel):
+    state_vector: List[complex] = Field(default_factory=list)
+    density_matrix: Optional[DensityMatrix] = None
+
+    class Config:
+        arbitrary_types_allowed = True
+
 
 Proposal = AgentAction
 State = SystemState
 Action = AgentResult
 QCState = SystemState
 EnergyComponents = EnergyBreakdown
+CanonicalAST: TypeAlias = 'Module'
 
 
 class AnnealingResult(BaseModel):
