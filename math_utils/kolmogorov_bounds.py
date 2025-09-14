@@ -1,5 +1,29 @@
 import zlib
+import gzip
+import bz2
+import lzma
 import numpy as np
+
+def multi_compressor_bound(data: bytes) -> int:
+    """
+    Approximates Kolmogorov complexity using the best of multiple compressors.
+    This provides a tighter upper bound on K(x) than a single compressor.
+    K(x) <= min(len(C1(x)), len(C2(x)), ...) + c
+
+    Args:
+        data: The data to compress, as a bytes object.
+
+    Returns:
+        The minimum compressed size in bytes.
+    """
+    if not isinstance(data, bytes):
+        raise TypeError("Input data must be bytes.")
+
+    return min(
+        len(gzip.compress(data)),
+        len(bz2.compress(data)),
+        len(lzma.compress(data))
+    )
 
 def kolmogorov_complexity_approximation(data):
     """

@@ -1,12 +1,12 @@
 import math
 import numpy as np
-import gzip
-import bz2
-import lzma
 from datetime import datetime
 from typing import Dict
 
 from core.data_models import SystemState, EnergyBreakdown, Module
+from math_utils.info_entropy import shannon_entropy
+from math_utils.kolmogorov_bounds import multi_compressor_bound
+from math_utils.laplacian import get_normalized_laplacian
 
 class EnergyCalculator:
     def __init__(self, alpha: float, beta: float, gamma: float, delta: float, tau: float = 3.154e+7):
@@ -58,68 +58,32 @@ class EnergyCalculator:
             'delta': breakdown.debt,
         }
 
-    def _compress_gzip(self, data: bytes) -> int:
-        return len(gzip.compress(data))
-
-    def _compress_bzip2(self, data: bytes) -> int:
-        return len(bz2.compress(data))
-
-    def _compress_lzma(self, data: bytes) -> int:
-        return len(lzma.compress(data))
-
-    def _compute_shannon_entropy(self, tokens: list[str]) -> float:
-        if not tokens:
-            return 0.0
-
-        freq_map = {}
-        for token in tokens:
-            freq_map[token] = freq_map.get(token, 0) + 1
-
-        entropy = 0.0
-        total_tokens = len(tokens)
-        for token in freq_map:
-            prob = freq_map[token] / total_tokens
-            entropy -= prob * math.log2(prob)
-
-        return entropy
-
     def _compute_complexity_energy(self, state: SystemState) -> float:
         """E_complexity = Σᵢ [K_approx(mᵢ) + H(mᵢ)]"""
         total_complexity = 0.0
         for module in state.modules:
-            # Kolmogorov approximation using multi-compressor approach
-            k_approx = min(
-                self._compress_gzip(module.normalized_ast),
-                self._compress_bzip2(module.normalized_ast),
-                self._compress_lzma(module.normalized_ast)
-            )
-
+            # Multi-compressor Kolmogorov approximation
+            k_approx = multi_compressor_bound(module.normalized_ast)
             # Shannon entropy of semantic tokens
-            h_entropy = self._compute_shannon_entropy(module.semantic_tokens)
-
-            total_complexity += k_approx + h_entropy
-
+            h_tokens = shannon_entropy(module.semantic_tokens)
+            total_complexity += k_approx + h_tokens
         return total_complexity
 
     def _compute_coupling_energy(self, state: SystemState) -> float:
-        """E_coupling = Tr(L) where L is the dependency graph Laplacian"""
-        if state.dependency_graph is None or state.dependency_graph.adjacency_matrix is None:
+        """E_coupling = Tr(L) where L is the normalized graph Laplacian"""
+        if state.dependency_graph is None or not state.dependency_graph.adjacency_matrix:
             return 0.0
 
         adjacency_matrix = np.array(state.dependency_graph.adjacency_matrix)
         if adjacency_matrix.size == 0:
             return 0.0
 
-        # Degree matrix is a diagonal matrix of vertex degrees
-        degrees = np.sum(adjacency_matrix, axis=1)
-        degree_matrix = np.diag(degrees)
+        # Use the normalized Laplacian as required
+        laplacian = get_normalized_laplacian(adjacency_matrix)
 
-        # Laplacian matrix L = D - A
-        laplacian = degree_matrix - adjacency_matrix
-
-        # Trace of the Laplacian is the sum of its eigenvalues
-        eigenvalues = np.linalg.eigvals(laplacian)
-        return float(np.sum(eigenvalues.real))
+        # The trace of the Laplacian is the sum of its eigenvalues.
+        # It's more efficient to compute the trace directly from the matrix.
+        return np.real(np.trace(laplacian))
 
     def _compute_constraint_energy(self, state: SystemState) -> float:
         """E_constraint = Σₖ wₖ·max(0, gₖ(S))²"""
