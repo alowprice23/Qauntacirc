@@ -25,7 +25,6 @@ class Orchestrator:
         closure_validator: ClosureValidator,
         communication_protocol: AgentCommunicationProtocol
     ):
-        from agents.base.agent import PhysicsBasedAgent
         self.agents = agents
         self.energy_calculator = energy_calculator
         self.lyapunov_monitor = lyapunov_monitor
