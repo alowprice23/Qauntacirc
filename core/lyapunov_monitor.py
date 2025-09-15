@@ -11,37 +11,179 @@ the principles of Lyapunov stability theory.
 from __future__ import annotations
 
 import numpy as np
-from typing import List, Optional, Tuple
+import time
+from typing import List, Optional, Tuple, Dict
+from scipy import stats
 
-from core.types import QCState, LyapunovResult
+from core.types import SystemState, LyapunovValue, BoundedExcursion, TestResult, ProofObligation
 from math_utils import lyapunov, martingales
-from unittest.mock import Mock
 
-class LyapunovFunction:
-    def __init__(self, kappa: float, xi: float):
-        if kappa <= 0 or xi <= 0:
-            raise ValueError("Weights kappa and xi must be positive.")
-        self.kappa = kappa
-        self.xi = xi
+# Helper functions (mock implementations)
 
-    def compute(self, state: Mock) -> float:
-        """Computes the Lyapunov function value."""
-        # This is a mock implementation based on the test
-        energy = state.energy
-        failing_tests = state.failing_tests
-        open_obligations = state.open_obligations
-        return energy + self.kappa * failing_tests + self.xi * open_obligations
+def compute_energy_approx(state: SystemState) -> float:
+    """Computes a mock approximation of system energy."""
+    return state.approximated_energy
 
-    def get_components(self, state: Mock) -> Dict[str, float]:
-        """Gets the components of the Lyapunov function."""
-        energy = state.energy
-        test_penalty = self.kappa * state.failing_tests
-        obligation_penalty = self.xi * state.open_obligations
-        return {
-            'energy': energy,
-            'test_penalty': test_penalty,
-            'obligation_penalty': obligation_penalty
-        }
+def count_failing_tests(test_results: List[TestResult]) -> int:
+    """Counts the number of failing tests."""
+    return sum(1 for r in test_results if not r.passed)
+
+def count_open_obligations(proof_obligations: List[ProofObligation]) -> int:
+    """Counts the number of open proof obligations."""
+    return sum(1 for o in proof_obligations if o.status == 'open')
+
+def classify_excursion_cause(window: List[LyapunovValue], future_window: List[LyapunovValue]) -> str:
+    """Classifies the cause of an excursion. Mock implementation."""
+    # In a real implementation, this would inspect the state changes that
+    # correspond to the Lyapunov value changes in the window.
+    return "Test addition"
+
+# Main Lyapunov functions
+
+def compute_lyapunov_function(state: SystemState,
+                            kappa: float = 100.0,
+                            xi: float = 50.0) -> LyapunovValue:
+    """
+    Computes the Lyapunov function Φ(S) for a given system state.
+
+    The function is defined as:
+    Φ(S) = E_approx(S) + κ·#{failing tests} + ξ·#{open obligations}
+
+    This function acts as a potential function for the system's state space.
+    A decrease in this value signifies progress towards a more stable state
+    (lower energy, fewer failing tests, fewer open obligations).
+
+    Theorem: Under the assumption of bounded excursions (temporary increases
+    in Φ are controlled), the process Φ_t is expected to be a supermartingale,
+    which guarantees almost-sure convergence to a stable state.
+    """
+    energy = compute_energy_approx(state)
+    failing_tests = count_failing_tests(state.test_results)
+    open_obligations = count_open_obligations(state.proof_obligations)
+
+    test_component = kappa * failing_tests
+    obligation_component = xi * open_obligations
+
+    phi = energy + test_component + obligation_component
+
+    return LyapunovValue(
+        total=phi,
+        energy_component=energy,
+        test_component=test_component,
+        obligation_component=obligation_component,
+        timestamp=time.time()
+    )
+
+def detect_bounded_excursions(phi_history: List[LyapunovValue],
+                            window_size: int = 50,
+                            excursion_tolerance: float = 5.0) -> List[BoundedExcursion]:
+    """
+    Detects and classifies bounded excursions in the Lyapunov function's trajectory.
+
+    An excursion occurs when Φ increases temporarily, for example, due to the
+    addition of new tests (which may initially fail) or new requirements (which
+    increase proof obligations). A 'bounded' excursion is one where this increase
+    is temporary and followed by a recovery, keeping the system on a stable path.
+    """
+    excursions = []
+    if len(phi_history) < window_size:
+        return excursions
+
+    for i in range(window_size, len(phi_history)):
+        window = phi_history[i-window_size:i]
+
+        # Compute trend over the window
+        phi_values = [v.total for v in window]
+        time_indices = range(len(phi_values))
+        try:
+            trend_slope = np.polyfit(time_indices, phi_values, 1)[0]
+        except np.linalg.LinAlgError:
+            continue # Skip if fitting fails
+
+        # Detect a potential excursion: an increasing trend in the window
+        if trend_slope > 0:
+            # Look ahead to see if the trend reverses (recovery)
+            future_window_end = min(i + window_size, len(phi_history))
+            future_window = phi_history[i:future_window_end]
+
+            if len(future_window) > 1:
+                future_values = [v.total for v in future_window]
+                future_time_indices = range(len(future_values))
+                try:
+                    recovery_slope = np.polyfit(future_time_indices, future_values, 1)[0]
+                except np.linalg.LinAlgError:
+                    continue
+
+                # If recovery is significant enough, classify the excursion
+                if recovery_slope < -0.1:  # Threshold for a clear recovery trend
+                    max_excursion_val = max(phi_values)
+                    # Baseline is taken from the start of the window
+                    baseline_val = phi_values[0]
+                    magnitude = max_excursion_val - baseline_val
+
+                    if magnitude <= excursion_tolerance:
+                        excursions.append(BoundedExcursion(
+                            start_index=i - window_size,
+                            end_index=i + len(future_window) -1,
+                            magnitude=magnitude,
+                            # Cause classification is mocked for now
+                            cause=classify_excursion_cause(window, future_window)
+                        ))
+
+    return excursions
+
+def verify_martingale_convergence(phi_history: List[LyapunovValue],
+                                warmup_period: int = 100) -> bool:
+    """
+    Verifies that the Lyapunov function trajectory (Φ_t) forms a supermartingale
+    after an initial warmup period. This is a key part of the proof of
+    almost-sure convergence.
+
+    Theorem (Doob's Supermartingale Convergence Theorem):
+    If a supermartingale X_t is bounded below (i.e., X_t >= C for some constant C),
+    then it converges almost surely to a random variable X.
+
+    In our case, Φ_t is bounded below by 0. We need to verify the supermartingale
+    property: E[Φ_{t+1} | F_t] ≤ Φ_t. We test for a stronger condition,
+    E[Φ_{t+1} | F_t] ≤ Φ_t - ε, which implies a drift towards lower values.
+    """
+    if len(phi_history) < warmup_period + 50:
+        return False  # Insufficient data for a reliable statistical test
+
+    # Extract post-warmup values for the test
+    post_warmup_phi = [v.total for v in phi_history[warmup_period:]]
+
+    # We test the supermartingale property by looking at the differences
+    # d_t = Φ_t - Φ_{t+1}. If Φ is a supermartingale, we expect E[d_t | F_t] >= 0.
+    # We test for a stronger condition: is the mean of d_t significantly positive?
+    decrements = np.diff(post_warmup_phi) * -1 # d_t = phi_t - phi_{t+1}
+
+    if len(decrements) < 30: # Need enough samples for t-test
+        return False
+
+    # Perform a one-sided t-test to see if the mean decrement is > 0.
+    # H0: mean_decrement <= 0 (not a supermartingale with positive drift)
+    # H1: mean_decrement > 0 (is a supermartingale with positive drift)
+    mean_decrement = np.mean(decrements)
+    std_dev = np.std(decrements, ddof=1)
+
+    if std_dev == 0:
+        # If there's no variance, it's not converging unless it's already at minimum.
+        # We can say it's not converging in a meaningful way.
+        return False
+
+    # Calculate the t-statistic
+    t_stat = mean_decrement / (std_dev / np.sqrt(len(decrements)))
+
+    # Calculate the p-value for the one-sided test
+    p_value = 1 - stats.t.cdf(t_stat, df=len(decrements)-1)
+
+    # We conclude convergence if the p-value is low enough (e.g., < 0.05)
+    # and the mean decrement is practically significant ( > epsilon).
+    is_converging = p_value < 0.05 and mean_decrement > 1e-6
+
+    return is_converging
+
 
 # Constants for stability analysis
 DEFAULT_EXCURSION_BOUND = 1.5
@@ -50,174 +192,42 @@ MAX_HISTORY_SIZE = 1000
 
 class LyapunovMonitor:
     """
-    Monitors system stability by computing Lyapunov exponents and tracking excursions.
-
-    The monitor maintains a history of system states (or their Lyapunov potentials)
-    to analyze the trajectory's stability, convergence, and boundedness. It integrates
-    with mathematical utilities for formal stability verification.
+    Monitors system stability by computing Lyapunov potentials and tracking excursions.
     """
 
     def __init__(self, excursion_bound: float = DEFAULT_EXCURSION_BOUND,
                  convergence_threshold: float = DEFAULT_CONVERGENCE_THRESHOLD):
         """
         Initializes the LyapunovMonitor.
-
-        Args:
-            excursion_bound: The maximum allowable ratio of current potential to
-                             the minimum potential observed so far.
-            convergence_threshold: The threshold on the Lyapunov exponent below
-                                   which the system is considered converged.
         """
         self.excursion_bound = excursion_bound
         self.convergence_threshold = convergence_threshold
-        self.potential_history: List[float] = []
-        self.state_history: List[QCState] = []
-        self.min_potential: Optional[float] = None
+        self.phi_history: List[LyapunovValue] = []
 
-    def track_state(self, state: QCState):
+    def track_state(self, state: SystemState):
         """
-        Adds a new state to the monitor's history.
-
-        Args:
-            state: The new QCState to track.
+        Computes the Lyapunov value for the new state and adds it to the history.
         """
-        potential = state.lyapunov_potential
-        self.potential_history.append(potential)
-        self.state_history.append(state)
+        phi = compute_lyapunov_function(state)
+        self.phi_history.append(phi)
 
-        if len(self.potential_history) > MAX_HISTORY_SIZE:
-            self.potential_history.pop(0)
-            self.state_history.pop(0)
+        if len(self.phi_history) > MAX_HISTORY_SIZE:
+            self.phi_history.pop(0)
 
-        if self.min_potential is None or potential < self.min_potential:
-            self.min_potential = potential
-
-    def track_excursion(self) -> Tuple[bool, float]:
+    def analyze_stability(self) -> Dict[str, any]:
         """
-        Checks if the system state has made a significant excursion from its
-        most stable point observed so far.
-
-        An excursion occurs if the current Lyapunov potential exceeds a defined
-        multiple of the minimum potential seen. This can be an indicator of
-
-        destabilization.
-
-        Returns:
-            A tuple containing:
-            - bool: True if an excursion is detected, False otherwise.
-            - float: The current excursion ratio.
+        Performs a full stability analysis on the current history.
         """
-        if self.min_potential is None or len(self.potential_history) < 1:
-            return False, 0.0
+        convergence = verify_martingale_convergence(self.phi_history)
+        excursions = detect_bounded_excursions(self.phi_history)
 
-        current_potential = self.potential_history[-1]
-
-        # Avoid division by zero if min_potential is close to zero
-        if abs(self.min_potential) < 1e-9:
-             # If both are near zero, no excursion. If current is not, it's a large excursion.
-            return (current_potential > 1e-9), float('inf') if current_potential > 1e-9 else 0.0
-
-        excursion_ratio = current_potential / self.min_potential
-
-        is_excursion = excursion_ratio > self.excursion_bound
-        return is_excursion, excursion_ratio
-
-    def verify_stability(self) -> LyapunovResult:
-        """
-        Performs a formal stability analysis on the state history.
-
-        This method computes the Lyapunov exponent from the historical data.
-        A negative exponent indicates stability, suggesting that nearby trajectories
-        converge. A positive exponent indicates chaos.
-
-        Returns:
-            A LyapunovResult object summarizing the stability analysis.
-        """
-        if len(self.potential_history) < 2:
-            return LyapunovResult(
-                exponent=0.0,
-                convergence_status="insufficient_data",
-                iterations=len(self.potential_history)
-            )
-
-        trajectory = np.array(self.potential_history)
-
-        # Use the lyapunov utility to compute the exponent
-        exponent = lyapunov.estimate_lyapunov_exponent(trajectory)
-
-        if exponent < -self.convergence_threshold:
-            status = "stable"
-        elif exponent > self.convergence_threshold:
-            status = "unstable"
-        else:
-            status = "marginal"
-
-        return LyapunovResult(
-            exponent=exponent,
-            convergence_status=status,
-            iterations=len(trajectory)
-        )
-
-    def predict_convergence(self, target_potential: float) -> Optional[float]:
-        """
-        Estimates the time (in steps) to reach a target Lyapunov potential.
-
-        This prediction is based on the currently observed rate of convergence,
-        derived from the Lyapunov exponent.
-
-        Args:
-            target_potential: The target potential value.
-
-        Returns:
-            The estimated number of steps to convergence, or None if the system
-            is not converging.
-        """
-        stability_result = self.verify_stability()
-
-        # Convergence prediction is only meaningful for stable systems
-        if stability_result.exponent >= 0 or len(self.potential_history) < 1:
-            return None
-
-        current_potential = self.potential_history[-1]
-
-        # Simplified exponential decay model: P(t) = P(0) * exp(lambda * t)
-        # We want to find t such that P(t) = target_potential
-        # t = log(target_potential / current_potential) / lambda
-
-        if current_potential <= target_potential:
-            return 0.0
-
-        # The exponent is the rate of convergence per step
-        time_to_converge = np.log(target_potential / current_potential) / stability_result.exponent
-        return time_to_converge
-
-    def verify_martingale_property(self) -> Tuple[bool, float]:
-        """
-        Checks if the sequence of Lyapunov potentials behaves like a supermartingale.
-
-        A supermartingale E[X_{t+1} | F_t] <= X_t is a process that is expected
-        to decrease or stay the same over time. This is a desirable property for
-        a potential function in an optimization process.
-
-        Returns:
-            A tuple containing:
-            - bool: True if the supermartingale property holds, False otherwise.
-            - float: The computed test statistic (e.g., drift).
-        """
-        if len(self.potential_history) < 10: # Need some data to test
-            return True, 0.0 # Assume property holds if not enough data
-
-        trajectory = np.array(self.potential_history)
-
-        # Use the martingale utility to check the property
-        is_supermartingale, drift = martingales.is_supermartingale(trajectory)
-
-        return is_supermartingale, drift
+        return {
+            "martingale_convergence": convergence,
+            "bounded_excursions": excursions
+        }
 
     def reset(self):
         """
         Resets the monitor's history.
         """
-        self.potential_history.clear()
-        self.state_history.clear()
-        self.min_potential = None
+        self.phi_history.clear()

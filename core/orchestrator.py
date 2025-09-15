@@ -14,7 +14,7 @@ import logging
 import random
 from datetime import datetime
 
-from core.types import QCState, SoftwareState, RunRecord, EnergyComponents
+from core.types import QCState, SoftwareState, RunRecord, EnergyComponents, SystemState, TestResult, ProofObligation
 from core.energy_calculator import EnergyCalculator
 from core.lyapunov_monitor import LyapunovMonitor
 from core.two_phase_annealer import TwoPhaseAnnealer
@@ -84,7 +84,7 @@ class Orchestrator:
         # 2. Initialize system components
         self.annealer.initialize_state(initial_qc_state)
         self.lyapunov_monitor.reset()
-        self.lyapunov_monitor.track_state(initial_qc_state)
+        # The new monitor tracks SystemState, not QCState. We'll create it in the loop.
 
         current_state = initial_qc_state
         state_history = [initial_qc_state]
@@ -94,34 +94,29 @@ class Orchestrator:
             previous_state = current_state
 
             # Propose a new state via the annealer
-            # The annealer's proposal function would in reality trigger a change
-            # in the software, re-metric, and re-functor. Here we simulate that.
-            proposed_state = self._propose_and_evaluate_new_state(current_state)
+            proposed_state = self._propose_and_evaluate_new_state(current_state, i, max_iterations)
 
             # The annealer step function decides whether to accept it
-            # We need to inject the proposed state into the annealer's logic
-            # This is a slight simplification of the feedback loop.
-
-            # Let's adjust the annealer's step to work with our loop
             new_energy = proposed_state.energy
             if self.annealer._should_accept(new_energy, current_state.energy, self.annealer.temperature):
-
                 # Validate the transition before accepting
                 is_valid, violations = self.closure_rules.validate_transition(previous_state, proposed_state)
-
                 if is_valid:
                     current_state = proposed_state
                     logging.debug(f"Iter {i}: Accepted new state with energy {current_state.energy:.4f}")
                 else:
                     logging.warning(f"Iter {i}: Rejected transition due to rule violations: {violations}")
-                    # State remains the same, but we might log the violation
 
             # Update temperature and phase
             self.annealer.current_state = current_state
             self.annealer._update_phase_and_temperature(i)
 
-            # Track stability and convergence
-            self.lyapunov_monitor.track_state(current_state)
+            # Create a mock SystemState for Lyapunov monitoring
+            # In a real system, this data would come from CI/CD, static analysis, etc.
+            mock_system_state = self._create_mock_system_state(current_state, i, max_iterations)
+
+            # Track stability with the new monitor
+            self.lyapunov_monitor.track_state(mock_system_state)
             state_history.append(current_state)
             if len(state_history) > 100:
                 state_history.pop(0)
@@ -129,6 +124,12 @@ class Orchestrator:
             if self.annealer.check_convergence(state_history[-20:]):
                 logging.info(f"Convergence detected at iteration {i}.")
                 break
+
+        logging.info(f"Analysis finished. Final energy: {current_state.energy:.4f}")
+
+        # Perform final stability analysis
+        final_stability_report = self.lyapunov_monitor.analyze_stability()
+        logging.info(f"Final stability report: {final_stability_report}")
 
         logging.info(f"Analysis finished. Final energy: {current_state.energy:.4f}")
 
@@ -168,25 +169,15 @@ class Orchestrator:
             optimization_phase="A"
         )
 
-    def _propose_and_evaluate_new_state(self, current_state: QCState) -> QCState:
+    def _propose_and_evaluate_new_state(self, current_state: QCState, iteration: int, max_iterations: int) -> QCState:
         """
-        Simulates the process of proposing a new state.
-
-        In a real system, this would involve:
-        1. Calling annealer.propose_new_state() to get a modified SoftwareState.
-        2. Re-running metric collection on the new SoftwareState.
-        3. Using the functor to map to a new QuantumState.
-        4. Creating the full new QCState.
-
-        Here, we'll just create a slightly perturbed version of the current state.
+        Simulates proposing a new state, now with a downward trend in energy.
         """
-        # This is a placeholder for a complex process.
-        # We create a new state with slightly modified energy and other properties.
+        # Simulate a general downward trend in energy over time
+        progress_factor = 1 - (iteration / max_iterations)
+        energy_change = random.uniform(-0.05, 0.1) * self.annealer.temperature
+        new_energy = current_state.energy - energy_change * progress_factor
 
-        new_energy = current_state.energy - random.uniform(-0.05, 0.1) * self.annealer.temperature
-        new_lyapunov = current_state.lyapunov_potential - random.uniform(0.01, 0.05)
-
-        # Create a mock SoftwareState and QuantumState for the new QCState
         new_software_state = current_state.software_state.model_copy()
         new_quantum_state = current_state.quantum_state.model_copy() if current_state.quantum_state else None
 
@@ -194,11 +185,39 @@ class Orchestrator:
             software_state=new_software_state,
             quantum_state=new_quantum_state,
             energy=new_energy,
-            # For simplicity, we don't recalculate components here.
             energy_components=current_state.energy_components,
-            lyapunov_potential=new_lyapunov,
+            lyapunov_potential=new_energy,  # Base Lyapunov on new energy
             contraction_factor=current_state.contraction_factor * 0.99,
             optimization_phase=self.annealer.phase
+        )
+
+    def _create_mock_system_state(self, qc_state: QCState, iteration: int, max_iterations: int) -> SystemState:
+        """
+        Creates a mock SystemState for the Lyapunov monitor.
+
+        This simulation shows a system that is gradually improving:
+        - Failing tests decrease over time.
+        - Open obligations are resolved.
+        - There's a small chance of adding a new failing test (simulating new features).
+        """
+        progress_ratio = iteration / max_iterations
+
+        # Simulate decreasing number of failing tests
+        num_failing_tests = max(0, 10 - int(progress_ratio * 10) + random.choice([-1, 0, 1]))
+        if random.random() < 0.05: # 5% chance of adding a new feature with a failing test
+            num_failing_tests += 1
+        test_results = [TestResult(name=f"test_{i}", passed=False) for i in range(num_failing_tests)]
+        test_results += [TestResult(name=f"test_pass_{i}", passed=True) for i in range(20 - num_failing_tests)]
+
+        # Simulate decreasing number of open obligations
+        num_open_obligations = max(0, 5 - int(progress_ratio * 5))
+        proof_obligations = [ProofObligation(id=f"obl_{i}", status='open') for i in range(num_open_obligations)]
+        proof_obligations += [ProofObligation(id=f"obl_closed_{i}", status='closed') for i in range(5 - num_open_obligations)]
+
+        return SystemState(
+            test_results=test_results,
+            proof_obligations=proof_obligations,
+            approximated_energy=qc_state.energy  # Use the QCState's energy
         )
 
 

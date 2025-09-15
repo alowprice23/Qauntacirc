@@ -1,145 +1,109 @@
-# tests/unit/core/test_lyapunov_monitor.py
-
 import pytest
 import numpy as np
-from core.lyapunov_monitor import LyapunovMonitor
-from core.types import QCState, LyapunovResult
+import time
 
-# Mock QCState, we only need the lyapunov_potential for most tests
-class MockQCState:
-    def __init__(self, potential):
-        self.lyapunov_potential = potential
-        # Add other attributes to satisfy the type hint if necessary
-        self.energy = 0
-        self.energy_components = None
+from core.types import SystemState, LyapunovValue, BoundedExcursion, TestResult, ProofObligation
+from core.lyapunov_monitor import (
+    compute_lyapunov_function,
+    detect_bounded_excursions,
+    verify_martingale_convergence
+)
 
-def test_initialization():
-    monitor = LyapunovMonitor(excursion_bound=2.0, convergence_threshold=1e-5)
-    assert monitor.excursion_bound == 2.0
-    assert monitor.convergence_threshold == 1e-5
-    assert monitor.potential_history == []
-    assert monitor.min_potential is None
+class TestLyapunovFunctions:
+    def test_compute_lyapunov_function(self):
+        """
+        Tests the correct computation of the Lyapunov function.
+        """
+        state = SystemState(
+            test_results=[TestResult(name="t1", passed=False), TestResult(name="t2", passed=True)],
+            proof_obligations=[ProofObligation(id="p1", status="open"), ProofObligation(id="p2", status="closed")],
+            approximated_energy=10.0
+        )
 
-def test_reset():
-    monitor = LyapunovMonitor()
-    monitor.track_state(MockQCState(10.0))
-    monitor.track_state(MockQCState(5.0))
-    monitor.reset()
-    assert monitor.potential_history == []
-    assert monitor.state_history == []
-    assert monitor.min_potential is None
+        # With kappa=100, xi=50
+        # Expected: 10 (energy) + 100*1 (failing test) + 50*1 (open obligation) = 160
+        lyapunov_value = compute_lyapunov_function(state, kappa=100.0, xi=50.0)
 
-def test_track_state():
-    monitor = LyapunovMonitor()
-    state1 = MockQCState(10.0)
-    state2 = MockQCState(5.0)
+        assert isinstance(lyapunov_value, LyapunovValue)
+        assert lyapunov_value.total == 160.0
+        assert lyapunov_value.energy_component == 10.0
+        assert lyapunov_value.test_component == 100.0
+        assert lyapunov_value.obligation_component == 50.0
+        assert isinstance(lyapunov_value.timestamp, float)
 
-    monitor.track_state(state1)
-    assert monitor.potential_history == [10.0]
-    assert monitor.state_history == [state1]
-    assert monitor.min_potential == 10.0
+    def test_detect_bounded_excursions_no_excursion(self):
+        """
+        Tests that no excursion is detected in a steadily decreasing trajectory.
+        """
+        phi_history = [LyapunovValue(total=100 - i, energy_component=0, test_component=0, obligation_component=0, timestamp=time.time()) for i in range(100)]
+        excursions = detect_bounded_excursions(phi_history, window_size=20)
+        assert len(excursions) == 0
 
-    monitor.track_state(state2)
-    assert monitor.potential_history == [10.0, 5.0]
-    assert monitor.state_history == [state1, state2]
-    assert monitor.min_potential == 5.0
+    def test_detect_bounded_excursions_with_valid_excursion(self):
+        """
+        Tests detection of a valid, bounded excursion.
+        """
+        # Create a base decreasing trajectory
+        phi_vals = [100 - i*0.2 for i in range(150)]
+        # Inject a more pronounced excursion
+        excursion_start = 60
+        excursion_peak = 75
+        for i in range(excursion_start, excursion_peak): # Increase for 15 steps
+            phi_vals[i] += (i - excursion_start) * 0.5
+        # Recovery phase
+        for i in range(excursion_peak, excursion_peak + 20):
+             phi_vals[i] = phi_vals[excursion_peak-1] - (i - (excursion_peak-1)) * 0.4
 
-def test_track_excursion():
-    monitor = LyapunovMonitor(excursion_bound=1.5)
-    monitor.track_state(MockQCState(10.0))
-    monitor.track_state(MockQCState(8.0))
 
-    # No excursion
-    is_excursion, ratio = monitor.track_excursion()
-    assert not is_excursion
-    assert ratio == 8.0 / 8.0 # Min potential is now 8
+        phi_history = [LyapunovValue(total=v, energy_component=0, test_component=0, obligation_component=0, timestamp=time.time()) for v in phi_vals]
 
-    monitor.track_state(MockQCState(12.1)) # 12.1 / 8 = 1.5125 > 1.5
-    is_excursion, ratio = monitor.track_excursion()
-    assert is_excursion
-    assert ratio == pytest.approx(12.1 / 8.0)
+        excursions = detect_bounded_excursions(phi_history, window_size=30, excursion_tolerance=10.0)
 
-def test_verify_stability_insufficient_data():
-    monitor = LyapunovMonitor()
-    monitor.track_state(MockQCState(10.0))
-    result = monitor.verify_stability()
-    assert result.convergence_status == "insufficient_data"
-    assert result.exponent == 0.0
+        assert len(excursions) > 0
+        assert isinstance(excursions[0], BoundedExcursion)
+        assert excursions[0].magnitude < 10.0
 
-def test_verify_stability_stable_system():
-    monitor = LyapunovMonitor(convergence_threshold=1e-3)
-    # Exponentially decreasing potential -> stable
-    potentials = [10.0 * (0.9**i) for i in range(20)]
-    for p in potentials:
-        monitor.track_state(MockQCState(p))
+    def test_detect_bounded_excursions_unbounded(self):
+        """
+        Tests that an excursion exceeding the tolerance is not classified as bounded.
+        """
+        phi_vals = [100 - i for i in range(150)]
+        # Inject a large excursion
+        for i in range(50, 60):
+            phi_vals[i] += (i - 50) * 2.0 # 20.0 increase
 
-    result = monitor.verify_stability()
-    assert result.convergence_status == "stable"
-    assert result.exponent < -monitor.convergence_threshold
+        phi_history = [LyapunovValue(total=v, energy_component=0, test_component=0, obligation_component=0, timestamp=time.time()) for v in phi_vals]
+        excursions = detect_bounded_excursions(phi_history, window_size=30, excursion_tolerance=10.0)
+        assert len(excursions) == 0
 
-def test_verify_stability_unstable_system():
-    monitor = LyapunovMonitor(convergence_threshold=1e-3)
-    # Exponentially increasing potential -> unstable
-    potentials = [1.0 * (1.1**i) for i in range(20)]
-    for p in potentials:
-        monitor.track_state(MockQCState(p))
+    def test_verify_martingale_convergence_converging(self):
+        """
+        Tests that a converging (supermartingale) trajectory is correctly identified.
+        """
+        # Create a trajectory with a clear negative drift
+        np.random.seed(42)
+        phi_vals = [1000 - i*0.1 - np.random.normal(0, 0.05) for i in range(200)]
+        phi_history = [LyapunovValue(total=v, energy_component=0, test_component=0, obligation_component=0, timestamp=time.time()) for v in phi_vals]
 
-    result = monitor.verify_stability()
-    assert result.convergence_status == "unstable"
-    assert result.exponent > monitor.convergence_threshold
+        is_converging = verify_martingale_convergence(phi_history, warmup_period=50)
+        assert is_converging
 
-def test_verify_stability_marginal_system():
-    monitor = LyapunovMonitor(convergence_threshold=1e-3)
-    # Sinusoidal potential -> marginal (on average)
-    potentials = [10 + np.sin(i / 5.0) for i in range(50)]
-    for p in potentials:
-        monitor.track_state(MockQCState(p))
+    def test_verify_martingale_convergence_not_converging(self):
+        """
+        Tests that a non-converging (random walk) trajectory is correctly identified.
+        """
+        # Create a random walk trajectory
+        np.random.seed(42)
+        phi_vals = [100 + np.sum(np.random.randn(i)) for i in range(1, 201)]
+        phi_history = [LyapunovValue(total=v, energy_component=0, test_component=0, obligation_component=0, timestamp=time.time()) for v in phi_vals]
 
-    result = monitor.verify_stability()
-    assert result.convergence_status == "marginal"
-    assert abs(result.exponent) <= monitor.convergence_threshold
+        is_converging = verify_martingale_convergence(phi_history, warmup_period=50)
+        assert not is_converging
 
-def test_predict_convergence_stable():
-    monitor = LyapunovMonitor()
-    potentials = [10.0, 8.0, 6.4, 5.12] # Converging
-    for p in potentials:
-        monitor.track_state(MockQCState(p))
-
-    # Mock the stability result to be predictable
-    monitor.verify_stability = lambda: LyapunovResult(exponent=-0.2, convergence_status="stable", iterations=4)
-
-    time_to_converge = monitor.predict_convergence(target_potential=1.0)
-    assert time_to_converge is not None
-    # log(1.0 / 5.12) / -0.2 = -1.63 / -0.2 = 8.15
-    assert time_to_converge == pytest.approx(np.log(1.0 / 5.12) / -0.2)
-
-def test_predict_convergence_unstable():
-    monitor = LyapunovMonitor()
-    potentials = [10.0, 12.0, 14.4] # Diverging
-    for p in potentials:
-        monitor.track_state(MockQCState(p))
-
-    time_to_converge = monitor.predict_convergence(target_potential=1.0)
-    assert time_to_converge is None
-
-def test_verify_martingale_property_supermartingale():
-    monitor = LyapunovMonitor()
-    # A decreasing sequence is a supermartingale
-    potentials = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
-    for p in potentials:
-        monitor.track_state(MockQCState(p))
-
-    is_super, drift = monitor.verify_martingale_property()
-    assert is_super
-    assert drift < 0
-
-def test_verify_martingale_property_not_supermartingale():
-    monitor = LyapunovMonitor()
-    # An increasing sequence is not a supermartingale
-    potentials = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-    for p in potentials:
-        monitor.track_state(MockQCState(p))
-
-    is_super, drift = monitor.verify_martingale_property()
-    assert not is_super
-    assert drift > 0
+    def test_verify_martingale_convergence_insufficient_data(self):
+        """
+        Tests that the function returns False if there is not enough data.
+        """
+        phi_history = [LyapunovValue(total=100 - i, energy_component=0, test_component=0, obligation_component=0, timestamp=time.time()) for i in range(50)]
+        is_converging = verify_martingale_convergence(phi_history, warmup_period=20)
+        assert is_converging is False

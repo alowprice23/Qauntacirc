@@ -127,6 +127,37 @@ class LyapunovResult(BaseModel):
     convergence_status: str = Field(..., description="Status of the convergence test.")
     iterations: int = Field(..., description="Number of iterations performed.")
 
+class TestResult(BaseModel):
+    """Represents a single test result."""
+    name: str = Field(..., description="Name of the test.")
+    passed: bool = Field(..., description="Whether the test passed.")
+
+class ProofObligation(BaseModel):
+    """Represents a proof obligation."""
+    id: str = Field(..., description="Identifier for the proof obligation.")
+    status: str = Field(..., description="Status of the obligation (e.g., 'open', 'closed').")
+
+class SystemState(BaseModel):
+    """A simplified representation of the system state for Lyapunov analysis."""
+    test_results: List[TestResult] = Field(..., description="List of current test results.")
+    proof_obligations: List[ProofObligation] = Field(..., description="List of current proof obligations.")
+    approximated_energy: float = Field(..., description="Approximated energy of the system state.")
+
+class LyapunovValue(BaseModel):
+    """Represents a single value of the Lyapunov function at a point in time."""
+    total: float = Field(..., description="The total Lyapunov value, Φ(S).")
+    energy_component: float = Field(..., description="The contribution from the system's energy.")
+    test_component: float = Field(..., description="The contribution from failing tests.")
+    obligation_component: float = Field(..., description="The contribution from open proof obligations.")
+    timestamp: float = Field(..., description="The time at which the value was computed.")
+
+class BoundedExcursion(BaseModel):
+    """Represents a detected bounded excursion in the Lyapunov function's trajectory."""
+    start_index: int = Field(..., description="The starting index of the excursion in the history.")
+    end_index: int = Field(..., description="The ending index of the excursion in the history.")
+    magnitude: float = Field(..., description="The maximum magnitude of the excursion.")
+    cause: str = Field(..., description="The classified cause of the excursion.")
+
 class StateTransformation(BaseModel):
     """Represents a transformation from one state to another."""
     source_state_id: UUID = Field(..., description="ID of the source state.")
