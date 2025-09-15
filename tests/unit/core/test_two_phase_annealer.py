@@ -668,30 +668,25 @@ class TestLyapunovMonitoring:
         )
         
         try:
-            from core.lyapunov_monitor import LyapunovFunction
-            
-            # Test construction
-            lyapunov = LyapunovFunction(kappa=100.0, xi=50.0)
-            
-            assert lyapunov.kappa > 0, "κ must be positive"
-            assert lyapunov.xi > 0, "ξ must be positive"
+            from core.lyapunov_monitor import compute_lyapunov_function
+            from core.types import SystemState, TestResult, ProofObligation
             
             # Test Lyapunov computation
-            mock_state = Mock()
-            mock_state.energy = 10.0
-            mock_state.failing_tests = 2
-            mock_state.open_obligations = 1
+            state = SystemState(
+                test_results=[TestResult(name="t1", passed=False), TestResult(name="t2", passed=False)],
+                proof_obligations=[ProofObligation(id="p1", status="open")],
+                approximated_energy=10.0
+            )
             
-            phi = lyapunov.compute(mock_state)
-            expected_phi = 10.0 + 100.0 * 2 + 50.0 * 1  # E + κ*tests + ξ*obligations
-            assert abs(phi - expected_phi) < 1e-10, "Lyapunov computation incorrect"
-            
+            lyapunov_value = compute_lyapunov_function(state, kappa=100.0, xi=50.0)
+            expected_phi = 10.0 + 100.0 * 2 + 50.0 * 1
+            assert abs(lyapunov_value.total - expected_phi) < 1e-10
+
             # Test components
-            components = lyapunov.get_components(mock_state)
-            assert components['energy'] == 10.0, "Energy component incorrect"
-            assert components['test_penalty'] == 200.0, "Test penalty component incorrect" 
-            assert components['obligation_penalty'] == 50.0, "Obligation penalty component incorrect"
-            
+            assert lyapunov_value.energy_component == 10.0
+            assert lyapunov_value.test_component == 200.0
+            assert lyapunov_value.obligation_component == 50.0
+
         except ImportError as e:
             pytest.fail(diagnostic.format_failure_message(f"ImportError: {str(e)}"))
         except Exception as e:
