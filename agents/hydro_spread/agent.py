@@ -1,137 +1,96 @@
-# agents/hydro_spread/agent.py
-"""
-HydroSpread Agent: Models and forecasts system growth and complexity evolution.
+from typing import List, Dict, Any, Optional
+import time
+from agents.base.agent import QuantumAgent, PhysicsPrinciple, SystemState, Proposal, VerificationResult
 
-This agent analyzes historical trends to predict future complexity, allowing for
-proactive architectural decisions.
-"""
-import asyncio
-import json
-import re
-from typing import Dict, Any, Optional, List
-
-from agents.base.agent import QuantumAgent
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action, Status
-from monitoring.metrics import MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
-
-from . import prompts
-from . import ops
+# Placeholder for a real LLM client
+class LLMClient:
+    def forecast_complexity(self, history: List[float]) -> Dict:
+        return {
+            "prediction": "Complexity will increase by 15% in the next cycle.",
+            "confidence": 0.85
+        }
 
 class HydroSpreadAgent(QuantumAgent):
     """
-    The HydroSpread Agent is a quantitative analyst for software evolution.
-
-    It uses historical data to model growth patterns and forecasts future
-    increases in static energy (complexity), providing valuable insights for
-    long-term strategic planning. Its rigor is Heuristic-Inspired.
+    Physics Principle: Hydrodynamic Equations (e.g., Navier-Stokes)
+    Function: Models and forecasts system growth and complexity evolution.
     """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
-        super().__init__(
-            name="hydro_spread",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
+
+    def __init__(self, llm_client: LLMClient, forecast_interval_seconds: int = 604800): # 1 week
+        self.forecast_interval = forecast_interval_seconds
+        physics = PhysicsPrinciple(
+            equation="∂u/∂t + (u⋅∇)u = -∇p + ν∇²u + f", # Navier-Stokes
+            parameters={"forecast_interval": forecast_interval_seconds},
+            constraints=[],
+            energy_contribution=self._complexity_energy
         )
-        self.llm_client = llm_client
+        super().__init__(physics, llm_client)
 
-    async def analyze_state(self, state: State) -> Proposal:
-        """
-        Analyzes historical data and proposes a complexity forecast.
+    def guard(self, state: SystemState) -> bool:
+        """Activate periodically to generate a new forecast."""
+        last_forecast_time = getattr(state, 'last_forecast_timestamp', 0)
+        return (time.time() - last_forecast_time) > self.forecast_interval
 
-        Args:
-            state: The current state, expected to contain 'historical_states'.
+    def propose(self, state: SystemState) -> Proposal:
+        """Analyze complexity history and propose a forecast."""
+        history = getattr(state, 'complexity_history', [])
 
-        Returns:
-            A proposal containing a complexity forecast.
-        """
-        historical_states = state.get("historical_states", [])
-        if len(historical_states) < 2:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.SUCCESS, reason="Not enough historical data to analyze.")
+        if len(history) < 2:
+            return Proposal(agent_id="hydro_spread", transformation="no_op", energy_delta=0, mathematical_justification="Not enough data to forecast.")
 
-        # 1. Analyze growth patterns (simulated)
-        summary = ops.analyze_growth_patterns(historical_states)
+        forecast = self.llm.forecast_complexity(history)
 
-        # 2. Generate a forecast using the LLM
-        prompt_spec = prompts.get_prompt("forecast_complexity")
-        formatted_prompt = prompt_spec.format(historical_data_summary=summary)
-
-        llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
-
-        try:
-            forecast = ops.parse_complexity_forecast(llm_response["content"])
-            return Proposal(
-                agent_id=self.agent_id,
-                data={"complexity_forecast": forecast},
-                status=Status.SUCCESS
-            )
-        except ops.ForecastError as e:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.FAILED, reason=f"Failed to generate forecast: {e}")
-
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """Validates the complexity forecast."""
-        if proposal.status != Status.SUCCESS:
-            return False
-
-        if "complexity_forecast" not in proposal.data:
-            return True
-
-        try:
-            ops.parse_complexity_forecast(json.dumps(proposal.data["complexity_forecast"]))
-            return True
-        except ops.ForecastError as e:
-            print(f"Complexity forecast validation failed: {e}")
-            return False
-
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the proposal by packaging the forecast. The energy impact is informational.
-        """
-        if "complexity_forecast" not in proposal.data:
-            return Action(agent_id=self.agent_id, data={}, status=Status.SUCCESS)
-
-        forecast = proposal.data["complexity_forecast"]
-
-        # This agent's action is purely informational. It forecasts a future
-        # energy change but doesn't cause one directly.
-        # We can add the forecast to the action data.
-
-        # A simple heuristic to quantify the forecast
-        forecast_text = forecast.get("complexity_forecast", "")
-        match = re.search(r'(\d+)%', forecast_text)
-        if match:
-            percent_increase = float(match.group(1))
-        else:
-            percent_increase = 0.0
-
-        # This isn't a change to the current state's energy, but a prediction.
-        predicted_static_energy_increase = self.energy_calculator.config.get("w_complexity", 1.0) * percent_increase
-
-        action_data = {
-            "forecast": forecast,
-            "predicted_energy_impact": {
-                "static": predicted_static_energy_increase
-            }
-        }
-
-        return Action(
-            agent_id=self.agent_id,
-            data=action_data,
-            status=Status.SUCCESS
+        # A forecast is informational and doesn't change the current energy state.
+        return Proposal(
+            agent_id="hydro_spread",
+            transformation="complexity_forecast",
+            energy_delta=0,
+            mathematical_justification="Forecasting future complexity by modeling its evolution as a fluid dynamic system.",
+            generated_code=[forecast] # Using generated_code to hold the forecast
         )
+
+    def verify(self, proposal: Proposal) -> VerificationResult:
+        """Verify that the forecast is well-formed."""
+        if not proposal.generated_code:
+            return VerificationResult(success=True) # No-op is valid
+
+        forecast = proposal.generated_code[0]
+        is_valid = "prediction" in forecast and "confidence" in forecast
+
+        return VerificationResult(
+            success=is_valid,
+            certificates={"forecast_structure_ok": is_valid}
+        )
+
+    # Helper methods
+    def _complexity_energy(self, state: SystemState) -> float:
+        """
+        The 'energy' is the current complexity of the system.
+        """
+        history = getattr(state, 'complexity_history', [0])
+        return history[-1] if history else 0.0
+
+# Monkey-patch SystemState for this agent's needs
+@property
+def last_forecast_timestamp(self):
+    if not hasattr(self, '_last_forecast_timestamp'):
+        self._last_forecast_timestamp = 0
+    return self._last_forecast_timestamp
+
+@last_forecast_timestamp.setter
+def last_forecast_timestamp(self, value):
+    self._last_forecast_timestamp = value
+
+SystemState.last_forecast_timestamp = last_forecast_timestamp
+
+@property
+def complexity_history(self):
+    if not hasattr(self, '_complexity_history'):
+        self._complexity_history = []
+    return self._complexity_history
+
+@complexity_history.setter
+def complexity_history(self, value):
+    self._complexity_history = value
+
+SystemState.complexity_history = complexity_history

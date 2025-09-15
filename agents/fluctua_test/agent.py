@@ -1,140 +1,99 @@
-# agents/fluctua_test/agent.py
-"""
-FluctuaTest Agent: Runs chaos tests to ensure system stability under stress.
+from typing import List, Dict, Any, Optional
+import time
+from agents.base.agent import QuantumAgent, PhysicsPrinciple, SystemState, Proposal, VerificationResult
 
-This agent designs and executes chaos engineering experiments to proactively
-find weaknesses in a system's resilience.
-"""
-import asyncio
-import json
-from typing import Dict, Any, Optional, List
-
-from agents.base.agent import QuantumAgent
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import Proposal, State, Action, Status
-from monitoring.metrics import MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
-
-from . import prompts
-from . import ops
+# Placeholder for a real LLM client
+class LLMClient:
+    def design_chaos_experiment(self, state: SystemState) -> Dict:
+        return {
+            "name": "Test DB connection failure",
+            "fault": "block_db_port",
+            "probe": "check_api_503_error_rate"
+        }
 
 class FluctuaTestAgent(QuantumAgent):
     """
-    The FluctuaTest Agent is a chaos engineer.
-
-    It designs experiments to inject faults into the system and observes the
-    impact, verifying that the system degrades gracefully rather than failing
-    catastrophically. A successful experiment increases confidence in the
-
-    system's resilience, thus lowering its dynamic energy.
+    Physics Principle: Fluctuation-Dissipation Theorem
+    Function: Runs chaos tests to ensure system stability under stress.
     """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
-        super().__init__(
-            name="fluctua_test",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
+
+    def __init__(self, llm_client: LLMClient, test_interval_seconds: int = 86400):
+        self.test_interval = test_interval_seconds
+        physics = PhysicsPrinciple(
+            equation="⟨ΔAΔB⟩ = k_B T χ_{AB}", # A simplified form of the theorem
+            parameters={"test_interval": test_interval_seconds},
+            constraints=[],
+            energy_contribution=self._resilience_energy
         )
-        self.llm_client = llm_client
+        super().__init__(physics, llm_client)
 
-    async def analyze_state(self, state: State) -> Proposal:
-        """
-        Analyzes the system architecture and proposes a chaos experiment.
+    def guard(self, state: SystemState) -> bool:
+        """Activate if the system hasn't been chaos tested recently."""
+        last_test_time = getattr(state, 'last_chaos_test_timestamp', 0)
+        return (time.time() - last_test_time) > self.test_interval
 
-        Args:
-            state: The current state, containing a map of all source code files.
+    def propose(self, state: SystemState) -> Proposal:
+        """Propose a chaos engineering experiment."""
+        experiment_plan = self.llm.design_chaos_experiment(state)
 
-        Returns:
-            A proposal containing a chaos engineering experiment plan.
-        """
-        all_source_files = state.get("source_code_map", {})
-        if not all_source_files:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.SUCCESS, reason="No source code to analyze.")
+        # A chaos test doesn't directly change the system's static energy,
+        # but a successful test reduces the *uncertainty* about its resilience,
+        # which can be modeled as a reduction in dynamic energy.
+        # For the proposal, the energy delta is 0 as we haven't run it yet.
 
-        # 1. Get a description of the system architecture (simulated)
-        architecture_description = ops.extract_architecture(all_source_files)
-
-        # 2. Generate a chaos test plan using the LLM
-        prompt_spec = prompts.get_prompt("generate_chaos_test")
-        formatted_prompt = prompt_spec.format(architecture_description=architecture_description)
-
-        llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
-
-        try:
-            plan = ops.parse_chaos_experiment_plan(llm_response["content"])
-            return Proposal(
-                agent_id=self.agent_id,
-                data={"chaos_experiment_plan": plan},
-                status=Status.SUCCESS
-            )
-        except ops.ChaosTestError as e:
-            return Proposal(agent_id=self.agent_id, data={}, status=Status.FAILED, reason=f"Failed to generate chaos test plan: {e}")
-
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """Validates the chaos experiment plan."""
-        if proposal.status != Status.SUCCESS:
-            return False
-
-        if "chaos_experiment_plan" not in proposal.data:
-            return True # An empty proposal is a valid one
-
-        try:
-            ops.parse_chaos_experiment_plan(json.dumps(proposal.data["chaos_experiment_plan"]))
-            return True
-        except ops.ChaosTestError as e:
-            print(f"Chaos experiment plan validation failed: {e}")
-            return False
-
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the chaos experiment and calculates the energy impact.
-        """
-        if "chaos_experiment_plan" not in proposal.data:
-            return Action(agent_id=self.agent_id, data={}, status=Status.SUCCESS)
-
-        plan = proposal.data["chaos_experiment_plan"]
-
-        # 1. Run the fault injection (simulated)
-        injection_result = ops.inject_fault(plan["fault_to_inject"])
-
-        # 2. Determine the outcome and calculate energy impact.
-        # For this simulation, we'll assume the experiment is always successful
-        # and confirms the system's resilience.
-        experiment_succeeded = injection_result["status"] == "SUCCESS"
-
-        energy_reduction = 0
-        if experiment_succeeded:
-            # A successful test reduces uncertainty about resilience.
-            # We model this as a reduction in dynamic energy.
-            resilience_confirmed_value = 1.0
-            energy_reduction = self.energy_calculator.config.get("w_resilience", 10.0) * resilience_confirmed_value
-
-        # 3. Create the action
-        action_data = {
-            "chaos_experiment_plan": plan,
-            "experiment_result": injection_result,
-            "energy_impact": {
-                "dynamic": -energy_reduction
-            }
-        }
-
-        return Action(
-            agent_id=self.agent_id,
-            data=action_data,
-            status=Status.SUCCESS
+        return Proposal(
+            agent_id="fluctua_test",
+            transformation="chaos_experiment_proposal",
+            energy_delta=0, # No energy change until the experiment runs
+            mathematical_justification="Proposing a fluctuation (fault) to measure the system's dissipative response (resilience).",
+            deduplication_plan=[experiment_plan] # Re-using a field for the plan
         )
+
+    def verify(self, proposal: Proposal) -> VerificationResult:
+        """Verify that the proposed chaos experiment is well-formed."""
+        plan = proposal.deduplication_plan[0]
+
+        # Check if the plan has the required keys
+        is_valid = all(k in plan for k in ["name", "fault", "probe"])
+
+        return VerificationResult(
+            success=is_valid,
+            certificates={"plan_structure_ok": is_valid}
+        )
+
+    # Helper methods
+    def _resilience_energy(self, state: SystemState) -> float:
+        """
+        Calculates energy based on system resilience.
+        A more resilient system (lower verified risk) has lower energy.
+        """
+        # This is a placeholder. A real model would use metrics from past chaos tests.
+        resilience_score = getattr(state, 'resilience_score', 1.0) # Assume 1.0 is perfect
+        # Lower score = higher energy
+        return (1.0 - resilience_score) * 100.0
+
+
+# Monkey-patch SystemState for this agent's needs
+@property
+def last_chaos_test_timestamp(self):
+    if not hasattr(self, '_last_chaos_test_timestamp'):
+        self._last_chaos_test_timestamp = 0
+    return self._last_chaos_test_timestamp
+
+@last_chaos_test_timestamp.setter
+def last_chaos_test_timestamp(self, value):
+    self._last_chaos_test_timestamp = value
+
+SystemState.last_chaos_test_timestamp = last_chaos_test_timestamp
+
+@property
+def resilience_score(self):
+    if not hasattr(self, '_resilience_score'):
+        self._resilience_score = 0.5 # Default to medium resilience
+    return self._resilience_score
+
+@resilience_score.setter
+def resilience_score(self, value):
+    self._resilience_score = value
+
+SystemState.resilience_score = resilience_score

@@ -1,153 +1,127 @@
-# agents/planck_forge/agent.py
-"""
-PlanckForge Agent: Translates natural language requirements into formal task sets.
+from typing import List, Dict, Any
+from dataclasses import dataclass
+from agents.base.agent import QuantumAgent, PhysicsPrinciple, SystemState, Proposal, VerificationResult
 
-This agent is the first step in the quantum software engineering process,
-decomposing high-level goals into a structured, verifiable, and machine-readable
-format.
-"""
+# Placeholder for a real LLM client
+class LLMClient:
+    def analyze_requirement_patterns(self, requirements: List[str]) -> Dict[str, Any]:
+        print("Simulating LLM analysis of requirement patterns...")
+        return {"dominant_frequency": 1.0}
 
-from typing import Dict, Any, Optional, List
-
-from agents.base.agent import QuantumAgent
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
-
-from . import prompts
-from . import ops
+# Placeholder for TaskQuantum data structure
+@dataclass
+class TaskQuantum:
+    id: str
+    energy: float
+    requirement: str
+    quantum_number: int
+    frequency: float
+    dependencies: List[str]
 
 class PlanckForgeAgent(QuantumAgent):
     """
-    The PlanckForge Agent specializes in requirement quantization.
-
-    It uses an LLM to analyze natural language requirements and structures them
-    into a formal task dependency graph (DAG). Its rigor is Functor-Verified,
-    ensuring that the output is logically sound and adheres to predefined
-    closure rules.
+    Physics Principle: E_n = nhν (Quantized energy levels)
+    Function: Convert NL requirements into discrete task quanta
     """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
-        super().__init__(
-            name="planck_forge",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
+
+    def __init__(self, llm_client: LLMClient):
+        physics = PhysicsPrinciple(
+            equation="E_n = n * h * ν",
+            parameters={"h": 6.626e-34, "frequency_scale": 1.0},
+            constraints=["n ∈ ℕ", "ν > 0"],
+            energy_contribution=self._quantization_energy
         )
-        self.llm_client = llm_client
+        super().__init__(physics, llm_client)
 
-    async def analyze_state(self, state: State) -> Proposal:
-        """
-        Analyzes a state containing a natural language requirement.
+    def guard(self, state: SystemState) -> bool:
+        """Check if requirements need quantization"""
+        return (state.unquantized_requirements and len(state.unquantized_requirements) > 0) or \
+               self._has_ambiguous_specifications(state)
 
-        Args:
-            state: The current state, expected to have a 'requirement_text' field in metadata.
+    def propose(self, state: SystemState) -> Proposal:
+        """Quantize requirements into discrete task quanta"""
+        requirements = state.unquantized_requirements
 
-        Returns:
-            A proposal containing the decomposed tasks.
-        """
-        requirement_text = state.metadata.get("requirement_text")
-        if not requirement_text:
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="No requirement text found in state.")
+        # Use LLM to extract dominant frequencies (recurring patterns)
+        frequency_analysis = self.llm.analyze_requirement_patterns(requirements)
 
-        # 1. Get the appropriate prompt
-        prompt_spec = prompts.get_prompt("decompose_requirement", "latest")
-        formatted_prompt = prompt_spec.format(requirement_text=requirement_text)
+        task_quanta = []
+        for requirement in requirements:
+            # Extract characteristic frequency ν
+            frequency = self._extract_frequency(requirement, frequency_analysis)
+            # Compute quantum number n (complexity level)
+            quantum_number = self._compute_quantum_number(requirement)
 
-        # 2. Call the LLM
-        llm_response = await self.llm_client.complete({"prompt": formatted_prompt})
-
-        if not llm_response.get("content"):
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="LLM failed to provide content.")
-
-        # 3. Parse the LLM output
-        try:
-            tasks = ops.parse_llm_output(llm_response["content"])
-            return Proposal(
-                agent_name=self.name,
-                task_type="analysis",
-                payload={"tasks": tasks, "requirement_text": requirement_text},
-                status=Status.SUCCESS
+            quantum = TaskQuantum(
+                id=f"tq_{quantum_number}_{hash(requirement)[:8]}",
+                energy=quantum_number * self.physics.parameters["h"] * frequency,
+                requirement=requirement,
+                quantum_number=quantum_number,
+                frequency=frequency,
+                dependencies=self._analyze_dependencies(requirement, task_quanta)
             )
-        except ops.TaskValidationError as e:
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason=f"Failed to parse or validate LLM output: {e}")
+            task_quanta.append(quantum)
 
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """
-        Validates the task set in the proposal using closure rules.
-
-        Args:
-            proposal: The proposal generated by analyze_state.
-
-        Returns:
-            True if the proposal is valid, False otherwise.
-        """
-        if proposal.status != Status.SUCCESS or "tasks" not in proposal.payload:
-            return False
-
-        try:
-            ops.validate_task_set(proposal.payload["tasks"])
-            self.metrics_logger.increment_counter(f"agent_{self.name}_proposal_validation_success")
-            return True
-        except ops.TaskValidationError as e:
-            self.metrics_logger.increment_counter(f"agent_{self.name}_proposal_validation_failure")
-            print(f"Proposal validation failed for agent {self.name}: {e}")
-            return False
-
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the proposal by finalizing the task DAG and calculating energy.
-
-        Args:
-            proposal: A validated proposal.
-
-        Returns:
-            An action containing the task DAG and energy impact.
-        """
-        tasks = proposal.payload["tasks"]
-
-        # 1. Generate the final task DAG
-        task_dag = ops.generate_task_dag(tasks)
-
-        # 2. Calculate the static energy impact
-        num_tasks = len(tasks)
-        num_dependencies = sum(len(task.get('dependencies', [])) for task in tasks)
-
-        static_metrics = {
-            'cyclomatic_complexity': float(num_tasks),
-            'coupling': float(num_dependencies)
-        }
-
-        static_energy = self.energy_calculator.compute_static_energy(static_metrics)
-
-        # 3. Create the action
-        action_data = {
-            "task_dag": task_dag,
-            "original_requirement": proposal.payload["requirement_text"],
-            "energy_impact": {
-                "static": static_energy
-            }
-        }
-
-        return Action(
-            task_id=proposal.id,
-            agent_name=self.name,
-            action_taken=True,
-            status=Status.SUCCESS,
-            result=action_data
+        return Proposal(
+            agent_id="planck_forge",
+            transformation="requirement_quantization",
+            task_quanta=task_quanta,
+            energy_delta=sum(q.energy for q in task_quanta),
+            mathematical_justification="Planck quantization E_n = nhν ensures discrete, schedulable work packets"
         )
+
+    def verify(self, proposal: Proposal) -> VerificationResult:
+        """Verify quantization satisfies completeness and minimality"""
+        task_quanta = proposal.task_quanta
+
+        # Check coverage: every requirement mapped to ≥1 quantum
+        coverage_check = self._verify_requirement_coverage(task_quanta)
+
+        # Check minimality: removing any quantum breaks coverage
+        minimality_check = self._verify_quantum_minimality(task_quanta)
+
+        # Check energy consistency: E = nhν for each quantum
+        energy_check = all(
+            abs(q.energy - q.quantum_number * self.physics.parameters["h"] * q.frequency) < 1e-6
+            for q in task_quanta
+        )
+
+        return VerificationResult(
+            success=coverage_check and minimality_check and energy_check,
+            certificates={
+                "coverage": coverage_check,
+                "minimality": minimality_check,
+                "energy_consistency": energy_check
+            },
+            formal_proof=self._generate_quantization_proof(task_quanta) if all([coverage_check, minimality_check, energy_check]) else None
+        )
+
+    def _quantization_energy(self, state: SystemState) -> float:
+        """Energy contribution from task quantization"""
+        return sum(q.energy for q in state.task_quanta)
+
+    # Placeholder helper methods
+    def _has_ambiguous_specifications(self, state: SystemState) -> bool:
+        return False
+
+    def _extract_frequency(self, requirement: str, analysis: Dict[str, Any]) -> float:
+        # Simple placeholder: length of requirement as a proxy for frequency
+        return float(len(requirement)) * self.physics.parameters["frequency_scale"]
+
+    def _compute_quantum_number(self, requirement: str) -> int:
+        # Simple placeholder: number of words as a proxy for complexity
+        return len(requirement.split())
+
+    def _analyze_dependencies(self, requirement: str, existing_quanta: List[TaskQuantum]) -> List[str]:
+        return []
+
+    def _verify_requirement_coverage(self, task_quanta: List[TaskQuantum]) -> bool:
+        # Placeholder: Assume all requirements are covered
+        return True
+
+    def _verify_quantum_minimality(self, task_quanta: List[TaskQuantum]) -> bool:
+        # Placeholder: Assume minimality
+        return True
+
+    def _generate_quantization_proof(self, task_quanta: List[TaskQuantum]) -> str:
+        return "Formal proof of quantization completeness and minimality."

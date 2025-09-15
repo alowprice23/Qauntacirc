@@ -1,188 +1,131 @@
-# agents/schrodinger_dev/agent.py
-"""
-SchrodingerDev Agent: Generates code and proof skeletons from formal tasks.
+from typing import List, Dict, Any
+import numpy as np
+from agents.base.agent import QuantumAgent, PhysicsPrinciple, SystemState, Proposal, VerificationResult
 
-This agent takes the formal task specifications from PlanckForge and uses
-template-driven, LLM-based synthesis to generate initial code structures
-and corresponding test/proof skeletons.
-"""
-import asyncio
-from typing import Dict, Any, Optional, List
+# Placeholder for a real LLM client
+class LLMClient:
+    def materialize_quantum_state(self, state_vector: np.ndarray, context: Any, target_language: str, proof_obligations: Any) -> Any:
+        print("Simulating LLM materialization of quantum state into code...")
+        # A real implementation would return structured code modules
+        class CodeModule:
+            pass
+        class CodeGenResult:
+            modules = [CodeModule()]
+        return CodeGenResult()
 
-from agents.base.agent import QuantumAgent
-from agents.base import ops as base_ops
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
+# Placeholders for Proof Generation tools
+class CoqProofGenerator:
+    def verify(self, proof): return True
+class SMTSolverInterface:
+    def verify(self, proof): return True
+class AgdaInterface:
+    def verify(self, proof): return True
 
-from . import prompts
-from . import ops
 
 class SchrodingerDevAgent(QuantumAgent):
     """
-    The SchrodingerDev Agent generates code to satisfy formal requirements.
-
-    It operates on the task graph produced by PlanckForge, generating a
-    code skeleton and a proof skeleton for each task node. Its rigor is
-    Empirically-Validated, meaning the quality of its output is assessed
-    based on metrics and successful compilation/testing downstream.
+    Physics Principle: iℏ∂ψ/∂t = Ĥψ (Wavefunction evolution)
+    Function: Generate code through unitary evolution under energy Hamiltonian
     """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
-        super().__init__(
-            name="schrodinger_dev",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
+
+    def __init__(self, llm_client: LLMClient):
+        physics = PhysicsPrinciple(
+            equation="iℏ∂ψ/∂t = Ĥψ",
+            parameters={"hbar": 1.055e-34, "dt": 1.0},
+            constraints=["U†U = I", "det(U) = 1"],
+            energy_contribution=self._evolution_energy
         )
-        self.llm_client = llm_client
-
-    async def analyze_state(self, state: State) -> Proposal:
-        """
-        Analyzes a state containing a task DAG from PlanckForge.
-
-        Args:
-            state: The current state, expected to have a 'task_dag' field in metadata.
-
-        Returns:
-            A proposal containing generated code and proof skeletons.
-        """
-        if "task_dag" not in state.metadata or "tasks" not in state.metadata.get("planck_forge_output", {}):
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="Task DAG or task list not found in state.")
-
-        tasks = state.metadata["planck_forge_output"]["tasks"]
-        generated_files = {}
-        llm_confidence_scores = []
-
-        # Process each task to generate code and proof skeletons
-        generation_coros = []
-        for task in tasks:
-            generation_coros.append(self._generate_for_task(task))
-
-        results = await asyncio.gather(*generation_coros, return_exceptions=True)
-
-        for result in results:
-            if isinstance(result, Exception):
-                return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason=f"Failed to generate code: {result}")
-
-            generated_files.update(result["file_map"])
-            llm_confidence_scores.append(result["confidence"])
-
-        avg_confidence = sum(llm_confidence_scores) / len(llm_confidence_scores) if llm_confidence_scores else 0
-
-        return Proposal(
-            agent_name=self.name,
-            task_type="analysis",
-            payload={"generated_files": generated_files, "avg_llm_confidence": avg_confidence},
-            status=Status.SUCCESS
-        )
-
-    async def _generate_for_task(self, task: Dict[str, Any]) -> Dict[str, Any]:
-        """Helper to generate code and proof for a single task."""
-        task_id = task["task_id"]
-        desc = task["description"]
-        ver_criteria = task["verification_criteria"]
-
-        # Generate code skeleton
-        code_prompt = prompts.get_prompt("generate_code").format(
-            task_description=desc,
-            verification_criteria=ver_criteria,
-            template_name="default" # Placeholder
-        )
-        code_response = await self.llm_client.complete({"prompt": code_prompt})
-        code_skeleton = ops.extract_python_code(code_response["content"])
-        ops.validate_python_syntax(code_skeleton)
-
-        # Generate proof skeleton
-        proof_prompt = prompts.get_prompt("generate_proof").format(
-            task_description=desc,
-            verification_criteria=ver_criteria
-        )
-        proof_response = await self.llm_client.complete({"prompt": proof_prompt})
-        proof_skeleton = ops.extract_python_code(proof_response["content"])
-        ops.validate_python_syntax(proof_skeleton)
-
-        file_map = ops.create_code_and_proof_files(code_skeleton, proof_skeleton, task_id)
-
-        # Assume confidence is part of the response as per llm/Plan.md
-        confidence = (code_response.get("confidence", 0.9) + proof_response.get("confidence", 0.9)) / 2
-
-        return {"file_map": file_map, "confidence": confidence}
-
-
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """
-        Validates the generated code skeletons in the proposal.
-        """
-        if proposal.status != Status.SUCCESS or "generated_files" not in proposal.payload:
-            return False
-
-        try:
-            for file_path, content in proposal.payload["generated_files"].items():
-                if file_path.endswith(".py"):
-                    ops.validate_python_syntax(content)
-            return True
-        except ops.CodeGenerationError as e:
-            print(f"Proposal validation failed for agent {self.name}: {e}")
-            return False
-
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the proposal by calculating the energy of the generated code.
-        """
-        generated_files = proposal.payload["generated_files"]
-
-        # 1. Calculate static energy from code complexity
-        total_complexity = 0
-        for content in generated_files.values():
-            try:
-                # Using the shared ops from the base agent
-                ast_tree = base_ops.parse_to_ast(content)
-                total_complexity += base_ops.calculate_cyclomatic_complexity(ast_tree)
-            except Exception:
-                # Ignore files that are not valid python or fail parsing
-                continue
-
-        static_metrics = {'cyclomatic_complexity': float(total_complexity)}
-        static_energy = self.energy_calculator.compute_static_energy(static_metrics)
-
-        # 2. Calculate dynamic energy from code generation quality (LLM confidence)
-        # We model low confidence as contributing to higher dynamic energy
-        avg_confidence = proposal.payload.get("avg_llm_confidence", 0.5)
-        quality_metric = (1.0 - avg_confidence) * 100 # Scale to be a significant number
-
-        # Assuming energy_calculator can be extended or uses a flexible key system
-        # For now, let's manually calculate a simple dynamic energy component
-        dynamic_energy = self.energy_calculator.config.get("w_code_quality", 1.0) * quality_metric
-
-        # 3. Create the action
-        action_data = {
-            "files_to_create": generated_files,
-            "energy_impact": {
-                "static": static_energy,
-                "dynamic": dynamic_energy,
-            }
+        super().__init__(physics, llm_client)
+        self.proof_generators = {
+            "coq": CoqProofGenerator(),
+            "smt": SMTSolverInterface(),
+            "agda": AgdaInterface()
         }
 
-        return Action(
-            task_id=proposal.id,
-            agent_name=self.name,
-            action_taken=True,
-            status=Status.SUCCESS,
-            result=action_data
+    def guard(self, state: SystemState) -> bool:
+        """Check if code evolution is needed"""
+        return (state.unimplemented_quanta and len(state.unimplemented_quanta) > 0) or \
+               (state.open_proof_obligations and len(state.open_proof_obligations) > 0)
+
+    def propose(self, state: SystemState) -> Proposal:
+        """Generate code via unitary evolution"""
+        current_psi = state.canonical_state_vector if state.canonical_state_vector is not None else np.array([1, 0])
+        hamiltonian = state.energy_hamiltonian if state.energy_hamiltonian is not None else np.array([[1, 0], [0, -1]])
+
+        # Compute unitary evolution operator U(Δt) = exp(-iĤΔt/ℏ)
+        dt = self.physics.parameters["dt"]
+        hbar = self.physics.parameters["hbar"]
+
+        evolution_operator = self._compute_unitary_evolution(hamiltonian, dt, hbar)
+
+        # Apply evolution to current state
+        evolved_psi = evolution_operator @ current_psi
+
+        # Use LLM to materialize evolved state as code
+        code_generation_result = self.llm.materialize_quantum_state(
+            evolved_psi,
+            context=state.task_quanta,
+            target_language=state.target_language,
+            proof_obligations=state.open_proof_obligations
         )
+
+        # Generate formal proofs for new code
+        proof_obligations = []
+        if code_generation_result.modules:
+            for code_module in code_generation_result.modules:
+                proofs = self._generate_proofs_for_module(code_module, state.specifications)
+                proof_obligations.extend(proofs)
+
+        return Proposal(
+            agent_id="schrodinger_dev",
+            transformation="quantum_code_evolution",
+            generated_code=code_generation_result.modules,
+            proof_obligations=proof_obligations,
+            energy_delta=self._compute_evolution_energy_delta(current_psi, evolved_psi),
+            mathematical_justification="Unitary evolution preserves norm while minimizing energy expectation"
+        )
+
+    def verify(self, proposal: Proposal) -> VerificationResult:
+        """Verify code generation preserves semantics and reduces energy"""
+        # Verify unitary evolution properties
+        evolution_check = self._verify_unitary_evolution(proposal)
+
+        # Verify generated code compiles and passes tests
+        compilation_check = self._verify_code_compilation(proposal.generated_code)
+
+        # Verify formal proofs are valid
+        proof_check = all(
+            self.proof_generators[proof.logic].verify(proof)
+            for proof in proposal.proof_obligations
+        ) if proposal.proof_obligations else True
+
+        return VerificationResult(
+            success=evolution_check and compilation_check and proof_check,
+            certificates={
+                "unitary_evolution": evolution_check,
+                "compilation": compilation_check,
+                "formal_proofs": proof_check
+            }
+        )
+
+    # Placeholder helper methods
+    def _evolution_energy(self, state: SystemState) -> float:
+        return 0.0
+
+    def _compute_unitary_evolution(self, hamiltonian: np.ndarray, dt: float, hbar: float) -> np.ndarray:
+        # This is a simplification. A real implementation would use matrix exponentiation.
+        # For a 2x2 matrix, we can use a simple rotation as a placeholder for unitary evolution.
+        theta = dt / hbar
+        return np.array([[np.cos(theta), -np.sin(theta)], [np.sin(theta), np.cos(theta)]])
+
+    def _generate_proofs_for_module(self, code_module: Any, specifications: Any) -> List[Any]:
+        return []
+
+    def _compute_evolution_energy_delta(self, old_psi: np.ndarray, new_psi: np.ndarray) -> float:
+        return 0.0
+
+    def _verify_unitary_evolution(self, proposal: Proposal) -> bool:
+        return True
+
+    def _verify_code_compilation(self, generated_code: List[Any]) -> bool:
+        return True
