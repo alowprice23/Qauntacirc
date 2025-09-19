@@ -34,7 +34,8 @@ class QuantumState:
         }
 
 from .rate_limiter import RateLimiter
-from .validators import ResponseValidator
+from .validators import ResponseValidator, PromptSafetyValidator
+from .capability_tokens import CapabilityToken, CapabilityTokenManager
 
 logger = logging.getLogger(__name__)
 
@@ -68,18 +69,23 @@ class LLMClient(abc.ABC):
         budget_manager: Optional[Any] = None,
         rate_limiter: Optional[RateLimiter] = None,
         validator: Optional[ResponseValidator] = None,
+        prompt_safety_validator: Optional[PromptSafetyValidator] = None,
+        token_manager: Optional[CapabilityTokenManager] = None,
     ):
         self.api_key = api_key
         self.model = model
         self.budget_manager = budget_manager
         self.rate_limiter = rate_limiter or RateLimiter()
         self.validator = validator or ResponseValidator()
+        self.prompt_safety_validator = prompt_safety_validator or PromptSafetyValidator()
+        self.token_manager = token_manager
         self.total_cost = 0.0
 
     @abc.abstractmethod
     def generate(
         self,
         prompt: str,
+        capability_token: Optional[CapabilityToken] = None,
         quantum_context: Optional[QuantumState] = None,
         **kwargs: Any,
     ) -> str:
@@ -90,6 +96,7 @@ class LLMClient(abc.ABC):
     def chat(
         self,
         messages: List[Dict[str, str]],
+        capability_token: Optional[CapabilityToken] = None,
         quantum_context: Optional[QuantumState] = None,
         **kwargs: Any,
     ) -> StandardChatResponse:
@@ -126,6 +133,45 @@ class LLMClient(abc.ABC):
         if self.rate_limiter:
             self.rate_limiter.wait()
 
+    def _validate_request(self, prompt: str, capability_token: Optional[CapabilityToken], tool_name: str):
+        """Performs all pre-request validation."""
+        # 1. Validate token
+        if self.token_manager and capability_token:
+            if not self.token_manager.validate_tool_access(capability_token, tool_name):
+                raise PermissionError(f"Invalid or insufficient capability token for '{tool_name}'")
+
+        # 2. Validate input
+        if self.prompt_safety_validator:
+            input_validation = self.prompt_safety_validator.validate_input(prompt)
+            if not input_validation.safe:
+                raise ValueError(f"Input validation failed: {input_validation.reason}")
+
+    def _validate_response(self, response: Any) -> Any:
+        """Performs all post-request validation."""
+        # 3. Validate output
+        if self.prompt_safety_validator:
+            output_content = ""
+            if isinstance(response, str):
+                output_content = response
+            elif isinstance(response, dict) and "choices" in response:
+                try:
+                    output_content = response["choices"][0]["message"]["content"]
+                except (KeyError, IndexError):
+                    output_content = str(response)
+            else:
+                output_content = str(response)
+
+            output_validation = self.prompt_safety_validator.validate_output(output_content)
+            if not output_validation.safe:
+                logger.error(f"Output validation failed: {output_validation.reason}")
+                raise ValueError(f"Output validation failed: {output_validation.reason}")
+
+        if not self.validator.validate(response):
+            logger.warning("Response failed validation.")
+            return None
+
+        return response
+
     def _handle_request(self, request_func, *args, **kwargs):
         """Generic request handler with retries and rate limiting."""
         self._apply_rate_limit()
@@ -133,12 +179,7 @@ class LLMClient(abc.ABC):
         for attempt in range(max_retries):
             try:
                 response = request_func(*args, **kwargs)
-                if self.validator.validate(response):
-                    return response
-                else:
-                    logger.warning("Response failed validation.")
-                    # Potentially raise an exception or handle differently
-                    return None
+                return self._validate_response(response)
             except Exception as e:
                 logger.error(f"API call failed on attempt {attempt + 1}: {e}")
                 if attempt < max_retries - 1:

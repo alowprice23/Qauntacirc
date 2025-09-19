@@ -1,3 +1,47 @@
+# CONCEPTUAL INTEGRATION FOR CAPABILITY TOKENS:
+#
+# The Orchestrator would be responsible for managing the lifecycle of agents
+# and their access to secure resources like the LLM. This would involve
+# integrating with the CapabilityTokenManager to issue and manage tokens.
+#
+# 1. Initialization:
+#    - An instance of CapabilityTokenManager would be created here, using a
+#      securely managed secret key.
+#    - `self.token_manager = CapabilityTokenManager(secret_key=os.environ.get("TOKEN_SECRET_KEY"))`
+#
+# 2. Agent Creation:
+#    - When a new agent is instantiated, the Orchestrator would determine its
+#      required permissions (e.g., based on agent type or task).
+#    - It would then use the token manager to issue a token for the agent.
+#
+#      def create_agent(self, agent_id: str, agent_type: str):
+#          if agent_type == "planner":
+#              allowed_tools = ["llm:chat", "llm:generate"]
+#          else:
+#              allowed_tools = ["llm:chat"]
+#
+#          token = self.token_manager.issue_token(
+#              agent_id=agent_id,
+#              requested_tools=allowed_tools
+#          )
+#
+#          # The agent would be initialized with this token
+#          agent = SomeAgentClass(agent_id=agent_id, capability_token=token)
+#          return agent
+#
+# 3. LLM Client Interaction:
+#    - The agent would then pass its token to the LLMClient for every call.
+#
+#      class SomeAgentClass:
+#          def do_work(self):
+#              self.llm_client.chat(
+#                  messages=[...],
+#                  capability_token=self.capability_token
+#              )
+#
+# This ensures that agent access to the LLM is securely managed, bounded
+# by permissions, and revocable.
+
 import time
 import numpy as np
 import scipy.stats as stats

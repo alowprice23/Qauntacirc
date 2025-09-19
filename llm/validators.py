@@ -1,9 +1,22 @@
 import logging
+import re
+import json
 from typing import Any, Dict, Optional
+from dataclasses import dataclass
+
+import jsonschema
 
 from .client import QuantumState
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ValidationResult:
+    safe: bool
+    reason: Optional[str] = None
+    risk_level: Optional[str] = None
+
 
 class ResponseValidator:
     """
@@ -93,3 +106,81 @@ class ResponseValidator:
             return False
 
         return True
+
+
+class PromptSafetyValidator:
+    """Validates LLM inputs and outputs for safety"""
+
+    def __init__(self):
+        self.injection_patterns = [
+            r"ignore\s+previous\s+instructions",
+            r"forget\s+everything\s+above",
+            r"system\s*:\s*you\s+are\s+now",
+            r"jailbreak\s+mode",
+            r"developer\s+mode"
+        ]
+
+    def validate_input(self, prompt: str, context: Optional[str] = "") -> ValidationResult:
+        """Validate input prompt for injection attempts"""
+        # Check for injection patterns
+        for pattern in self.injection_patterns:
+            if re.search(pattern, prompt.lower()):
+                return ValidationResult(
+                    safe=False,
+                    reason=f"Potential injection pattern detected: {pattern}",
+                    risk_level="HIGH"
+                )
+
+        # Check prompt length limits
+        if len(prompt) > 50000:  # Conservative limit
+            return ValidationResult(
+                safe=False,
+                reason="Prompt exceeds maximum length",
+                risk_level="MEDIUM"
+            )
+
+        # Validate context separation
+        if context and "```" in prompt and "```" in context:
+            # Ensure no context bleeding
+            context_markers = prompt.count("```")
+            if context_markers % 2 != 0:
+                return ValidationResult(
+                    safe=False,
+                    reason="Unclosed code blocks may allow context confusion",
+                    risk_level="MEDIUM"
+                )
+
+        return ValidationResult(safe=True)
+
+    def validate_output(self, llm_output: str, expected_schema: Optional[Dict] = None) -> ValidationResult:
+        """Validate LLM output against schema and safety constraints"""
+        # JSON schema validation if provided
+        if expected_schema:
+            try:
+                parsed = json.loads(llm_output)
+                jsonschema.validate(instance=parsed, schema=expected_schema)
+            except (json.JSONDecodeError, jsonschema.ValidationError) as e:
+                return ValidationResult(
+                    safe=False,
+                    reason=f"Schema validation failed: {str(e)}",
+                    risk_level="HIGH"
+                )
+
+        # Check for data exfiltration attempts
+        sensitive_patterns = [
+            r"api[_-]?key",
+            r"password",
+            r"secret",
+            r"token",
+            r"credential"
+        ]
+
+        for pattern in sensitive_patterns:
+            if re.search(pattern, llm_output.lower()):
+                return ValidationResult(
+                    safe=False,
+                    reason=f"Potential sensitive data exposure: {pattern}",
+                    risk_level="HIGH"
+                )
+
+        return ValidationResult(safe=True)
