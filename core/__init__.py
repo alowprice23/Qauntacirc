@@ -12,7 +12,6 @@ the computational engine, state representation, and optimization algorithms.
 from .energy_calculator import EnergyCalculator
 from .lyapunov_monitor import LyapunovMonitor
 from .two_phase_annealer import TwoPhaseAnnealer
-from .orchestrator import Orchestrator
 from .closure_validator import ClosureValidator
 from .agent_pool import AgentPool
 
@@ -53,7 +52,6 @@ from .exceptions import (
 # Define the public API of the 'core' module
 __all__ = [
     # Core Components
-    "Orchestrator",
     "EnergyCalculator",
     "LyapunovMonitor",
     "TwoPhaseAnnealer",

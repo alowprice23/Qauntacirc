@@ -85,3 +85,20 @@ class ClosureRuleCondition(Condition):
         This is typically a post-condition.
         """
         return self.rule.is_satisfied(state, action)
+
+from pydantic import BaseModel
+from core.types import PhysicsResult
+
+class OptimizationProposal(BaseModel):
+    barrier_id: str
+    optimization_type: str
+    code_changes: Any
+    estimated_speedup: float
+    tunneling_probability: float
+    risk_assessment: Any
+
+class Proposal(PhysicsResult):
+    agent_id: str
+    transformation: str
+    optimizations: List[OptimizationProposal]
+    mathematical_justification: str

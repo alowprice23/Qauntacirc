@@ -1,154 +1,143 @@
-import math
-from typing import List
+import numpy as np
+from typing import List, Any, Dict
 
-from agents.base.agent import PhysicsBasedAgent
-from core.types import (
-    SystemState, PerformanceProfile, TunnelingResult, TunnelingOpportunity,
-    AppliedOptimization, PerformanceBarrier, Observable
-)
-from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
-from common.utils import PerformanceBarrierDetector, TunnelingOptimizer
+from agents.base.quantum_agent import QuantumAgent
+from agents.base.contracts import Proposal, OptimizationProposal
+from monitoring.performance import PerformanceProfiler, PerformanceProfile, PerformanceBottleneck
+from math_utils.optimization import BarrierEscapeOptimizer, OptimizationCandidate
+from core.types import SystemState, PerformanceBarrier
+from llm.client import LLMClient
 
-class TunnelFixAgent(PhysicsBasedAgent):
-    def __init__(self):
-        """
-        Initializes the TunnelFixAgent.
-        This agent uses quantum tunneling to find performance optimizations.
-        """
+class TunnelFixAgent(QuantumAgent):
+    """
+    Physics Principle: T ∝ e^(-2κd) (Quantum Tunneling)
+    Function: Escape performance local minima through barrier penetration
+    """
+
+    def __init__(self, llm_client: LLMClient):
         super().__init__(
             physics_principle="Quantum Tunneling",
-            mathematical_formula="T ∝ e^(-2κd)"
+            mathematical_formula="T = A * exp(-2 * κ * d)"
         )
-        self.barrier_detector = PerformanceBarrierDetector()
-        self.optimization_engine = TunnelingOptimizer()
-        self.min_tunneling_threshold = 1e-4
+        self.llm_client = llm_client
+        self.profiler = PerformanceProfiler()
+        self.optimizer = BarrierEscapeOptimizer()
 
-    def apply_physics_principle(self, system_state: SystemState) -> TunnelingResult:
-        """
-        Identify and tunnel through performance barriers.
-        Requires a `PerformanceProfile` in `system_state.metadata`.
-        """
-        metadata = system_state.metadata.get("tunnel_fix_input", {})
-        profile_data = metadata.get("performance_profile")
+    def _has_performance_bottlenecks(self, state: SystemState) -> bool:
+        """Check for performance bottlenecks."""
+        # Placeholder: In a real implementation, this would involve more complex checks.
+        profile = self.profiler.profile_system(state)
+        return len(profile.bottlenecks) > 0
 
-        if not profile_data:
-            raise ValueError("TunnelFixAgent requires a 'performance_profile' in metadata.")
+    def _sla_violations_detected(self, state: SystemState) -> bool:
+        """Check for Service Level Agreement (SLA) violations."""
+        # Placeholder: This would check against predefined SLA metrics.
+        return False
 
-        profile = PerformanceProfile(**profile_data)
+    def guard(self, state: SystemState) -> bool:
+        """Check if performance optimization is needed."""
+        return (self._has_performance_bottlenecks(state) or
+                self._sla_violations_detected(state))
 
-        barriers = self.barrier_detector.identify_barriers(profile)
+    def _identify_performance_barriers(self, profile: PerformanceProfile) -> List[PerformanceBarrier]:
+        """Identifies performance barriers from a performance profile."""
+        barriers = []
+        for bottleneck in profile.bottlenecks:
+            barriers.append(PerformanceBarrier(
+                id=f"{bottleneck.type}-{bottleneck.location}",
+                height=bottleneck.severity,
+                width=len(bottleneck.description) / 100.0, # Heuristic for width
+                location=bottleneck.location
+            ))
+        return barriers
 
-        opportunities = []
+    def _assess_optimization_risk(self, candidate: OptimizationCandidate) -> Any:
+        """Assesses the risk of an optimization candidate."""
+        # Placeholder for risk assessment logic
+        return {"risk_level": "low", "confidence": 0.9}
+
+    def propose(self, state: SystemState) -> Proposal:
+        """Propose performance optimizations via barrier escape."""
+        performance_profile = self.profiler.profile_system(state)
+        barriers = self._identify_performance_barriers(performance_profile)
+        optimization_proposals = []
+
         for barrier in barriers:
-            κ = self._compute_barrier_curvature(barrier)
-            d = barrier.width
+            # The prompt uses state.system_temperature, which doesn't exist. Using a constant.
+            system_temperature = 1.0
 
-            if κ is None or d is None or κ == float('inf'): continue
+            # The prompt uses barrier.performance_delta and barrier.complexity_factor
+            # which do not exist on PerformanceBarrier. Using height and width instead.
+            barrier_height = barrier.height
+            barrier_width = barrier.width
 
-            tunneling_prob = math.exp(-2 * κ * d)
-
-            if tunneling_prob > self.min_tunneling_threshold:
-                opp = TunnelingOpportunity(
-                    barrier=barrier,
-                    probability=tunneling_prob,
-                    optimization_moves=self._generate_tunneling_moves(barrier, tunneling_prob),
-                    expected_improvement=barrier.height * tunneling_prob
-                )
-                if self._validate_tunneling_move(opp):
-                    opportunities.append(opp)
-
-        applied_optimizations = []
-        for opp in sorted(opportunities, key=lambda x: x.expected_improvement, reverse=True):
-            result = self.optimization_engine.apply_tunneling_optimization(opp)
-            if result:
-                applied_optimizations.append(result)
-
-        return TunnelingResult(
-            barriers_detected=len(barriers),
-            tunneling_opportunities=len(opportunities),
-            applied_optimizations=applied_optimizations,
-            total_performance_gain=sum(opt.performance_gain for opt in applied_optimizations)
-        )
-
-    def _compute_barrier_curvature(self, barrier: PerformanceBarrier) -> float:
-        """Computes barrier curvature (κ) as a heuristic for its 'stiffness'."""
-        if barrier.width > 0:
-            return barrier.height / (barrier.width ** 2)
-        return float('inf')
-
-    def _generate_tunneling_moves(self, barrier: PerformanceBarrier, probability: float) -> List[str]:
-        """Generates descriptive strings for the optimization moves."""
-        return [
-            f"Attempt refactor on '{barrier.location}' to overcome barrier "
-            f"(height={barrier.height:.2f}) with tunneling prob={probability:.4f}."
-        ]
-
-    def _validate_tunneling_move(self, opportunity: TunnelingOpportunity) -> bool:
-        """Validates that a tunneling opportunity is worth considering."""
-        return opportunity.expected_improvement > 0 and opportunity.probability > 0
-
-    def measure_observable(self, system_state: SystemState) -> Observable:
-        """
-        Measures the total expected performance gain from all identified
-        tunneling opportunities.
-        """
-        try:
-            result = self.apply_physics_principle(system_state)
-            total_gain = result.total_performance_gain
-            return Observable(
-                name="total_expected_performance_gain",
-                value=total_gain,
-                unit="performance_units"
+            tunneling_prob = self._compute_tunneling_probability(
+                barrier_height,
+                barrier_width,
+                system_temperature
             )
-        except (ValueError, TypeError):
-            return Observable(name="total_expected_performance_gain", value=0.0, unit="undefined")
 
-    def verify_conservation_laws(self, before: SystemState, after: SystemState) -> bool:
-        """
-        For TunnelFix, energy (inverse performance) must not increase.
-        """
-        energy_before = before.energy_breakdown.total
-        energy_after = after.energy_breakdown.total
-        return energy_after <= energy_before + 1e-9 # Allow for float tolerance
+            if tunneling_prob > 0.1:  # 10% threshold
+                candidates = self.optimizer.generate_optimization_candidates(barrier, state)
+                for candidate in candidates:
+                    estimated_improvement = self.optimizer.estimate_performance_gain(candidate, barrier)
+                    optimization_proposals.append(OptimizationProposal(
+                        barrier_id=barrier.id,
+                        optimization_type=candidate.type,
+                        code_changes=candidate.changes,
+                        estimated_speedup=estimated_improvement,
+                        tunneling_probability=tunneling_prob,
+                        risk_assessment=self._assess_optimization_risk(candidate)
+                    ))
 
-    def generate_certificate(self, before_state: SystemState, after_state: SystemState, result: TunnelingResult) -> AgentCertificate:
-        """Generates a mathematical certificate for the tunneling operation."""
-
-        energy_before = before_state.energy_breakdown.total
-        energy_after = after_state.energy_breakdown.total
-        conservation_error = energy_after - energy_before
-
-        conservation_proof = ConservationProof(
-            energy_before=energy_before,
-            energy_after=energy_after,
-            conservation_error=conservation_error,
-            mathematical_justification=f"TunnelFix is an optimization agent; energy should not increase. ΔE = {conservation_error:.2e}"
-        )
-
-        convergence_proof = ConvergenceProof(
-            lyapunov_before=0, lyapunov_after=0, descent_amount=0, convergence_rate=0,
-            justification="N/A: TunnelFix is a single-step analysis, not a convergent process."
-        )
-
-        stability_proof = StabilityProof(
-            description="Optimization Stability", is_stable=True,
-            details="The agent only proposes optimizations that are validated and have a positive expected gain.",
-            justification="The agent's operation is considered stable as it does not destabilize the system's performance."
-        )
-
-        performance_guarantee = PerformanceGuarantee(
-            description="Total Performance Gain",
-            bound=f"Total performance gain of {result.total_performance_gain:.4f} units.",
-            verified=True,
-            justification="Sum of gains from all applied optimizations."
-        )
-
-        return AgentCertificate(
+        return Proposal(
             agent_id="tunnel_fix",
-            physics_principle=self.physics_principle,
-            mathematical_formula=self.formula,
-            conservation_proof=conservation_proof,
-            convergence_proof=convergence_proof,
-            stability_proof=stability_proof,
-            performance_guarantee=performance_guarantee
+            transformation="barrier_escape_optimization",
+            optimizations=optimization_proposals,
+            mathematical_justification="Quantum tunneling enables barrier escape: T ∝ e^(-2κd)"
         )
+
+    def _compute_tunneling_probability(self,
+                                     barrier_height: float,
+                                     barrier_width: float,
+                                     temperature: float) -> float:
+        """
+        Compute tunneling probability using quantum mechanics formula
+        T = A * exp(-2κd) where κ = √(2m(V-E))/ℏ
+        """
+        if temperature <= 0:
+            return 0.0
+
+        # The prompt uses self.physics.parameters["transmission_coeff"], which doesn't exist.
+        # Using a constant value.
+        transmission_coeff = 1.0
+
+        kappa = np.sqrt(2 * barrier_height / temperature)
+        distance = barrier_width
+
+        tunneling_prob = transmission_coeff * np.exp(-2 * kappa * distance)
+
+        return min(1.0, tunneling_prob)
+
+    def apply_physics_principle(self, system_state: SystemState) -> Any:
+        """
+        This agent uses guard and propose, so this method is not used.
+        It needs to be implemented because it's an abstract method in the base class.
+        """
+        if self.guard(system_state):
+            return self.propose(system_state)
+        return None
+
+    def measure_observable(self, system_state: SystemState) -> Any:
+        """
+        This method is not used for this agent.
+        It needs to be implemented because it's an abstract method in the base class.
+        """
+        return None
+
+    def generate_certificate(self, before_state: SystemState, after_state: SystemState, result: Any) -> Any:
+        """
+        This method is not used for this agent.
+        It needs to be implemented because it's an abstract method in the base class.
+        """
+        return None

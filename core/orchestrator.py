@@ -1,7 +1,12 @@
 from typing import List, Dict
 import random
 
-from agents.base.agent import PhysicsBasedAgent
+from typing import List, TYPE_CHECKING
+if TYPE_CHECKING:
+    from agents.base.agent import PhysicsBasedAgent
+
+from agents.base.quantum_agent import QuantumAgent
+from agents.base.contracts import Proposal
 from core.energy_calculator import EnergyCalculator
 from core.lyapunov_monitor import LyapunovMonitor
 from core.closure_validator import ClosureValidator
@@ -23,7 +28,7 @@ class Orchestrator:
     """
     def __init__(
         self,
-        agents: List[PhysicsBasedAgent],
+        agents: List['PhysicsBasedAgent'],
         energy_calculator: EnergyCalculator,
         lyapunov_monitor: LyapunovMonitor,
         closure_validator: ClosureValidator,
@@ -37,7 +42,7 @@ class Orchestrator:
         self.agent_selector_strategy = "round-robin"
         self.last_agent_idx = -1
 
-    def select_agent(self) -> PhysicsBasedAgent:
+    def select_agent(self) -> 'PhysicsBasedAgent':
         """Selects an agent to run based on the chosen strategy."""
         if self.agent_selector_strategy == "round-robin":
             self.last_agent_idx = (self.last_agent_idx + 1) % len(self.agents)
@@ -52,7 +57,20 @@ class Orchestrator:
         agent = self.select_agent()
         print(f"Orchestrator: Selected agent -> {agent.__class__.__name__}")
 
-        result = agent.apply_physics_principle(current_state.model_copy(deep=True))
+        result = None
+        if isinstance(agent, QuantumAgent):
+            if agent.guard(current_state.model_copy(deep=True)):
+                result = agent.propose(current_state.model_copy(deep=True))
+        else:
+            result = agent.apply_physics_principle(current_state.model_copy(deep=True))
+
+        if result is None:
+            return SystemEvolution(
+                initial_state=current_state,
+                final_state=current_state,
+                actions=[],
+                energy_delta=0
+            )
 
         new_state = await self._apply_result_to_state(current_state, result, agent)
 
@@ -60,7 +78,8 @@ class Orchestrator:
         new_state.lyapunov_metrics = self.lyapunov_monitor.compute(new_state)
 
         certificate = agent.generate_certificate(current_state, new_state, result)
-        print(f"CERTIFICATE [{agent.__class__.__name__}]: {certificate.performance_guarantee.description} - Verified: {certificate.performance_guarantee.verified}")
+        if certificate:
+            print(f"CERTIFICATE [{agent.__class__.__name__}]: {certificate.performance_guarantee.description} - Verified: {certificate.performance_guarantee.verified}")
 
         evolution = SystemEvolution(
             initial_state=current_state,
@@ -82,7 +101,7 @@ class Orchestrator:
             reports.append(report)
         return reports
 
-    async def _apply_result_to_state(self, current_state: SystemState, result: PhysicsResult, agent: PhysicsBasedAgent) -> SystemState:
+    async def _apply_result_to_state(self, current_state: SystemState, result: PhysicsResult, agent: 'PhysicsBasedAgent') -> SystemState:
         """
         Applies the result from an agent's operation to the system state.
         This function dispatches to a handler based on the result type.
@@ -90,6 +109,12 @@ class Orchestrator:
         new_state = current_state.model_copy(deep=True)
 
         match result:
+            case Proposal():
+                print(f"Orchestrator: Applying Proposal result from {result.agent_id}.")
+                total_estimated_speedup = sum(opt.estimated_speedup for opt in result.optimizations)
+                # Simulate performance gain by reducing complexity energy
+                new_state.energy_breakdown.complexity -= total_estimated_speedup
+                print(f"Reduced complexity energy by {total_estimated_speedup}")
             case QuantizedTasks():
                 print(f"Orchestrator: Applying QuantizedTasks result.")
                 for q in result.quanta:
