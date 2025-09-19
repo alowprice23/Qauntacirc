@@ -11,6 +11,9 @@ from core.types import (
     ResourceAllocation, FlowOptimization, ChaosTestResult,
     GrowthPrediction, DependencyOptimization, PhysicsResult, Obligation, ObligationType, ObligationStatus
 )
+from core.chaos_types import ChaosPlanResult
+from monitoring.resilience import ResilienceMonitor
+import asyncio
 from communication.protocol import AgentCommunicationProtocol
 
 class Orchestrator:
@@ -42,7 +45,7 @@ class Orchestrator:
         else:
             return random.choice(self.agents)
 
-    def evolve_system(self, current_state: SystemState) -> SystemEvolution:
+    async def evolve_system(self, current_state: SystemState) -> SystemEvolution:
         """
         Executes one full cycle of the system's evolution by selecting and running an agent.
         """
@@ -51,7 +54,7 @@ class Orchestrator:
 
         result = agent.apply_physics_principle(current_state.model_copy(deep=True))
 
-        new_state = self._apply_result_to_state(current_state, result, agent)
+        new_state = await self._apply_result_to_state(current_state, result, agent)
 
         new_state.energy_breakdown = self.energy_calculator.compute_total_energy(new_state)
         new_state.lyapunov_metrics = self.lyapunov_monitor.compute(new_state)
@@ -69,7 +72,17 @@ class Orchestrator:
         self.verify_evolution(evolution)
         return evolution
 
-    def _apply_result_to_state(self, current_state: SystemState, result: PhysicsResult, agent: PhysicsBasedAgent) -> SystemState:
+    async def _execute_chaos_plan(self, monitor: ResilienceMonitor, plan: "ChaosTestingPlan"):
+        """Executes the scenarios in a chaos testing plan."""
+        reports = []
+        # The execution order is currently a random permutation of indices.
+        for i in plan.execution_order:
+            scenario = plan.scenarios[i]
+            report = await monitor.monitor_chaos_scenario(scenario)
+            reports.append(report)
+        return reports
+
+    async def _apply_result_to_state(self, current_state: SystemState, result: PhysicsResult, agent: PhysicsBasedAgent) -> SystemState:
         """
         Applies the result from an agent's operation to the system state.
         This function dispatches to a handler based on the result type.
@@ -112,9 +125,11 @@ class Orchestrator:
             case FlowOptimization():
                 print(f"Orchestrator: Applying FlowOptimization result.")
                 new_state.metadata["flow_optimization_plan"] = result.model_dump()
-            case ChaosTestResult():
-                print(f"Orchestrator: Applying ChaosTestResult.")
-                new_state.metadata.setdefault("chaos_tests", []).extend(result.scenarios)
+            case ChaosPlanResult():
+                print(f"Orchestrator: Applying ChaosPlanResult.")
+                resilience_monitor = ResilienceMonitor()
+                reports = await self._execute_chaos_plan(resilience_monitor, result.chaos_plan)
+                new_state.metadata["chaos_reports"] = [r.model_dump() for r in reports]
             case GrowthPrediction():
                 print(f"Orchestrator: Applying GrowthPrediction result.")
                 new_state.metadata["growth_prediction"] = result.model_dump()
