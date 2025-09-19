@@ -47,9 +47,11 @@ import numpy as np
 import scipy.stats as stats
 from typing import List
 from core.types import TelemetryData, RiskUpdate, CoverageReport, ErrorEvent
+from memory.constellation import ConstellationMemory
 
 class Orchestrator:
     def __init__(self):
+        self.memory = ConstellationMemory()
         self.current_empirical_risk = 0.0
         # CUSUM parameters
         self.cusum = 0.0
@@ -161,3 +163,13 @@ class Orchestrator:
             coverage_adjusted_bound = 1.0
 
         return coverage_adjusted_bound + residual_risk
+
+    def get_agent_context(self, agent_id: str, task_description: str) -> str:
+        """
+        Retrieves relevant context for an agent from the ConstellationMemory.
+        """
+        context_data = self.memory.generate_llm_context(
+            agent_id=agent_id,
+            current_task=task_description
+        )
+        return context_data["formatted_context"]
