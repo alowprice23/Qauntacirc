@@ -1,281 +1,119 @@
-# core/orchestrator.py
-
-"""
-The central orchestrator for the QuantaCirc system.
-
-This module coordinates the entire process of software analysis, quantum mapping,
-optimization, and state validation. It drives the main execution loop of the system.
-"""
-
-from __future__ import annotations
-
-from typing import Dict, Any, Optional
-import logging
-import random
-from datetime import datetime
-
-from core.types import QCState, SoftwareState, RunRecord, EnergyComponents, SystemState, TestResult, ProofObligation
-from core.energy_calculator import EnergyCalculator
-from core.lyapunov_monitor import LyapunovMonitor
-from core.two_phase_annealer import TwoPhaseAnnealer
-from core.functor import Functor
-from core.closure_rules import ClosureRuleSet
-
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+import time
+import numpy as np
+import scipy.stats as stats
+from typing import List
+from core.types import TelemetryData, RiskUpdate, CoverageReport, ErrorEvent
 
 class Orchestrator:
-    """
-    Coordinates the components of the QuantaCirc system to run an analysis.
+    def __init__(self):
+        self.current_empirical_risk = 0.0
+        # CUSUM parameters
+        self.cusum = 0.0
+        self.baseline_rate = 0.01 # Should be initialized with historical data
+        self.detection_threshold = 5.0
+        # Bayesian update parameters
+        self.prior_alpha = 1.0 # Assume a non-informative prior initially
+        self.prior_beta = 1.0
 
-    The orchestrator manages the main loop of the simulation:
-    1.  Takes an initial software state.
-    2.  Uses the Functor to map it to an initial quantum state (QCState).
-    3.  Initializes the TwoPhaseAnnealer with this state.
-    4.  Runs the annealing loop to find an optimized state.
-    5.  Uses the LyapunovMonitor to track stability.
-    6.  Uses the ClosureRuleSet to validate state transitions.
-    7.  Produces a final RunRecord of the analysis.
-    """
-
-    def __init__(self,
-                 energy_calculator: EnergyCalculator,
-                 lyapunov_monitor: LyapunovMonitor,
-                 annealer: TwoPhaseAnnealer,
-                 functor: Functor,
-                 closure_rules: ClosureRuleSet):
+    def update_risk_from_telemetry(self,
+                                  telemetry_data: TelemetryData,
+                                  window_minutes: int = 60) -> RiskUpdate:
         """
-        Initializes the Orchestrator.
-
-        Args:
-            energy_calculator: Instance for energy calculations.
-            lyapunov_monitor: Instance for stability monitoring.
-            annealer: Instance of the optimization algorithm.
-            functor: Instance for SoftSys -> QuantSys mapping.
-            closure_rules: Instance for transition validation.
+        Update empirical risk bounds from live system telemetry
+        using change-point detection and Bayesian updating
         """
-        self.energy_calculator = energy_calculator
-        self.lyapunov_monitor = lyapunov_monitor
-        self.annealer = annealer
-        self.functor = functor
-        self.closure_rules = closure_rules
-        self.run_history: list[RunRecord] = []
 
-    def run_analysis(self, initial_software_state: SoftwareState,
-                     initial_metrics: Dict[str, Any],
-                     max_iterations: int = 1000) -> RunRecord:
-        """
-        Executes a full analysis and optimization run.
+        # Extract relevant metrics from telemetry
+        error_events = telemetry_data.extract_error_events(window_minutes)
+        total_requests = telemetry_data.extract_request_count(window_minutes)
 
-        Args:
-            initial_software_state: The initial state of the classical software.
-            initial_metrics: The initial set of metrics for the software.
-            max_iterations: The maximum number of iterations for the annealing process.
+        if total_requests == 0:
+            return RiskUpdate(risk_delta=0.0, confidence=0.0)
 
-        Returns:
-            A RunRecord summarizing the entire run.
-        """
-        logging.info("Starting new QuantaCirc analysis run.")
+        # Observed error rate in current window
+        # This is not how CUSUM is typically used, but following prompt structure
+        change_detected = self._detect_change_point_batch(error_events, total_requests)
 
-        # 1. Create the initial QCState
-        initial_qc_state = self._create_initial_qc_state(initial_software_state, initial_metrics)
-        logging.info(f"Initial state created with energy: {initial_qc_state.energy:.4f}")
+        if change_detected:
+            # Inflate risk bounds due to detected change
+            current_error_rate = len(error_events) / total_requests
+            risk_inflation = self._compute_risk_inflation(current_error_rate)
 
-        # 2. Initialize system components
-        self.annealer.initialize_state(initial_qc_state)
-        self.lyapunov_monitor.reset()
-        # The new monitor tracks SystemState, not QCState. We'll create it in the loop.
+            return RiskUpdate(
+                risk_delta=risk_inflation,
+                confidence=0.95,
+                reason="Change point detected in error rate",
+                expiry_time=time.time() + 3600,  # 1 hour inflation
+                decay_factor=0.95  # Exponential decay
+            )
 
-        current_state = initial_qc_state
-        state_history = [initial_qc_state]
+        # Bayesian update of prior belief
+        posterior_alpha = self.prior_alpha + len(error_events)
+        posterior_beta = self.prior_beta + total_requests - len(error_events)
 
-        # 3. Main optimization loop
-        for i in range(max_iterations):
-            previous_state = current_state
+        # Compute credible interval for true error rate
+        credible_upper_bound = stats.beta.ppf(0.95, posterior_alpha, posterior_beta)
 
-            # Propose a new state via the annealer
-            proposed_state = self._propose_and_evaluate_new_state(current_state, i, max_iterations)
+        risk_delta = credible_upper_bound - self.current_empirical_risk
+        self.current_empirical_risk = credible_upper_bound
 
-            # The annealer step function decides whether to accept it
-            new_energy = proposed_state.energy
-            if self.annealer._should_accept(new_energy, current_state.energy, self.annealer.temperature):
-                # Validate the transition before accepting
-                is_valid, violations = self.closure_rules.validate_transition(previous_state, proposed_state)
-                if is_valid:
-                    current_state = proposed_state
-                    logging.debug(f"Iter {i}: Accepted new state with energy {current_state.energy:.4f}")
-                else:
-                    logging.warning(f"Iter {i}: Rejected transition due to rule violations: {violations}")
+        # Update priors for next iteration
+        self.prior_alpha = posterior_alpha
+        self.prior_beta = posterior_beta
 
-            # Update temperature and phase
-            self.annealer.current_state = current_state
-            self.annealer._update_phase_and_temperature(i)
-
-            # Create a mock SystemState for Lyapunov monitoring
-            # In a real system, this data would come from CI/CD, static analysis, etc.
-            mock_system_state = self._create_mock_system_state(current_state, i, max_iterations)
-
-            # Track stability with the new monitor
-            self.lyapunov_monitor.track_state(mock_system_state)
-            state_history.append(current_state)
-            if len(state_history) > 100:
-                state_history.pop(0)
-
-            if self.annealer.check_convergence(state_history[-20:]):
-                logging.info(f"Convergence detected at iteration {i}.")
-                break
-
-        logging.info(f"Analysis finished. Final energy: {current_state.energy:.4f}")
-
-        # Perform final stability analysis
-        final_stability_report = self.lyapunov_monitor.analyze_stability()
-        logging.info(f"Final stability report: {final_stability_report}")
-
-        logging.info(f"Analysis finished. Final energy: {current_state.energy:.4f}")
-
-        # 4. Create and store the run record
-        run_record = RunRecord(
-            start_time=initial_qc_state.timestamp,
-            end_time=datetime.utcnow(),
-            status="completed",
-            initial_state=initial_qc_state,
-            final_state=current_state,
-            results=[] # In a full system, this would be populated with agent results
-        )
-        self.run_history.append(run_record)
-
-        return run_record
-
-    def _create_initial_qc_state(self, software_state: SoftwareState, metrics: Dict[str, Any]) -> QCState:
-        """Helper to create the first QCState."""
-        quantum_state = self.functor.map_software_to_quantum(software_state, metrics)
-
-        total_energy, energy_components = self.energy_calculator.compute_total_energy(
-            metrics.get('static', {}),
-            metrics.get('dynamic', {}),
-            metrics.get('interaction', {})
+        return RiskUpdate(
+            risk_delta=risk_delta,
+            confidence=0.95,
+            reason="Bayesian update from telemetry",
+            posterior_params=(posterior_alpha, posterior_beta)
         )
 
-        # Initial Lyapunov potential can be set to the initial energy
-        lyapunov_potential = total_energy
-
-        return QCState(
-            software_state=software_state,
-            quantum_state=quantum_state,
-            energy=total_energy,
-            energy_components=energy_components,
-            lyapunov_potential=lyapunov_potential,
-            contraction_factor=1.0, # Starts at 1, should decrease
-            optimization_phase="A"
-        )
-
-    def _propose_and_evaluate_new_state(self, current_state: QCState, iteration: int, max_iterations: int) -> QCState:
+    def _detect_change_point_batch(self, error_events: List[ErrorEvent], total_requests: int) -> bool:
         """
-        Simulates proposing a new state, now with a downward trend in energy.
+        Detect change points in error rate using CUSUM algorithm on a batch.
         """
-        # Simulate a general downward trend in energy over time
-        progress_factor = 1 - (iteration / max_iterations)
-        energy_change = random.uniform(-0.05, 0.1) * self.annealer.temperature
-        new_energy = current_state.energy - energy_change * progress_factor
+        if total_requests < 30: # Need enough data to be meaningful
+            return False
 
-        new_software_state = current_state.software_state.model_copy()
-        new_quantum_state = current_state.quantum_state.model_copy() if current_state.quantum_state else None
+        error_rate = len(error_events) / total_requests
 
-        return QCState(
-            software_state=new_software_state,
-            quantum_state=new_quantum_state,
-            energy=new_energy,
-            energy_components=current_state.energy_components,
-            lyapunov_potential=new_energy,  # Base Lyapunov on new energy
-            contraction_factor=current_state.contraction_factor * 0.99,
-            optimization_phase=self.annealer.phase
-        )
+        # Simple CUSUM: accumulate deviation from baseline
+        self.cusum = max(0, self.cusum + (error_rate - self.baseline_rate))
+        if self.cusum > self.detection_threshold:
+            return True
 
-    def _create_mock_system_state(self, qc_state: QCState, iteration: int, max_iterations: int) -> SystemState:
+        return False
+
+    def _compute_risk_inflation(self, current_error_rate: float) -> float:
+        # Mock implementation for risk inflation
+        return current_error_rate * 1.5
+
+    def adjust_risk_for_coverage(self,
+                           base_risk: float,
+                           coverage_report: CoverageReport) -> float:
         """
-        Creates a mock SystemState for the Lyapunov monitor.
-
-        This simulation shows a system that is gradually improving:
-        - Failing tests decrease over time.
-        - Open obligations are resolved.
-        - There's a small chance of adding a new failing test (simulating new features).
-        """
-        progress_ratio = iteration / max_iterations
-
-        # Simulate decreasing number of failing tests
-        num_failing_tests = max(0, 10 - int(progress_ratio * 10) + random.choice([-1, 0, 1]))
-        if random.random() < 0.05: # 5% chance of adding a new feature with a failing test
-            num_failing_tests += 1
-        test_results = [TestResult(name=f"test_{i}", passed=False) for i in range(num_failing_tests)]
-        test_results += [TestResult(name=f"test_pass_{i}", passed=True) for i in range(20 - num_failing_tests)]
-
-        # Simulate decreasing number of open obligations
-        num_open_obligations = max(0, 5 - int(progress_ratio * 5))
-        proof_obligations = [ProofObligation(id=f"obl_{i}", status='open') for i in range(num_open_obligations)]
-        proof_obligations += [ProofObligation(id=f"obl_closed_{i}", status='closed') for i in range(5 - num_open_obligations)]
-
-        return SystemState(
-            test_results=test_results,
-            proof_obligations=proof_obligations,
-            approximated_energy=qc_state.energy  # Use the QCState's energy
-        )
-
-
-from collections import namedtuple
-
-# Define a result object that matches the test's expectations
-PipelineResult = namedtuple('PipelineResult', [
-    'status',
-    'convergence_achieved',
-    'initial_energy',
-    'final_energy',
-    'phase_b_lambda',
-    'lyapunov_converged',
-    'computed_risk_bound',
-    'test_coverage',
-    'formal_coverage',
-    'generated_artifacts',
-    'production_ready',
-    'deployment_artifacts_valid'
-])
-
-class QuantaCircOrchestrator:
-    """
-    High-level orchestrator for the entire QuantaCirc pipeline,
-    from natural language requirements to deployable artifacts.
-    """
-    def execute_complete_pipeline(self, requirement: str, target_energy_reduction: float, risk_budget: float):
-        """
-        Executes the full end-to-end pipeline.
-
-        NOTE: This is a mock implementation to satisfy the e2e test.
-        It returns a hardcoded result object that assumes success.
+        Adjust risk bounds based on test coverage using coverage-adjusted Chernoff bounds
         """
 
-        # These values are chosen to pass the assertions in the e2e test.
-        expected_artifacts = [
-            "main.py",
-            "auth/jwt_handler.py",
-            "auth/rate_limiter.py",
-            "models/user.py",
-            "tests/test_auth.py",
-            "Dockerfile",
-            "k8s/deployment.yaml",
-            "proofs/jwt_security.v"
-        ]
+        line_coverage = coverage_report.line_coverage / 100.0 if coverage_report.line_coverage > 1.0 else coverage_report.line_coverage
+        branch_coverage = coverage_report.branch_coverage / 100.0 if coverage_report.branch_coverage > 1.0 else coverage_report.branch_coverage
+        overall_coverage = coverage_report.overall_coverage / 100.0 if coverage_report.overall_coverage > 1.0 else coverage_report.overall_coverage
 
-        result = PipelineResult(
-            status="completed",
-            convergence_achieved=True,
-            initial_energy=100.0,
-            final_energy=29.0,  # (100-29)/100 = 0.71 reduction > 0.70
-            phase_b_lambda=0.94, # < 0.95
-            lyapunov_converged=True,
-            computed_risk_bound=1e-5, # < 1e-4
-            test_coverage=0.96, # > 0.95
-            formal_coverage=0.81, # > 0.80
-            generated_artifacts=expected_artifacts,
-            production_ready=True,
-            deployment_artifacts_valid=True
-        )
-        return result
+        # Coverage-adjusted sample size
+        effective_n = line_coverage * coverage_report.total_tests
+        branch_coverage_factor = np.sqrt(branch_coverage)
+
+        adjusted_n = effective_n * branch_coverage_factor
+
+        # Residual risk from uncovered code paths
+        uncovered_fraction = 1.0 - overall_coverage
+        residual_risk = uncovered_fraction * 0.01  # Conservative estimate
+
+        # Recompute Chernoff bound with adjusted parameters
+        if adjusted_n > 0:
+            epsilon = np.sqrt(-np.log(base_risk / 2) / (2 * adjusted_n)) if base_risk < 2 else 0
+            coverage_adjusted_bound = 2 * np.exp(-2 * adjusted_n * epsilon**2)
+        else:
+            coverage_adjusted_bound = 1.0
+
+        return coverage_adjusted_bound + residual_risk

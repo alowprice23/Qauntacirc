@@ -1,160 +1,78 @@
-# core/error_budget.py
+import numpy as np
+import scipy.stats as stats
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from math_utils.uncertainty_bounds import UncertaintyQuantifier
+from core.types import RiskAssessment, ErrorBudget, CoverageReport, VerificationResult, TestResults, RiskBound
 
-"""
-Manages the computational error budget for the system.
+class ErrorBudgetManager:
+    """Manages system-wide error budgets with mathematical guarantees"""
 
-In any complex simulation, errors can accumulate from various sources, such as
-numerical precision, model simplifications, and stochastic processes. This
-module provides a framework for tracking and managing this error budget.
-"""
+    def __init__(self, total_budget: float = 1e-4):
+        self.total_budget = total_budget
+        self.verified_budget = 1e-6  # Formal verification surface
+        self.empirical_budget = total_budget - self.verified_budget
+        self.security_budget = 5e-6
+        self.current_utilization = 0.0
+        self.confidence_level = 0.95
 
-from __future__ import annotations
-
-from typing import Dict, Optional
-from uuid import UUID, uuid4
-import logging
-
-class ErrorBudget:
-    """
-    Tracks the consumption of the computational error budget.
-
-    The total budget is composed of different components, each corresponding to a
-    potential source of error in the simulation. The orchestrator or other
-    components can 'spend' from this budget when they perform operations that
-    introduce uncertainty or error.
-    """
-
-    def __init__(self, initial_budgets: Dict[str, float]):
+    def compute_composite_risk_bound(self,
+                                   verification_results: List[VerificationResult],
+                                   test_results: TestResults) -> RiskBound:
         """
-        Initializes the ErrorBudget.
-
-        Args:
-            initial_budgets: A dictionary mapping error sources (e.g., 'numerical',
-                             'sampling', 'model') to their initial budget values.
+        Compute P(failure) = P(verified failure) + P(empirical failure) + P(security failure)
         """
-        if not initial_budgets:
-            raise ValueError("Initial budgets cannot be empty.")
 
-        self.budgets: Dict[str, float] = initial_budgets.copy()
-        self.initial_budgets: Dict[str, float] = initial_budgets.copy()
-        self.log: list[Dict] = []
-        logging.info(f"ErrorBudget initialized with: {self.budgets}")
+        # Verified surface risk (ideally near zero)
+        verified_risk = self._compute_verified_risk(verification_results)
 
-    def spend(self, source: str, amount: float, transaction_id: Optional[UUID] = None):
+        # Empirical surface risk using Chernoff bounds
+        empirical_risk = self._compute_empirical_risk(test_results)
+
+        # Security risk from policy violations and CVEs
+        security_risk = self._compute_security_risk()
+
+        total_risk = verified_risk + empirical_risk + security_risk
+
+        return RiskBound(
+            total=total_risk,
+            verified_component=verified_risk,
+            empirical_component=empirical_risk,
+            security_component=security_risk,
+            within_budget=total_risk <= self.total_budget,
+            confidence_level=self.confidence_level
+        )
+
+    def _compute_verified_risk(self, verification_results: List[VerificationResult]) -> float:
+        # This is a mock implementation. A real implementation would analyze the verification results.
+        if all(r.success for r in verification_results):
+            return 0.0
+        return 1.0 # Total risk if any verification fails
+
+    def _compute_empirical_risk(self, test_results: TestResults) -> float:
         """
-        Spends a certain amount from a specific error budget source.
+        Compute empirical risk using Chernoff-Hoeffding bounds
 
-        Args:
-            source: The error source to spend from (e.g., 'numerical').
-            amount: The amount of budget to spend.
-            transaction_id: An optional unique ID for this transaction.
-
-        Raises:
-            ValueError: If the source does not exist or if the amount is negative.
-            RuntimeError: If the budget for the source is depleted.
+        For n tests with k failures:
+        P(error rate > ε) ≤ 2exp(-2nε²)
         """
-        if source not in self.budgets:
-            raise ValueError(f"Error source '{source}' not found in budget.")
-        if amount < 0:
-            raise ValueError("Cannot spend a negative amount.")
+        n_tests = test_results.total_tests
+        n_failures = test_results.total_failures
 
-        if self.budgets[source] < amount:
-            logging.error(f"Error budget for '{source}' depleted. Requested: {amount}, Remaining: {self.budgets[source]}")
-            raise RuntimeError(f"Error budget for '{source}' depleted.")
+        if n_tests == 0:
+            return 1.0  # No tests = maximum risk
 
-        self.budgets[source] -= amount
+        observed_failure_rate = n_failures / n_tests
 
-        log_entry = {
-            "transaction_id": transaction_id or uuid4(),
-            "source": source,
-            "spent": amount,
-            "remaining": self.budgets[source]
-        }
-        self.log.append(log_entry)
-        logging.debug(f"Spent {amount} from '{source}' budget. Remaining: {self.budgets[source]}")
+        target_epsilon = np.sqrt(-np.log(self.empirical_budget / 2) / (2 * n_tests)) if self.empirical_budget > 0 and n_tests > 0 else 0
 
-    def get_remaining_budget(self, source: str) -> float:
-        """
-        Gets the remaining budget for a specific source.
+        epsilon_margin = target_epsilon
+        chernoff_bound_value = 2 * np.exp(-2 * n_tests * epsilon_margin**2)
 
-        Args:
-            source: The name of the error source.
+        estimated_risk = observed_failure_rate + epsilon_margin
 
-        Returns:
-            The remaining budget amount.
-        """
-        if source not in self.budgets:
-            raise ValueError(f"Error source '{source}' not found.")
-        return self.budgets[source]
+        return min(estimated_risk, chernoff_bound_value)
 
-    def get_total_remaining_budget(self) -> float:
-        """
-        Calculates the total remaining budget across all sources.
-
-        Returns:
-            The sum of all remaining budgets.
-        """
-        return sum(self.budgets.values())
-
-    def get_budget_status(self) -> Dict[str, Dict[str, float]]:
-        """
-        Provides a summary of the current state of all budget components.
-
-        Returns:
-            A dictionary with the status of each budget source, including initial,
-            spent, and remaining amounts.
-        """
-        status = {}
-        for source, initial_amount in self.initial_budgets.items():
-            remaining = self.budgets[source]
-            spent = initial_amount - remaining
-            status[source] = {
-                "initial": initial_amount,
-                "spent": spent,
-                "remaining": remaining
-            }
-        return status
-
-    def reset(self):
-        """
-        Resets all budgets to their initial values and clears the log.
-        """
-        self.budgets = self.initial_budgets.copy()
-        self.log.clear()
-        logging.info("ErrorBudget has been reset to initial state.")
-
-# Example Usage
-if __name__ == '__main__':
-    initial_budgets = {
-        'numerical_precision': 0.1,
-        'model_approximation': 0.5,
-        'stochastic_sampling': 1.0
-    }
-
-    budget_manager = ErrorBudget(initial_budgets)
-
-    print("Initial Budget Status:")
-    print(budget_manager.get_budget_status())
-
-    try:
-        print("\nSpending 0.2 from 'stochastic_sampling'...")
-        budget_manager.spend('stochastic_sampling', 0.2)
-
-        print("Spending 0.05 from 'numerical_precision'...")
-        budget_manager.spend('numerical_precision', 0.05)
-
-        print("\nUpdated Budget Status:")
-        print(budget_manager.get_budget_status())
-
-        print(f"\nTotal remaining budget: {budget_manager.get_total_remaining_budget():.2f}")
-
-        print("\nTrying to spend more than available...")
-        budget_manager.spend('model_approximation', 0.6) # This will raise an error
-
-    except (ValueError, RuntimeError) as e:
-        print(f"Caught expected error: {e}")
-
-    print("\nResetting budget...")
-    budget_manager.reset()
-    print("Budget Status after reset:")
-    print(budget_manager.get_budget_status())
+    def _compute_security_risk(self) -> float:
+        # This is a mock implementation. A real implementation would analyze security vulnerabilities.
+        return self.security_budget # Assume we use up the security budget

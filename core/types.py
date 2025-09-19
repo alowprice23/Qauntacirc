@@ -121,6 +121,111 @@ class AgentResult(BaseModel):
 # Mathematical & Verification Types
 # ==============================================================================
 
+class LogicType(str, Enum):
+    """Enumeration of supported verification logics."""
+    COQ = "coq"
+    SMT_Z3 = "smt_z3"
+    SMT_CVC5 = "smt_cvc5"
+    UPPAAL = "uppaal"
+    PRISM = "prism"
+
+class PropertySpecification(BaseModel):
+    """Specification of a property to be verified."""
+    id: str
+    description: str
+    category: str
+
+class VerificationResult(BaseModel):
+    """Result of a verification task for a single logic."""
+    success: bool
+    proves_termination: Optional[bool] = None
+    error: Optional[str] = None
+
+    @staticmethod
+    def failed(error: str) -> 'VerificationResult':
+        return VerificationResult(success=False, error=error)
+
+class ComposedVerificationResult(BaseModel):
+    """Result of a composed verification task."""
+    success: bool
+    logic_results: Dict[LogicType, VerificationResult]
+    composed_certificate: Optional[str] = None
+    soundness_proof: Optional[str] = None
+    error: Optional[str] = None
+
+    @staticmethod
+    def failed(error: str, logic_results: Dict[LogicType, VerificationResult]) -> 'ComposedVerificationResult':
+        return ComposedVerificationResult(success=False, error=error, logic_results=logic_results)
+
+class ConsistencyCheck(BaseModel):
+    """Result of a cross-logic consistency check."""
+    valid: bool
+    error: Optional[str] = None
+
+class CoverageReport(BaseModel):
+    """Report on verification coverage."""
+    overall_coverage: float
+    by_category: Dict[str, float]
+    by_logic: Dict[LogicType, float]
+    uncovered_properties: List[PropertySpecification]
+    line_coverage: Optional[float] = 1.0
+    branch_coverage: Optional[float] = 1.0
+    total_tests: Optional[int] = 0
+
+class TestResults(BaseModel):
+    """Summary of test execution results."""
+    total_tests: int
+    total_failures: int
+
+class RiskBound(BaseModel):
+    """Computed risk bound for the system."""
+    total: float
+    verified_component: float
+    empirical_component: float
+    security_component: float
+    within_budget: bool
+    confidence_level: float = 0.95
+
+class RiskAssessment(BaseModel):
+    """A full risk assessment for the system."""
+    id: UUID = Field(default_factory=uuid4)
+    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    risk_bound: RiskBound
+    coverage_report: CoverageReport
+
+class ErrorBudget(BaseModel):
+    """Specification of an error budget."""
+    total_budget: float
+    verified_budget: float
+    empirical_budget: float
+    security_budget: float
+
+class ErrorEvent(BaseModel):
+    """Represents a single error event from telemetry."""
+    timestamp: float
+    error_type: str
+
+class TelemetryData(BaseModel):
+    """Represents live telemetry data."""
+    events: List[Union[ErrorEvent, Dict]]
+
+    def extract_error_events(self, window_minutes: int) -> List[ErrorEvent]:
+        # Mock implementation
+        return []
+
+    def extract_request_count(self, window_minutes: int) -> int:
+        # Mock implementation
+        return 0
+
+class RiskUpdate(BaseModel):
+    """Represents an update to the risk assessment."""
+    risk_delta: float
+    confidence: float
+    reason: Optional[str] = None
+    expiry_time: Optional[float] = None
+    decay_factor: Optional[float] = None
+    posterior_params: Optional[tuple[float, float]] = None
+
 class LyapunovResult(BaseModel):
     """Result of a Lyapunov stability analysis."""
     exponent: float = Field(..., description="Calculated Lyapunov exponent.")
@@ -142,6 +247,8 @@ class SystemState(BaseModel):
     test_results: List[TestResult] = Field(..., description="List of current test results.")
     proof_obligations: List[ProofObligation] = Field(..., description="List of current proof obligations.")
     approximated_energy: float = Field(..., description="Approximated energy of the system state.")
+    verification_results: List['ComposedVerificationResult'] = Field([], description="List of verification results.")
+
 
 class LyapunovValue(BaseModel):
     """Represents a single value of the Lyapunov function at a point in time."""

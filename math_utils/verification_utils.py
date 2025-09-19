@@ -2,6 +2,7 @@ import numpy as np
 from . import lipschitz as lip
 from . import contractive_maps as cmaps
 from . import lyapunov as lyap
+from core.types import SystemState, CoverageReport, PropertySpecification, LogicType
 
 class ConvergenceCertificate:
     """
@@ -94,3 +95,87 @@ def verify_smoothness(grad_func, space, samples=100):
             max_l = l_val
 
     return max_l, "Estimated Lipschitz constant for the gradient."
+
+
+def compute_verification_coverage(system_state: SystemState) -> CoverageReport:
+    """
+    Compute verification coverage across all logics
+
+    Coverage = (Verified Properties) / (Total Properties) by category
+    """
+
+    total_properties = classify_system_properties(system_state)
+    verified_properties = {category: [] for category in total_properties.keys()}
+
+    # Analyze verification results by property category
+    for result in system_state.verification_results:
+        if result.success and result.logic_results:
+            property_category = classify_property(result.property_spec)
+            verified_properties[property_category].append(result.property_spec)
+
+    # Compute coverage percentages
+    coverage_by_category = {}
+    for category, props in total_properties.items():
+        total = len(props)
+        verified = len(verified_properties.get(category, []))
+        coverage_by_category[category] = (verified / total * 100) if total > 0 else 100.0
+
+    # Compute overall formal coverage
+    total_all = sum(len(props) for props in total_properties.values())
+    verified_all = sum(len(props) for props in verified_properties.values())
+    overall_coverage = (verified_all / total_all * 100) if total_all > 0 else 100.0
+
+    return CoverageReport(
+        overall_coverage=overall_coverage,
+        by_category=coverage_by_category,
+        by_logic=compute_coverage_by_logic(system_state.verification_results),
+        uncovered_properties=compute_uncovered_properties(total_properties, verified_properties)
+    )
+
+def classify_system_properties(system_state: SystemState) -> dict:
+    """Classify all properties required by the system state."""
+    # Mock implementation: In a real system, this would inspect the code,
+    # requirements, etc., to determine all properties that need verification.
+    return {
+        "functional": [PropertySpecification(id="p1", description="desc1", category="functional")],
+        "performance": [PropertySpecification(id="p2", description="desc2", category="performance")]
+    }
+
+def classify_property(property_spec: PropertySpecification) -> str:
+    """Classify a single property spec into a category."""
+    # Mock implementation
+    return property_spec.category
+
+def compute_coverage_by_logic(verification_results: list) -> dict:
+    """Compute coverage percentage for each logic used."""
+    # Mock implementation
+    logic_coverage = {logic.value: 0 for logic in LogicType}
+    if not verification_results:
+        return logic_coverage
+
+    logic_counts = {logic.value: 0 for logic in LogicType}
+    logic_success = {logic.value: 0 for logic in LogicType}
+
+    for result in verification_results:
+        if result.logic_results:
+            for logic, res in result.logic_results.items():
+                logic_counts[logic.value] += 1
+                if res.success:
+                    logic_success[logic.value] += 1
+
+    for logic_str in logic_coverage.keys():
+        if logic_counts[logic_str] > 0:
+            logic_coverage[logic_str] = (logic_success[logic_str] / logic_counts[logic_str]) * 100
+
+    return logic_coverage
+
+def compute_uncovered_properties(total_properties: dict, verified_properties: dict) -> list:
+    """Determine which properties from the total set have not been verified."""
+    uncovered = []
+    verified_ids = {prop.id for cat_props in verified_properties.values() for prop in cat_props}
+
+    for category, props in total_properties.items():
+        for prop in props:
+            if prop.id not in verified_ids:
+                uncovered.append(prop)
+    return uncovered
