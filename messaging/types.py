@@ -24,3 +24,12 @@ class Message:
     id: UUID = field(default_factory=uuid4)
     timestamp: VectorClock = field(default_factory=VectorClock)
     metadata: Dict[str, Any] = field(default_factory=dict)
+
+@dataclass
+class AgentMessage:
+    id: str
+    correlation_id: str
+    agent_id: str
+    energy_delta: float
+    phi_delta: float
+    content: Dict[str, Any]

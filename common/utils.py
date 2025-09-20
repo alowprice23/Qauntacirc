@@ -140,6 +140,20 @@ class HydrodynamicGrowthModeler:
         """Placeholder for a complex modeling utility."""
         return []
 
+# --- Core Simulation Utilities ---
+
+def apply_proposal(state: SystemState, proposal: Any) -> SystemState:
+    """Placeholder for applying a proposal to a state."""
+    # In a real implementation, this would deeply modify the state based on the proposal.
+    print(f"Warning: apply_proposal is a placeholder and does not modify state.")
+    return state.model_copy(deep=True)
+
+def compute_total_energy(state: SystemState) -> float:
+    """Placeholder for computing the total energy of a state."""
+    # This would likely call the EnergyCalculator.
+    return state.energy_breakdown.total if state.energy_breakdown else 0.0
+
+
 # --- LondonLink Utilities ---
 
 class LondonCoefficientCalculator:

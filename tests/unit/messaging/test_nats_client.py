@@ -11,34 +11,34 @@ from tests.conftest import TestDiagnostic
 import asyncio
 from unittest.mock import AsyncMock, patch, PropertyMock, MagicMock
 from uuid import uuid4
-from core.types import QCState, SoftwareState, EnergyBreakdown, LyapunovMetrics
+from core.types import SystemState, SoftwareState, EnergyBreakdown, LyapunovMetrics
 from nats.aio.msg import Msg
 
-from messaging.nats_client import NATSClient
+from messaging.nats_client import NATSMessageBus
 
-class TestNatsClient:
-    def test_nats_client_import(self):
+class TestNatsMessageBus:
+    def test_nats_message_bus_import(self):
         diagnostic = TestDiagnostic(
-            component_name="NATS Client",
-            expected_behavior="The NATS client module should be importable.",
+            component_name="NATS Message Bus",
+            expected_behavior="The NATS message bus module should be importable.",
             failure_indicators=["ImportError"],
-            build_instructions=["Create the NATS client in 'messaging/nats_client.py'"],
+            build_instructions=["Create the NATS message bus in 'messaging/nats_client.py'"],
             mathematical_requirements=["Guaranteed delivery (P(delivery) = 1)"],
             acceptance_criteria={"import": "successful"},
             physics_principle="Causal information propagation",
             related_components=["Publisher", "Subscriber", "StreamManager"]
         )
         try:
-            from messaging.nats_client import NATSClient as NatsClient
+            from messaging.nats_client import NATSMessageBus as NatsBus
         except ImportError as e:
             pytest.fail(diagnostic.format_failure_message(f"ImportError: {str(e)}"))
         except Exception as e:
             pytest.fail(diagnostic.format_failure_message(str(e)))
 
 @pytest.mark.asyncio
-async def test_nats_client_connect_disconnect():
+async def test_nats_message_bus_connect_disconnect():
     """
-    Tests that the NATS client can connect and disconnect successfully.
+    Tests that the NATS message bus can connect and disconnect successfully.
     """
     mock_nats_client = AsyncMock()
     type(mock_nats_client).is_connected = PropertyMock(return_value=True)
@@ -46,7 +46,7 @@ async def test_nats_client_connect_disconnect():
     mock_nats_client.connected_url.netloc = "mock-server"
 
     with patch('nats.connect', new=AsyncMock(return_value=mock_nats_client)) as mock_connect:
-        client = NATSClient(server_urls="nats://localhost:4222")
+        client = NATSMessageBus(server_urls="nats://localhost:4222")
         await client.connect()
 
         assert client.nc is not None
@@ -69,12 +69,12 @@ async def test_publish_with_quantum_context():
     mock_nats_client.jetstream = MagicMock(return_value=mock_js_context)
 
     with patch('nats.connect', new=AsyncMock(return_value=mock_nats_client)):
-        client = NATSClient(server_urls="nats://localhost:4222")
+        client = NATSMessageBus(server_urls="nats://localhost:4222")
         await client.connect()
 
         energy_breakdown = EnergyBreakdown(total=1.0, complexity=1.0, coupling=0.0, constraint=0.0, debt=0.0)
         lyapunov_metrics = LyapunovMetrics(phi=1.0, energy=1.0, test_penalty=0.0, obligation_penalty=0.0)
-        qc_state = QCState(
+        qc_state = SystemState(
             id=uuid4(),
             software_state=SoftwareState(component_versions={}, config_hashes={}),
             energy_breakdown=energy_breakdown,
@@ -108,12 +108,12 @@ async def test_subscribe_and_receive_message():
     mock_nats_client.jetstream = MagicMock(return_value=mock_js_context)
 
     with patch('nats.connect', new=AsyncMock(return_value=mock_nats_client)):
-        client = NATSClient(server_urls="nats://localhost:4222")
+        client = NATSMessageBus(server_urls="nats://localhost:4222")
         await client.connect()
 
         energy_breakdown = EnergyBreakdown(total=1.0, complexity=1.0, coupling=0.0, constraint=0.0, debt=0.0)
         lyapunov_metrics = LyapunovMetrics(phi=1.0, energy=1.0, test_penalty=0.0, obligation_penalty=0.0)
-        qc_state = QCState(
+        qc_state = SystemState(
             id=uuid4(),
             software_state=SoftwareState(component_versions={}, config_hashes={}),
             energy_breakdown=energy_breakdown,
@@ -160,4 +160,4 @@ async def test_subscribe_and_receive_message():
         assert received_msg.data == test_msg.data
         assert received_context is not None
         assert received_context.id == qc_state.id
-        assert received_context.energy == qc_state.energy
+        assert received_context.lyapunov_metrics.energy == qc_state.lyapunov_metrics.energy

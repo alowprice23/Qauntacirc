@@ -22,6 +22,7 @@ class FluctuaTestAgent(PhysicsBasedAgent):
         """
         # The physics principle is kept for consistency with the base class.
         super().__init__(
+            agent_name="fluctua_test",
             physics_principle="Fluctuation-Dissipation Theorem",
             mathematical_formula="S_AA(ω) = (2kT/ω)Im(χ_AA(ω))"
         )
@@ -89,7 +90,13 @@ class FluctuaTestAgent(PhysicsBasedAgent):
                 recovery_procedures=self._prepare_recovery_procedures(selected_scenarios)
             )
 
-        return ChaosPlanResult(chaos_plan=chaos_plan)
+        return ChaosPlanResult(
+            chaos_plan=chaos_plan,
+            success=True,
+            agent_name=self.agent_name,
+            physics_principle=self.physics_principle,
+            message="Chaos testing plan generated successfully."
+        )
 
     def measure_observable(self, system_state: SystemState) -> Observable:
         """Measures an observable related to system stability. Placeholder."""

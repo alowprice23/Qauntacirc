@@ -10,20 +10,18 @@ def test_orchestrator_instantiation():
     # Create mock objects for all dependencies
     mock_energy_calculator = Mock()
     mock_lyapunov_monitor = Mock()
-    mock_annealer = Mock()
-    mock_functor = Mock()
-    mock_closure_rules = Mock()
-    mock_agent_router = Mock()
+    mock_closure_validator = Mock()
+    mock_closure_rule_engine = Mock()
+    mock_comm_protocol = Mock()
 
     # Instantiate the Orchestrator
     orchestrator = Orchestrator(
         agents=[Mock()],
         energy_calculator=mock_energy_calculator,
         lyapunov_monitor=mock_lyapunov_monitor,
-        annealer=mock_annealer,
-        functor=mock_functor,
-        closure_rules=mock_closure_rules,
-        agent_router=mock_agent_router,
+        closure_validator=mock_closure_validator,
+        closure_rule_engine=mock_closure_rule_engine,
+        communication_protocol=mock_comm_protocol,
     )
 
     # Assert that the object was created and is of the correct type
@@ -32,7 +30,6 @@ def test_orchestrator_instantiation():
     # Assert that the dependencies were assigned correctly
     assert orchestrator.energy_calculator is mock_energy_calculator
     assert orchestrator.lyapunov_monitor is mock_lyapunov_monitor
-    assert orchestrator.annealer is mock_annealer
-    assert orchestrator.functor is mock_functor
-    assert orchestrator.closure_rules is mock_closure_rules
-    assert orchestrator.agent_router is mock_agent_router
+    assert orchestrator.closure_validator is mock_closure_validator
+    assert orchestrator.closure_rule_engine is mock_closure_rule_engine
+    assert orchestrator.comm_protocol is mock_comm_protocol

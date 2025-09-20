@@ -4,6 +4,7 @@ from uuid import UUID, uuid4
 from datetime import datetime, timedelta
 from pydantic import field_validator, model_validator, BaseModel, Field, validator
 from enum import Enum
+import re
 
 class EnergyBreakdown(BaseModel):
     total: float
@@ -32,7 +33,12 @@ class ObligationStatus(str, Enum):
 
 class ProofWitness(BaseModel):
     type: str
-    data: Any
+    data: str # Changed from Any to str to ensure hashability
+
+    class Config:
+        frozen = True
+
+from typing import Tuple
 
 class Obligation(BaseModel):
     id: str
@@ -40,15 +46,68 @@ class Obligation(BaseModel):
     description: str
     status: ObligationStatus = ObligationStatus.OPEN
     witness: Optional[ProofWitness] = None
-    dependencies: List[str] = Field(default_factory=list)
+    dependencies: Tuple[str, ...] = Field(default_factory=tuple)
     deadline: Optional[datetime] = None
     energy_impact: float
 
+    class Config:
+        frozen = True
+
+Requirement = str
+
+class ProofStep(BaseModel):
+    type: str
+    description: str
+    evidence: List[Dict[str, Any]]
+
+class CompletenessProof(BaseModel):
+    obligation_count: int
+    proof_steps: List[ProofStep]
+    verification_method: str
+    confidence: float
+
 class ClosureResult(BaseModel):
-    valid: bool
-    error: Optional[str] = None
-    unsatisfied: Optional[List[Obligation]] = None
-    closure_proof: Optional[Any] = None
+    closed_set: Set[Obligation]
+    is_closed: bool
+    is_minimal: bool
+    closure_iterations: int
+    derived_obligations: int
+    completeness_proof: Optional[CompletenessProof] = None
+
+    class Config:
+        arbitrary_types_allowed = True
+
+class ClosureRule(BaseModel):
+    name: str
+    pattern: str
+    implies: List[str]
+
+    def apply(self, obligations: Set[Obligation], requirements: Set[Requirement]) -> Set[Obligation]:
+        """
+        If a requirement or obligation description matches the rule's pattern,
+        derive new obligations from the 'implies' list.
+        """
+        derived_obligations: Set[Obligation] = set()
+        all_texts = {req for req in requirements} | {o.description for o in obligations}
+
+        triggered = False
+        for text in all_texts:
+            if re.search(self.pattern, text, re.IGNORECASE):
+                triggered = True
+                break
+
+        if triggered:
+            for implied_desc in self.implies:
+                derived_obligations.add(
+                    Obligation(
+                        id=f"derived::{implied_desc}",
+                        description=implied_desc,
+                        type=ObligationType.FUNCTIONAL,
+                        status=ObligationStatus.OPEN,
+                        energy_impact=0.0
+                    )
+                )
+        return derived_obligations
 
 class Agent(BaseModel):
     id: str
@@ -123,6 +182,13 @@ class SystemState(BaseModel):
     phase: str = "A"
 
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator('contraction_factor')
+    @classmethod
+    def validate_contraction_factor(cls, v: float) -> float:
+        if not (0.0 <= v <= 1.0):
+            raise ValueError('Contraction factor must be between 0.0 and 1.0')
+        return v
 
 class SystemEvolution(BaseModel):
     initial_state: SystemState
@@ -229,6 +295,7 @@ class SoftwareState(BaseModel):
 
 class QuantumState(BaseModel):
     state_vector: List[complex] = Field(default_factory=list)
+    density_matrix: Optional[List[List[complex]]] = None
 
     class Config:
         arbitrary_types_allowed = True
@@ -257,6 +324,14 @@ class Observable(BaseModel):
 
 class PhysicsResult(BaseModel):
     """Base class for results from physics-based operations."""
+    success: bool
+    agent_name: str
+    physics_principle: str
+    message: str
+    observed_effect: Optional[Any] = None
+    energy_delta: float = 0.0
+    proposals: List[AgentAction] = Field(default_factory=list)
+
     class Config:
         arbitrary_types_allowed = True
 
@@ -510,6 +585,59 @@ class AgentProposal(BaseModel):
 class CoordinationResult(BaseModel):
     approved: bool
     modifications: List[Any]
+
+class GateResult(BaseModel):
+    passed: bool
+    reason: str
+    required_actions: List[str] = Field(default_factory=list)
+    blocking: bool = True
+    completeness_proof: Optional[CompletenessProof] = None
+
+class MonitoringResult(BaseModel):
+    status: str
+    metrics: Dict[str, Any]
+    alerts: List[Any]
+
+
+class BuildArtifacts(BaseModel):
+    """Placeholder for build artifacts."""
+    files: List[str] = Field(default_factory=list)
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+class PredicateResult(BaseModel):
+    predicate: str
+    value: bool
+    witness: Optional[Any] = None
+    checker_used: Optional[str] = None
+    replayable: bool
+    hash: Optional[str] = None
+    error: Optional[str] = None
+
+class IrrefutabilityResult(BaseModel):
+    decision_irrefutable: bool
+    predicate_results: Dict[str, PredicateResult]
+    logical_conjunction: bool
+    acceptance_decision: bool
+    axiom_ledger: List[Dict[str, Any]]
+    replayability_proof: Any
+    soundness_certificate: Any
+
+class SystemVerification(BaseModel):
+    """Placeholder for system verification data."""
+    energy_proofs: Any = None
+    convergence_proofs: Any = None
+    functor_proofs: Any = None
+    agent_validations: Any = None
+    risk_calculations: Any = None
+    closure_proofs: Any = None
+    statistical_tests: Any = None
+    integration_results: Any = None
+
+class FinalCertificate(BaseModel):
+    irrefutability_score: float
+    mathematical_certainty_level: str
+    final_verdict: str
+
 
 # Final forward reference resolution
 Component.model_rebuild()

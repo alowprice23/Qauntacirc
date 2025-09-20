@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Callable
 import random
 
 from typing import List, TYPE_CHECKING
@@ -10,11 +10,13 @@ from agents.base.contracts import Proposal
 from core.energy_calculator import EnergyCalculator
 from core.lyapunov_monitor import LyapunovMonitor
 from core.closure_validator import ClosureValidator
+from core.closure_rules import ClosureRuleEngine
 from core.types import (
     SystemState, SystemEvolution, AgentAction, QuantizedTasks, CodeEvolution,
     OrthogonalizationResult, UncertaintyAnalysis, TunnelingResult,
     ResourceAllocation, FlowOptimization, ChaosTestResult,
-    GrowthPrediction, DependencyOptimization, PhysicsResult, Obligation, ObligationType, ObligationStatus
+    GrowthPrediction, DependencyOptimization, PhysicsResult, Obligation, ObligationType, ObligationStatus,
+    GateResult, MonitoringResult, CompletenessProof
 )
 from core.chaos_types import ChaosPlanResult
 from monitoring.resilience import ResilienceMonitor
@@ -32,15 +34,104 @@ class Orchestrator:
         energy_calculator: EnergyCalculator,
         lyapunov_monitor: LyapunovMonitor,
         closure_validator: ClosureValidator,
+        closure_rule_engine: ClosureRuleEngine,
         communication_protocol: AgentCommunicationProtocol
     ):
         self.agents = agents
         self.energy_calculator = energy_calculator
         self.lyapunov_monitor = lyapunov_monitor
         self.closure_validator = closure_validator
+        self.closure_rule_engine = closure_rule_engine
         self.comm_protocol = communication_protocol
         self.agent_selector_strategy = "round-robin"
         self.last_agent_idx = -1
+
+        self.gates: Dict[str, Callable[[SystemState], GateResult]] = {}
+        self.monitors: Dict[str, Callable[[SystemState], MonitoringResult]] = {}
+        self._register_default_components()
+
+    def add_gate(self, name: str, func: Callable[[SystemState], GateResult]):
+        """Adds a verification gate to the orchestrator."""
+        self.gates[name] = func
+
+    def add_monitor(self, name: str, func: Callable[[SystemState], MonitoringResult]):
+        """Adds a system monitor to the orchestrator."""
+        self.monitors[name] = func
+
+    def _register_default_components(self):
+        """Registers the default gates and monitors."""
+        self.add_gate("delta_closure", self._closure_gate)
+        self.add_monitor("closure_completeness", self._monitor_closure)
+
+    def _suggest_closure_actions(self, closure_result: "ClosureResult") -> List[str]:
+        """Placeholder for suggesting actions to fix closure."""
+        missing_obligations = closure_result.closed_set - set(closure_result.completeness_proof.obligation_set)
+        actions = [f"Add missing obligation: {ob.description}" for ob in missing_obligations]
+        return actions
+
+    def _generate_closure_alerts(self, closure_result: "ClosureResult") -> List[Dict]:
+        """Placeholder for generating alerts from closure results."""
+        alerts = []
+        if not closure_result.is_closed:
+            alerts.append({"type": "CLOSURE_FAILURE", "message": "System is not closed."})
+        if not closure_result.is_minimal:
+            alerts.append({"type": "CLOSURE_WARNING", "message": "System is not minimal."})
+        return alerts
+
+    def _closure_gate(self, state: SystemState) -> GateResult:
+        """Gate function that blocks deployment until closure verified."""
+        closure_result = self.closure_rule_engine.verify_closure(
+            set(state.requirements),
+            set(state.obligations)
+        )
+
+        if not closure_result.is_closed:
+            return GateResult(
+                passed=False,
+                reason="Δ-closure not satisfied - missing obligations detected",
+                required_actions=self._suggest_closure_actions(closure_result),
+                blocking=True
+            )
+
+        if not closure_result.is_minimal:
+            return GateResult(
+                passed=False,
+                reason="Obligation set not minimal - redundant obligations detected",
+                required_actions=["remove_redundant_obligations"],
+                blocking=False
+            )
+
+        return GateResult(
+            passed=True,
+            reason="Δ-closure verified - all obligations captured",
+            completeness_proof=closure_result.completeness_proof
+        )
+
+    def _monitor_closure(self, state: SystemState) -> MonitoringResult:
+        """Monitor closure status for real-time feedback."""
+        closure_result = self.closure_rule_engine.verify_closure(
+            set(state.requirements),
+            set(state.obligations)
+        )
+
+        return MonitoringResult(
+            status="CLOSED" if closure_result.is_closed else "OPEN",
+            metrics={
+                "obligation_count": len(closure_result.closed_set),
+                "closure_iterations": closure_result.closure_iterations,
+                "completeness_confidence": 1.0 if closure_result.is_closed else 0.0
+            },
+            alerts=self._generate_closure_alerts(closure_result)
+        )
+
+    def run_gates(self, state: SystemState) -> List[GateResult]:
+        """Runs all registered gates and returns their results."""
+        results = []
+        for name, gate_func in self.gates.items():
+            result = gate_func(state)
+            print(f"Gate '{name}' result: {'PASSED' if result.passed else 'FAILED'}")
+            results.append(result)
+        return results
 
     def select_agent(self) -> 'PhysicsBasedAgent':
         """Selects an agent to run based on the chosen strategy."""
@@ -54,6 +145,17 @@ class Orchestrator:
         """
         Executes one full cycle of the system's evolution by selecting and running an agent.
         """
+        gate_results = self.run_gates(current_state)
+        for result in gate_results:
+            if not result.passed and result.blocking:
+                print(f"Blocking gate failed: {result.reason}. Halting evolution.")
+                return SystemEvolution(
+                    initial_state=current_state,
+                    final_state=current_state,
+                    actions=[],
+                    energy_delta=0
+                )
+
         agent = self.select_agent()
         print(f"Orchestrator: Selected agent -> {agent.__class__.__name__}")
 
@@ -94,7 +196,6 @@ class Orchestrator:
     async def _execute_chaos_plan(self, monitor: ResilienceMonitor, plan: "ChaosTestingPlan"):
         """Executes the scenarios in a chaos testing plan."""
         reports = []
-        # The execution order is currently a random permutation of indices.
         for i in plan.execution_order:
             scenario = plan.scenarios[i]
             report = await monitor.monitor_chaos_scenario(scenario)
@@ -112,7 +213,6 @@ class Orchestrator:
             case Proposal():
                 print(f"Orchestrator: Applying Proposal result from {result.agent_id}.")
                 total_estimated_speedup = sum(opt.estimated_speedup for opt in result.optimizations)
-                # Simulate performance gain by reducing complexity energy
                 new_state.energy_breakdown.complexity -= total_estimated_speedup
                 print(f"Reduced complexity energy by {total_estimated_speedup}")
             case QuantizedTasks():
@@ -127,22 +227,14 @@ class Orchestrator:
                     ))
             case CodeEvolution():
                 print(f"Orchestrator: Applying CodeEvolution result (Not Implemented).")
-                # To implement: need to know which module was evolved.
-                # Assumes input metadata contains 'module_id'.
-                # e.g., module_id = new_state.metadata['schrodinger_dev_input']['module_id']
-                # Then find and update the module in new_state.modules.
             case OrthogonalizationResult():
                 print(f"Orchestrator: Applying OrthogonalizationResult (Not Implemented).")
-                # To implement: need to update the state vectors of modules.
-                # This is complex as SystemState.modules don't have state vectors.
-                # The change would likely be reflected in the metadata for the next agent run.
             case UncertaintyAnalysis():
                 print(f"Orchestrator: Applying UncertaintyAnalysis result.")
                 if result.additional_tests:
                     new_state.metadata.setdefault("new_tests", []).extend(result.additional_tests)
             case TunnelingResult():
                 print(f"Orchestrator: Applying TunnelingResult.")
-                # Simulate performance gain by reducing complexity energy
                 new_state.energy_breakdown.complexity -= result.total_performance_gain
             case ResourceAllocation():
                 print(f"Orchestrator: Applying ResourceAllocation result.")
@@ -160,7 +252,6 @@ class Orchestrator:
                 new_state.metadata["growth_prediction"] = result.model_dump()
             case DependencyOptimization():
                 print(f"Orchestrator: Applying DependencyOptimization result.")
-                # Simulate modularity improvement by reducing coupling energy
                 new_state.energy_breakdown.coupling -= result.expected_potential_reduction
             case _:
                 print(f"Orchestrator: No state application logic for result type {type(result).__name__}.")

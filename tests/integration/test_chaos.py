@@ -1,12 +1,12 @@
 import pytest
 import asyncio
-from unittest.mock import MagicMock, AsyncMock
+from unittest.mock import MagicMock, AsyncMock, patch
 
 from core.orchestrator import Orchestrator
 from agents.fluctua_test.agent import FluctuaTestAgent
 from monitoring.resilience import ResilienceMonitor
 from core.types import SystemState, EnergyBreakdown, LyapunovMetrics, SoftwareState
-from core.chaos_types import ChaosPlanResult, ChaosTestingPlan, ResilienceReport
+from core.chaos_types import ChaosPlanResult, ChaosTestingPlan, ResilienceReport, ChaosScenario
 
 @pytest.fixture
 def mock_system_state():
@@ -24,7 +24,27 @@ def mock_system_state():
 @pytest.fixture
 def fluctua_test_agent():
     """Fixture for the FluctuaTestAgent."""
-    return FluctuaTestAgent()
+    agent = FluctuaTestAgent()
+    # Create 5 mock scenarios so that a risk budget of 0.6 selects 3
+    mock_scenarios = [
+        ChaosScenario(
+            name=f"test_scenario_{i}",
+            description="A mock scenario.",
+            target_components=["component_a"],
+            fault_injection=lambda: "Injected fault!",
+            expected_behavior="System should recover.",
+            recovery_criteria={"metric": "latency", "threshold": 100},
+            blast_radius=0.5,
+            duration_seconds=60
+        ) for i in range(5)
+    ]
+    agent.chaos_scenarios = mock_scenarios
+    return agent
+
+
+from core.closure_rules import ClosureRuleEngine
+
+from core.types import ClosureResult
 
 @pytest.fixture
 def mock_orchestrator(fluctua_test_agent):
@@ -33,17 +53,28 @@ def mock_orchestrator(fluctua_test_agent):
     energy_calculator = MagicMock()
     lyapunov_monitor = MagicMock()
     closure_validator = MagicMock()
+    closure_rule_engine = MagicMock(spec=ClosureRuleEngine)
     comm_protocol = MagicMock()
 
     # Configure mocks to return valid objects
     energy_calculator.compute_total_energy.return_value = EnergyBreakdown(total=1000.0, complexity=500.0, coupling=300.0, constraint=100.0, debt=100.0)
     lyapunov_monitor.compute.return_value = LyapunovMetrics(phi=1.0, energy=1000.0, test_penalty=0.0, obligation_penalty=0.0)
+    mock_closure_result = ClosureResult(
+        closed_set=set(),
+        is_closed=True,
+        is_minimal=True,
+        closure_iterations=0,
+        derived_obligations=0,
+        completeness_proof=None
+    )
+    closure_rule_engine.verify_closure.return_value = mock_closure_result
 
     orchestrator = Orchestrator(
         agents=[fluctua_test_agent],
         energy_calculator=energy_calculator,
         lyapunov_monitor=lyapunov_monitor,
         closure_validator=closure_validator,
+        closure_rule_engine=closure_rule_engine,
         communication_protocol=comm_protocol,
     )
     return orchestrator

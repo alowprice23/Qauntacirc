@@ -6,6 +6,22 @@ from typing import List, Any, Optional
 from pydantic import BaseModel
 from core.types import SystemState, AnnealingResult, ContractionResult
 
+# Helper class for Metropolis acceptance rule test
+class MetropolisAcceptor:
+    def __init__(self, seed=None):
+        self.rng = np.random.default_rng(seed)
+
+    def acceptance_probability(self, delta_energy: float, temperature: float) -> float:
+        if delta_energy <= 0:
+            return 1.0
+        if temperature <= 1e-9:
+            return 0.0
+        return math.exp(-delta_energy / temperature)
+
+    def should_accept(self, delta_energy: float, temperature: float) -> bool:
+        prob = self.acceptance_probability(delta_energy, temperature)
+        return self.rng.random() < prob
+
 class TwoPhaseAnnealer:
     """
     Implements a mathematically rigorous two-phase annealing algorithm as

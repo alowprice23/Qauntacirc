@@ -13,7 +13,7 @@ from unittest.mock import AsyncMock, MagicMock
 from pydantic import BaseModel
 
 from messaging.publisher import MessagePublisher
-from messaging.nats_client import NATSClient
+from messaging.nats_client import NATSMessageBus
 from messaging.serialization import MessageSerializer, SerializationFormat
 
 class TestPublisher:
@@ -43,7 +43,7 @@ async def test_publish_single_message():
     """
     Tests that the publish method correctly serializes and publishes a single message.
     """
-    mock_nats_client = AsyncMock(spec=NATSClient)
+    mock_nats_client = AsyncMock(spec=NATSMessageBus)
     mock_serializer = MagicMock(spec=MessageSerializer)
 
     publisher = MessagePublisher(nats_client=mock_nats_client, serializer=mock_serializer)

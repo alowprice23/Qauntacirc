@@ -5,7 +5,7 @@ from typing import List
 from agents.base.agent import PhysicsBasedAgent
 from core.types import (
     SystemState, CommunicationGraph, FlowOptimization, DispersionRelation,
-    OptimizedChannel, Node, Edge, Observable
+    OptimizedChannel, Node, Edge, Observable, Component
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from common.utils import LatticeFlowOptimizer
@@ -46,6 +46,7 @@ class PhononFlowAgent(PhysicsBasedAgent):
     def __init__(self):
         """Initializes agent to optimize communication using lattice dynamics."""
         super().__init__(
+            agent_name="phonon_flow",
             physics_principle="Lattice Dynamics",
             mathematical_formula="ℏω = ℏv_s·k"
         )
@@ -56,12 +57,31 @@ class PhononFlowAgent(PhysicsBasedAgent):
     def apply_physics_principle(self, system_state: SystemState) -> FlowOptimization:
         """Optimizes information flow using phonon dispersion relations."""
         if not system_state.dependency_graph:
-            return FlowOptimization(dispersion_relations=[], optimized_channels=[], total_bandwidth=0, latency_improvement=0)
+            return FlowOptimization(
+                success=True,
+                agent_name=self.agent_name,
+                physics_principle=self.physics_principle,
+                message="No dependency graph found for analysis.",
+                dispersion_relations=[],
+                optimized_channels=[],
+                total_bandwidth=0,
+                latency_improvement=0
+            )
 
-        comm_graph = CommunicationGraph(
-            nodes=[Node(id=n.id) for n in system_state.dependency_graph.nodes],
-            edges=[Edge(source=e.source, target=e.target, weight=e.strength) for e in system_state.dependency_graph.edges]
-        )
+        # Create Nodes and a map for easy lookup
+        nodes = [Node(id=n.id) for n in system_state.dependency_graph.nodes]
+        node_map = {node.id: node for node in nodes}
+
+        # Create Edges using the Node map
+        edges = [
+            Edge(
+                source=node_map[e.source.id],
+                target=node_map[e.target.id],
+                weight=e.strength
+            ) for e in system_state.dependency_graph.edges
+        ]
+
+        comm_graph = CommunicationGraph(nodes=nodes, edges=edges)
 
         lattice = self._map_to_lattice(comm_graph)
         dispersion_relations = []
@@ -90,6 +110,10 @@ class PhononFlowAgent(PhysicsBasedAgent):
                 optimized_channels.append(optimization)
 
         return FlowOptimization(
+            success=True,
+            agent_name=self.agent_name,
+            physics_principle=self.physics_principle,
+            message="Successfully analyzed information flow using lattice dynamics.",
             dispersion_relations=dispersion_relations,
             optimized_channels=optimized_channels,
             total_bandwidth=sum(opt.bandwidth for opt in optimized_channels),

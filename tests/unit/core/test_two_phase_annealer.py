@@ -40,7 +40,7 @@ from unittest.mock import Mock, patch
 from dataclasses import dataclass
 
 # Test diagnostic imports
-from tests.conftest import TestDiagnostic, EnergyLandscape
+from tests.common.test_utils import TestDiagnostic
 
 # Helper class for Metropolis acceptance rule test
 class MetropolisAcceptor:

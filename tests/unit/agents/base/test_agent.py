@@ -1,158 +1,128 @@
 import pytest
-from unittest.mock import Mock, call, patch, MagicMock
-import uuid
+from unittest.mock import Mock, MagicMock
+from agents.base.agent import PhysicsBasedAgent
+from agents.base.quantum_agent import QuantumAgent
+from core.types import SystemState, PhysicsResult, Observable, AgentAction, SoftwareState, EnergyBreakdown, LyapunovMetrics
+from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 
-from agents.base.agent import QuantumAgent
-from core.types import QCState as State, AgentTask as Proposal, AgentResult as Action, SoftwareState, EnergyComponents, LyapunovMetrics, EnergyBreakdown
-
-# A concrete implementation of the abstract QuantumAgent for testing
+# A concrete implementation for testing purposes
 class ConcreteQuantumAgent(QuantumAgent):
-    def analyze_state(self, state: State) -> Proposal:
-        return Proposal(agent_name=self.name, task_type="analysis", payload={"analysis": "done"})
+    def __init__(self, agent_name: str, physics_principle: str, mathematical_formula: str):
+        super().__init__(agent_name, physics_principle, mathematical_formula)
 
-    def validate_proposal(self, proposal: Proposal) -> bool:
+    def apply_physics_principle(self, system_state: SystemState) -> PhysicsResult:
+        if not self.guard(system_state):
+            return PhysicsResult(
+                success=False,
+                agent_name=self.agent_name,
+                physics_principle=self.physics_principle,
+                message="Guard failed.",
+                observed_effect=None,
+                energy_delta=0.0,
+                proposals=[],
+            )
+
+        proposal = self.propose(system_state)
+        # In a real scenario, there would be more logic here, like verification and application.
+        # For this test, we'll just return a success result with the proposal.
+        return PhysicsResult(
+            success=True,
+            agent_name=self.agent_name,
+            physics_principle=self.physics_principle,
+            message="Proposal generated.",
+            observed_effect=None,
+            energy_delta=-1.0,
+            proposals=[proposal],
+        )
+
+    def measure_observable(self, system_state: SystemState) -> Observable:
+        return Observable(name="test_observable", value=1.0, unit="tests")
+
+    def generate_certificate(self, before_state: SystemState, after_state: SystemState, result: PhysicsResult) -> 'AgentCertificate':
+        return AgentCertificate(
+            agent_id=self.agent_name,
+            physics_principle=self.physics_principle,
+            mathematical_formula=self.formula,
+            conservation_proof=ConservationProof(energy_before=10, energy_after=9, conservation_error=1, mathematical_justification="test"),
+            convergence_proof=ConvergenceProof(lyapunov_before=1, lyapunov_after=0.9, descent_amount=0.1, convergence_rate=0.9, justification="test"),
+            stability_proof=StabilityProof(description="test", is_stable=True, details="test"),
+            performance_guarantee=PerformanceGuarantee(description="test", bound="O(1)", verified=True)
+        )
+
+    def guard(self, state: SystemState) -> bool:
+        # This will be mocked in tests
         return True
 
-    def execute(self, proposal: Proposal) -> Action:
-        task_id = proposal.id if hasattr(proposal, 'id') else uuid.uuid4()
-        return Action(task_id=task_id, agent_name=self.name, action_taken=True, result={"execution": "done"})
+    def propose(self, state: SystemState) -> AgentAction:
+        # This will be mocked in tests
+        return AgentAction(
+            agent_id=self.agent_name,
+            action_type="test_task",
+            params={"test": "payload"}
+        )
 
 @pytest.fixture
-def mock_dependencies():
-    metrics_logger = Mock()
-    metrics_logger.log_duration.return_value = MagicMock()
-    return {
-        "name": "test_agent",
-        "state_space": Mock(),
-        "energy_calculator": Mock(),
-        "metrics_logger": metrics_logger,
-        "policy_engine": Mock(),
-        "agent_memory": Mock(),
-        "contracts": [Mock()],
-    }
+def mock_agent():
+    """Provides an instance of the concrete agent for testing."""
+    return ConcreteQuantumAgent(
+        agent_name="concrete_quantum_agent",
+        physics_principle="Test Principle",
+        mathematical_formula="E=mc^2"
+    )
 
 @pytest.fixture
 def mock_state():
-    # A simplified mock of QCState for testing purposes
-    return State(
-        software_state=SoftwareState(),
-        energy_breakdown=EnergyBreakdown(
-            total=100.0,
-            complexity=50.0,
-            coupling=30.0,
-            constraint=20.0,
-            debt=0.0,
-        ),
-        lyapunov_metrics=LyapunovMetrics(
-            phi=0.5,
-            energy=100.0,
-            test_penalty=0.0,
-            obligation_penalty=0.0,
-        ),
+    """Provides a mock SystemState."""
+    return SystemState(
+        software_state=SoftwareState(component_versions={}, config_hashes={}),
+        energy_breakdown=EnergyBreakdown(total=10.0, complexity=5, coupling=3, constraint=2, debt=0),
+        lyapunov_metrics=LyapunovMetrics(phi=1.0, energy=10.0, test_penalty=0, obligation_penalty=0),
         contraction_factor=0.9,
     )
 
-def test_agent_initialization(mock_dependencies):
-    agent = ConcreteQuantumAgent(**mock_dependencies)
-    assert agent.name == "test_agent"
-    assert isinstance(agent.agent_id, str)
-    assert agent.state_space == mock_dependencies["state_space"]
-    assert not agent.is_active
+def test_agent_initialization(mock_agent):
+    """Tests that the agent is initialized correctly."""
+    assert mock_agent.agent_name == "concrete_quantum_agent"
+    assert mock_agent.physics_principle == "Test Principle"
+    assert mock_agent.formula == "E=mc^2"
+    assert isinstance(mock_agent.measurement_apparatus, object) # MeasurementApparatus is a placeholder
 
-    # Check if metrics are registered
-    mock_dependencies["metrics_logger"].register_counter.assert_any_call(
-        "agent_test_agent_proposals", "Number of proposals generated"
-    )
-    mock_dependencies["metrics_logger"].register_counter.assert_any_call(
-        "agent_test_agent_executions", "Number of successful executions"
-    )
-    mock_dependencies["metrics_logger"].register_histogram.assert_called_with(
-        "agent_test_agent_execution_duration", "Duration of agent execution"
-    )
+def test_apply_physics_principle_success(mock_agent, mock_state, mocker):
+    """Tests the successful execution of the physics principle application."""
+    mocker.patch.object(mock_agent, 'guard', return_value=True)
+    mocker.patch.object(mock_agent, 'propose', return_value=AgentAction(agent_id="test_agent", action_type="test_action", params={"test": "param"}))
 
-def test_agent_activation_deactivation(mock_dependencies):
-    agent = ConcreteQuantumAgent(**mock_dependencies)
-    assert not agent.is_active
-    agent.activate()
-    assert agent.is_active
-    agent.deactivate()
-    assert not agent.is_active
+    result = mock_agent.apply_physics_principle(mock_state)
 
-def test_run_successful_execution(mock_dependencies, mock_state):
-    agent = ConcreteQuantumAgent(**mock_dependencies)
-    agent.activate()
+    assert result.success is True
+    assert result.message == "Proposal generated."
+    assert len(result.proposals) == 1
+    mock_agent.guard.assert_called_once_with(mock_state)
+    mock_agent.propose.assert_called_once_with(mock_state)
 
-    mock_dependencies["contracts"][0].check_preconditions.return_value = True
-    mock_dependencies["contracts"][0].check_postconditions.return_value = True
-    mock_dependencies["policy_engine"].validate.return_value = True
+def test_apply_physics_principle_guard_fails(mock_agent, mock_state, mocker):
+    """Tests that if the guard fails, no proposal is made."""
+    mocker.patch.object(mock_agent, 'guard', return_value=False)
+    mocker.patch.object(mock_agent, 'propose')
 
-    action = agent.run(mock_state)
+    result = mock_agent.apply_physics_principle(mock_state)
 
-    assert action is not None
-    assert action.action_taken is True
+    assert result.success is False
+    assert result.message == "Guard failed."
+    mock_agent.guard.assert_called_once_with(mock_state)
+    mock_agent.propose.assert_not_called()
 
-    mock_dependencies["contracts"][0].check_preconditions.assert_called_once_with(mock_state)
-    mock_dependencies["policy_engine"].validate.assert_called_once()
-    mock_dependencies["contracts"][0].check_postconditions.assert_called_once()
-    mock_dependencies["metrics_logger"].increment_counter.assert_has_calls([
-        call("agent_test_agent_proposals"),
-        call("agent_test_agent_executions")
-    ])
-    mock_dependencies["agent_memory"].record_decision.assert_called_once()
+def test_measure_observable(mock_agent, mock_state):
+    """Tests the measurement of an observable."""
+    observable = mock_agent.measure_observable(mock_state)
+    assert isinstance(observable, Observable)
+    assert observable.name == "test_observable"
+    assert observable.value == 1.0
 
-def test_run_inactive_agent(mock_dependencies, mock_state):
-    agent = ConcreteQuantumAgent(**mock_dependencies)
-    action = agent.run(mock_state)
-    assert action is None
-    mock_dependencies["metrics_logger"].increment_counter.assert_not_called()
-
-def test_run_failed_precondition(mock_dependencies, mock_state):
-    mock_dependencies["contracts"][0].check_preconditions.side_effect = ValueError("Precondition failed")
-    agent = ConcreteQuantumAgent(**mock_dependencies)
-    agent.activate()
-
-    action = agent.run(mock_state)
-
-    assert action is None
-    mock_dependencies["metrics_logger"].increment_counter.assert_called_with("agent_test_agent_errors")
-
-def test_run_failed_proposal_validation(mock_dependencies, mock_state):
-    agent = ConcreteQuantumAgent(**mock_dependencies)
-    agent.activate()
-
-    with patch.object(agent, 'validate_proposal', return_value=False):
-        action = agent.run(mock_state)
-        assert action is None
-        # No error counter for a simple validation fail
-        error_call = call("agent_test_agent_errors")
-        assert error_call not in mock_dependencies["metrics_logger"].increment_counter.call_args_list
-
-def test_run_failed_policy_validation(mock_dependencies, mock_state):
-    mock_dependencies["policy_engine"].validate.return_value = False
-    agent = ConcreteQuantumAgent(**mock_dependencies)
-    agent.activate()
-
-    action = agent.run(mock_state)
-
-    assert action is None
-    error_call = call("agent_test_agent_errors")
-    assert error_call not in mock_dependencies["metrics_logger"].increment_counter.call_args_list
-
-def test_run_failed_postcondition(mock_dependencies, mock_state):
-    mock_dependencies["contracts"][0].check_postconditions.side_effect = ValueError("Postcondition failed")
-    agent = ConcreteQuantumAgent(**mock_dependencies)
-    agent.activate()
-
-    action = agent.run(mock_state)
-
-    assert action is None
-    mock_dependencies["metrics_logger"].increment_counter.assert_called_with("agent_test_agent_errors")
-
-def test_run_execution_exception(mock_dependencies, mock_state):
-    agent = ConcreteQuantumAgent(**mock_dependencies)
-    agent.activate()
-
-    with patch.object(agent, 'execute', side_effect=Exception("Execution failed")):
-        action = agent.run(mock_state)
-        assert action is None
-        mock_dependencies["metrics_logger"].increment_counter.assert_called_with("agent_test_agent_errors")
+def test_generate_certificate(mock_agent, mock_state):
+    """Tests the generation of an agent certificate."""
+    result = PhysicsResult(success=True, agent_name="test", physics_principle="test", message="", observed_effect=None, energy_delta=0, proposals=[])
+    certificate = mock_agent.generate_certificate(mock_state, mock_state, result)
+    assert isinstance(certificate, AgentCertificate)
+    assert certificate.agent_id == "concrete_quantum_agent"
+    assert certificate.physics_principle == "Test Principle"

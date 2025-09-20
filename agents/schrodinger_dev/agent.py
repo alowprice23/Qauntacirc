@@ -7,36 +7,42 @@ from core.types import (
     SystemState, CodeState, Hamiltonian, CodeEvolution, UnitaryOperator, Proof, Observable
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
-from common.utils import QuantumCodeGenerator, ProofSynthesizer
+from agents.schrodinger_dev.code_generator import SchrodingerCodeGenerator
+from common.utils import ProofSynthesizer
 
-class SchrödingerDevAgent(PhysicsBasedAgent):
-    def __init__(self):
+class SchrodingerDevAgent(PhysicsBasedAgent):
+    def __init__(self, llm_client: "LLMClient" = None):
         """
-        Initializes the SchrödingerDevAgent.
+        Initializes the SchrodingerDevAgent.
         This agent is responsible for code synthesis through quantum state evolution,
         governed by the Schrödinger equation.
         """
         super().__init__(
+            agent_name="schrodinger_dev",
             physics_principle="Quantum State Evolution",
             mathematical_formula="iℏ∂ψ/∂t = Ĥψ"
         )
         self.hbar = 1.054571817e-34
-        self.code_generator = QuantumCodeGenerator()
+        if llm_client is None:
+            from llm.client import LLMClient
+            llm_client = LLMClient()
+        self.code_generator = SchrodingerCodeGenerator(llm_client=llm_client, num_superpositions=5)
         self.proof_synthesizer = ProofSynthesizer()
 
     def apply_physics_principle(self, system_state: SystemState) -> CodeEvolution:
         """
         Evolve the code state using the Schrödinger equation.
-        This function requires 'code_state', 'hamiltonian', and 'dt' to be present
+        This function requires 'code_state', 'hamiltonian', 'dt', and 'implementations' to be present
         in the system_state.metadata.
         """
         metadata = system_state.metadata.get("schrodinger_dev_input", {})
         current_code_state_data = metadata.get("code_state")
         hamiltonian_data = metadata.get("hamiltonian")
         dt = metadata.get("dt")
+        implementations = metadata.get("implementations")
 
-        if not all([current_code_state_data, hamiltonian_data, dt is not None]):
-            raise ValueError("SchrödingerDevAgent requires 'code_state', 'hamiltonian', and 'dt' in metadata.")
+        if not all([current_code_state_data, hamiltonian_data, dt is not None, implementations is not None]):
+            raise ValueError("SchrödingerDevAgent requires 'code_state', 'hamiltonian', 'dt', and 'implementations' in metadata.")
 
         current_code_state = CodeState(**current_code_state_data)
         hamiltonian = Hamiltonian(**hamiltonian_data)
@@ -47,12 +53,16 @@ class SchrödingerDevAgent(PhysicsBasedAgent):
 
         new_psi = np.array(unitary_operator.matrix) @ initial_psi
 
-        generated_code = self.code_generator.materialize_from_state(new_psi)
+        generated_code = self.code_generator.collapse_to_implementation(implementations, new_psi)
 
         proof_obligations = self._extract_proof_obligations(generated_code)
         proofs = self.proof_synthesizer.generate_proofs(proof_obligations)
 
         return CodeEvolution(
+            success=True,
+            agent_name="SchrodingerDevAgent",
+            physics_principle=self.physics_principle,
+            message="Code evolution successful.",
             new_state=CodeState(state_vector=new_psi.tolist(), code=generated_code),
             proofs=proofs,
             energy_change=self._compute_energy_change(initial_psi, new_psi, hamiltonian),

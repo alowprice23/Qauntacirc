@@ -1,80 +1,74 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 from agents.phonon_flow.agent import PhononFlowAgent
 from core.types import (
-    SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, Module,
-    DependencyGraph, Component, Dependency, SoftwareState
+    SystemState, DependencyGraph, Component, Dependency,
+    EnergyBreakdown, LyapunovMetrics, SoftwareState, FlowOptimization
 )
-from datetime import datetime
 
 @pytest.fixture
-def mock_llm_client():
-    client = AsyncMock()
-    client.complete.return_value = {
-        "content": '{"refactored_code": "new code here", "explanation": "did a thing"}'
-    }
-    return client
+def phonon_agent():
+    """Fixture for a PhononFlowAgent instance."""
+    return PhononFlowAgent()
 
 @pytest.fixture
-def mock_energy_calculator():
-    calculator = MagicMock()
-    calculator.config = {"w_maintainability": 5.0}
-    return calculator
-
-@pytest.fixture
-def phonon_agent(mock_llm_client, mock_energy_calculator):
-    return PhononFlowAgent(
-        state_space=MagicMock(),
-        energy_calculator=mock_energy_calculator,
-        metrics_logger=MagicMock(),
-        policy_engine=MagicMock(),
-        agent_memory=MagicMock(),
-        llm_client=mock_llm_client
-    )
-
-@pytest.fixture
-def initial_state():
-    """A state with two files, one of which is clearly 'slower'."""
-    energy_breakdown = EnergyBreakdown(total=170.0, complexity=100.0, coupling=50.0, constraint=20.0, debt=0.0)
-    lyapunov_metrics = LyapunovMetrics(phi=170.0, energy=170.0, test_penalty=0.0, obligation_penalty=0.0)
-    modules = [
-        Module(name="slow.py", normalized_ast=b"", semantic_tokens=[], cyclomatic_complexity=10, duplication_factor=0, coverage_deficit=0, last_refactor=datetime.now()),
-        Module(name="fast.py", normalized_ast=b"", semantic_tokens=[], cyclomatic_complexity=1, duplication_factor=0, coverage_deficit=0, last_refactor=datetime.now())
+def system_state_with_graph():
+    """Fixture for a SystemState with a sample dependency graph for flow analysis."""
+    nodes = [
+        Component(id="a"),
+        Component(id="b"),
+        Component(id="c")
     ]
+    edges = [
+        Dependency(source=nodes[0].model_dump(), target=nodes[1].model_dump(), strength=0.9), # Strong bond -> high freq
+        Dependency(source=nodes[1].model_dump(), target=nodes[2].model_dump(), strength=0.2)  # Weak bond -> low freq
+    ]
+    graph = DependencyGraph(nodes=[n.model_dump() for n in nodes], edges=edges)
 
-    # Using dictionaries to create the dependency graph to avoid validation issues
-    nodes_data = [{"id": "slow.py"}, {"id": "fast.py"}]
-    edges_data = [{"source": nodes_data[0], "target": nodes_data[1], "strength": 0.8}]
-    dep_graph_data = {"nodes": nodes_data, "edges": edges_data}
-
-    dep_graph = DependencyGraph.model_validate(dep_graph_data)
-
-    return SystemState(
+    state = SystemState(
         software_state=SoftwareState(),
-        modules=modules,
-        dependency_graph=dep_graph,
-        energy_breakdown=energy_breakdown,
-        lyapunov_metrics=lyapunov_metrics,
+        dependency_graph=graph,
+        energy_breakdown=EnergyBreakdown(total=100.0, complexity=50.0, coupling=30.0, constraint=20.0, debt=0.0),
+        lyapunov_metrics=LyapunovMetrics(phi=100.0, energy=100.0, test_penalty=0.0, obligation_penalty=0.0)
+    )
+    return state
+
+def test_apply_physics_principle_success(phonon_agent, system_state_with_graph):
+    """
+    Tests that apply_physics_principle correctly analyzes communication flow
+    and proposes optimizations.
+    """
+    # Act
+    result = phonon_agent.apply_physics_principle(system_state_with_graph)
+
+    # Assert
+    assert isinstance(result, FlowOptimization)
+    assert result.success is True
+    assert result.agent_name == "phonon_flow"
+    assert result.physics_principle == "Lattice Dynamics"
+
+    # Check that analysis was performed
+    assert len(result.dispersion_relations) > 0
+    assert len(result.optimized_channels) > 0
+    assert result.total_bandwidth > 0
+    assert "latency_improvement" in result.model_dump()
+
+def test_apply_physics_principle_no_graph(phonon_agent):
+    """
+    Tests that the agent handles a system state with no dependency graph.
+    """
+    state = SystemState(
+        software_state=SoftwareState(),
+        dependency_graph=None,
+        energy_breakdown=EnergyBreakdown(total=100.0, complexity=50.0, coupling=30.0, constraint=20.0, debt=0.0),
+        lyapunov_metrics=LyapunovMetrics(phi=100.0, energy=100.0, test_penalty=0.0, obligation_penalty=0.0)
     )
 
-@pytest.mark.asyncio
-async def test_analyze_state_targets_slowest_file(phonon_agent, initial_state):
-    proposal = phonon_agent.analyze_state(initial_state)
-    assert proposal.status == Status.SUCCESS
-    assert "flow_optimization" in proposal.payload
-    opt = proposal.payload["flow_optimization"]
-    assert "total_bandwidth" in opt
-    assert opt["total_bandwidth"] > 0
+    # Act
+    result = phonon_agent.apply_physics_principle(state)
 
-def test_execute_calculates_energy_impact(phonon_agent):
-    proposal = AgentTask(
-        agent_name="phonon_flow",
-        task_type="refactoring",
-        payload={
-            "flow_optimization": {"total_bandwidth": 100}
-        },
-        status=Status.SUCCESS
-    )
-    action = phonon_agent.execute(proposal)
-    assert action.status == Status.SUCCESS
-    assert "flow_optimization" in action.result
+    # Assert
+    assert isinstance(result, FlowOptimization)
+    assert result.success is True # Successful analysis, just nothing to do
+    assert result.total_bandwidth == 0
+    assert result.latency_improvement == 0
+    assert len(result.optimized_channels) == 0

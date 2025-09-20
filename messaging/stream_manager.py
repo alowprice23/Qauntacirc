@@ -13,7 +13,7 @@ from nats.js.api import ConsumerConfig, StreamConfig, StreamInfo, StreamState
 from nats.js.errors import APIError
 
 from core.exceptions import MessagingError
-from messaging.nats_client import NATSClient
+from messaging.nats_client import NATSMessageBus
 
 log = logging.getLogger(__name__)
 
@@ -23,15 +23,15 @@ class StreamManager:
     JetStream streams and consumers.
     """
 
-    def __init__(self, nats_client: NATSClient):
+    def __init__(self, nats_client: NATSMessageBus):
         """
         Initializes the StreamManager.
 
         Args:
-            nats_client: An instance of the NATSClient, which must be connected.
+            nats_client: An instance of the NATSMessageBus, which must be connected.
         """
-        if not isinstance(nats_client, NATSClient):
-            raise TypeError("nats_client must be an instance of NATSClient.")
+        if not isinstance(nats_client, NATSMessageBus):
+            raise TypeError("nats_client must be an instance of NATSMessageBus.")
         self.nats_client = nats_client
 
     async def _get_jsm(self):

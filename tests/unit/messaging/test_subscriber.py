@@ -14,7 +14,7 @@ from pydantic import BaseModel
 from nats.aio.msg import Msg
 
 from messaging.subscriber import MessageSubscriber
-from messaging.nats_client import NATSClient
+from messaging.nats_client import NATSMessageBus
 from messaging.serialization import MessageSerializer, SerializationFormat
 
 class TestSubscriber:
@@ -44,7 +44,7 @@ async def test_subscriber_receives_message():
     """
     Tests that the subscriber correctly deserializes and processes a received message.
     """
-    mock_nats_client = AsyncMock(spec=NATSClient)
+    mock_nats_client = AsyncMock(spec=NATSMessageBus)
     mock_serializer = MagicMock(spec=MessageSerializer)
 
     subscriber = MessageSubscriber(nats_client=mock_nats_client, serializer=mock_serializer)

@@ -3,7 +3,7 @@ import numpy as np
 from unittest.mock import MagicMock, AsyncMock
 
 from agents.schrodinger_dev.hamiltonian import HamiltonianBuilder
-from agents.schrodinger_dev.code_generator import QuantumCodeGenerator
+from agents.schrodinger_dev.code_generator import SchrodingerCodeGenerator
 from agents.schrodinger_dev.agent import SchrodingerDevAgent
 from core.types import SystemState, EnergyBreakdown, LyapunovMetrics, Status, SoftwareState
 
@@ -68,7 +68,7 @@ print(s.check())
 
 @pytest.fixture
 def quantum_code_generator(mock_llm_client_variations):
-    return QuantumCodeGenerator(llm_client=mock_llm_client_variations, num_superpositions=4)
+    return SchrodingerCodeGenerator(llm_client=mock_llm_client_variations, num_superpositions=4)
 
 def test_hamiltonian_construction(hamiltonian_builder):
     implementations = [
@@ -102,14 +102,22 @@ def test_state_evolution_and_collapse(quantum_code_generator):
 
 @pytest.mark.asyncio
 async def test_agent_end_to_end_quantum_flow(mock_llm_client_variations):
-    agent = SchrodingerDevAgent(
-        state_space=MagicMock(),
-        energy_calculator=MagicMock(),
-        metrics_logger=MagicMock(),
-        policy_engine=MagicMock(),
-        agent_memory=MagicMock(),
-        llm_client=mock_llm_client_variations
-    )
+    agent = SchrodingerDevAgent(llm_client=mock_llm_client_variations)
+
+    # Mock data for the agent to use
+    code_state_data = {
+        "state_vector": [0.5, 0.5, 0.5, 0.5],
+        "code": "initial code"
+    }
+    hamiltonian_data = {
+        "matrix": [
+            [10, -1, -1, -1],
+            [-1, 5, -1, -1],
+            [-1, -1, 1, -1],
+            [-1, -1, -1, 8]
+        ]
+    }
+    dt = 1.0
 
     energy_breakdown = EnergyBreakdown(total=100.0, complexity=100.0, coupling=0.0, constraint=0.0, debt=0.0)
     lyapunov_metrics = LyapunovMetrics(phi=100.0, energy=100.0, test_penalty=0.0, obligation_penalty=0.0)
@@ -118,14 +126,20 @@ async def test_agent_end_to_end_quantum_flow(mock_llm_client_variations):
         energy_breakdown=energy_breakdown,
         lyapunov_metrics=lyapunov_metrics,
         metadata={
-            "planck_forge_output": {
-                "tasks": [{"id": "task_quantum", "description": "d1", "verification_criteria": ["vc1"]}]
-            },
-            "task_dag": {"task_quantum": []}
+            "schrodinger_dev_input": {
+                "code_state": code_state_data,
+                "hamiltonian": hamiltonian_data,
+                "dt": dt,
+                "implementations": ["code1", "code2", "code3", "code4"]
+            }
         }
     )
 
-    proposal = agent.analyze_state(initial_state)
+    result = agent.apply_physics_principle(initial_state)
 
-    assert proposal.status == Status.SUCCESS
-    assert "code_evolution" in proposal.payload
+    assert result.success is True
+    assert result.agent_name == "SchrodingerDevAgent"
+    assert "Code evolution successful" in result.message
+    assert result.new_state is not None
+    assert len(result.new_state.state_vector) == 4
+    assert result.energy_change is not None

@@ -16,6 +16,7 @@ class TunnelFixAgent(QuantumAgent):
 
     def __init__(self, llm_client: LLMClient):
         super().__init__(
+            agent_name="tunnel_fix",
             physics_principle="Quantum Tunneling",
             mathematical_formula="T = A * exp(-2 * κ * d)"
         )
@@ -91,7 +92,11 @@ class TunnelFixAgent(QuantumAgent):
                     ))
 
         return Proposal(
+            success=True,
+            agent_name="tunnel_fix",
             agent_id="tunnel_fix",
+            physics_principle="Quantum Tunneling",
+            message="Generated optimization proposals based on quantum tunneling.",
             transformation="barrier_escape_optimization",
             optimizations=optimization_proposals,
             mathematical_justification="Quantum tunneling enables barrier escape: T ∝ e^(-2κd)"

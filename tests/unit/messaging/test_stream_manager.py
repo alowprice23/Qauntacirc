@@ -14,7 +14,7 @@ from nats.js.api import StreamConfig
 from nats.js.errors import APIError
 
 from messaging.stream_manager import StreamManager
-from messaging.nats_client import NATSClient
+from messaging.nats_client import NATSMessageBus
 
 class TestStreamManager:
     def test_stream_manager_import(self):
@@ -40,7 +40,7 @@ async def test_create_new_stream():
     """
     Tests creating a new stream when it doesn't exist.
     """
-    mock_nats_client = AsyncMock(spec=NATSClient)
+    mock_nats_client = AsyncMock(spec=NATSMessageBus)
     mock_js_context = AsyncMock()
     # Simulate stream not found error, then success on add
     mock_js_context.update_stream.side_effect = APIError(err_code=10059)
@@ -70,7 +70,7 @@ async def test_update_existing_stream():
     """
     Tests updating an existing stream.
     """
-    mock_nats_client = AsyncMock(spec=NATSClient)
+    mock_nats_client = AsyncMock(spec=NATSMessageBus)
     mock_js_context = AsyncMock()
     mock_js_context.update_stream = AsyncMock()
 

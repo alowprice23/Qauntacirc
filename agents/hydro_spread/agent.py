@@ -14,6 +14,7 @@ class HydroSpreadAgent(PhysicsBasedAgent):
         Initializes agent to model system growth using viscous spreading.
         """
         super().__init__(
+            agent_name="hydro_spread",
             physics_principle="Viscous Spreading",
             mathematical_formula="R(t) = (5ρg/3πμ)^(1/8)V^(3/8)t^(1/8)"
         )
@@ -49,7 +50,13 @@ class HydroSpreadAgent(PhysicsBasedAgent):
             ))
 
         return GrowthPrediction(
-            predictions=predictions, viscosity=μ, spreading_coefficient=C,
+            success=True,
+            agent_name=self.agent_name,
+            physics_principle=self.physics_principle,
+            message="Successfully predicted system growth using viscous spreading model.",
+            predictions=predictions,
+            viscosity=μ,
+            spreading_coefficient=C,
             scaling_recommendations=self._generate_scaling_recommendations(predictions),
             growth_sustainability=self._assess_sustainability(predictions)
         )

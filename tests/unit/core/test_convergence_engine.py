@@ -91,10 +91,11 @@ def test_energy_stability_check():
 
 def test_lyapunov_stability_check(lyapunov_monitor):
     """Test the Lyapunov stability check logic."""
-    engine = ConvergenceEngine(ConvergenceCriteria(lyapunov_exponent_threshold=-1e-3))
+    # Use a smaller window size for the test to avoid generating excessive data
+    engine = ConvergenceEngine(ConvergenceCriteria(lyapunov_exponent_threshold=-1e-3, window_size=20))
 
     # Stable case
-    stable_history = [MockQCState(energy=1.0 * (0.9**i), potential=1.0 * (0.9**i)) for i in range(20)]
+    stable_history = [MockQCState(energy=1.0 * (0.9**i), potential=1.0 * (0.9**i)) for i in range(30)]
     for state in stable_history:
         lyapunov_monitor.track(lyapunov_monitor.compute(state))
     is_stable, exponent = engine._check_lyapunov_stability(lyapunov_monitor)
@@ -103,7 +104,7 @@ def test_lyapunov_stability_check(lyapunov_monitor):
 
     # Unstable case
     unstable_monitor = LyapunovMonitor(kappa=1.0, xi=1.0)
-    unstable_history = [MockQCState(energy=1.0 * (1.1**i), potential=1.0 * (1.1**i)) for i in range(20)]
+    unstable_history = [MockQCState(energy=1.0 * (1.1**i), potential=1.0 * (1.1**i)) for i in range(30)]
     for state in unstable_history:
         unstable_monitor.track(unstable_monitor.compute(state))
     is_stable, exponent = engine._check_lyapunov_stability(unstable_monitor)

@@ -16,7 +16,7 @@ from nats.aio.msg import Msg
 
 from core.exceptions import QuantumStateError
 from core.types import QCState
-from messaging.nats_client import NATSClient, QuantumAwareCallback
+from messaging.nats_client import NATSMessageBus, QuantumAwareCallback
 from messaging.serialization import MessageSerializer, SerializationFormat
 
 log = logging.getLogger(__name__)
@@ -32,7 +32,7 @@ class MessageSubscriber:
 
     def __init__(
         self,
-        nats_client: NATSClient,
+        nats_client: NATSMessageBus,
         serializer: MessageSerializer,
         dlq_subject_prefix: str = "DLQ",
         max_delivery_attempts: int = 5,
@@ -41,13 +41,13 @@ class MessageSubscriber:
         Initializes the MessageSubscriber.
 
         Args:
-            nats_client: An instance of the NATSClient.
+            nats_client: An instance of the NATSMessageBus.
             serializer: An instance of the MessageSerializer.
             dlq_subject_prefix: The prefix for Dead Letter Queue subjects.
             max_delivery_attempts: Max times a message should be delivered before DLQ.
         """
-        if not isinstance(nats_client, NATSClient):
-            raise TypeError("nats_client must be an instance of NATSClient.")
+        if not isinstance(nats_client, NATSMessageBus):
+            raise TypeError("nats_client must be an instance of NATSMessageBus.")
         if not isinstance(serializer, MessageSerializer):
             raise TypeError("serializer must be an instance of MessageSerializer.")
 

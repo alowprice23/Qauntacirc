@@ -27,24 +27,20 @@ class MockLLMClient(LLMClient):
             "risk_assessment": {"bound_type": "chernoff", "confidence_level": 1, "failure_probability": 0, "details": ""},
             "requires_approval": False, "estimated_effort": "TRIVIAL"
         }
-        # Minimal valid response for a Plan (requires an intent)
-        self.plan_response_template = {
-            "id": "", "intent": {}, "nodes": [], "edges": [],
+        # Minimal valid response for a PlanGenerationResult
+        self.plan_generation_response = {
+            "nodes": [], "edges": [],
             "metadata": {"required_capabilities": [], "estimated_time_seconds": 0, "risk_assessment": self.intent_response['risk_assessment']},
-            "verification_points": [], "energy_impact": {"initial_energy": 0, "predicted_final_energy": 0, "delta_e": 0},
-            "convergence_proof": {"theorem": "", "proof_sketch": "", "is_verified": False},
-            "lyapunov_certificate": {"function_definition": "", "descent_guarantee": "", "is_verified": False}
+            "verification_points": []
         }
 
     async def _do_chat(self, messages: List[Dict[str, str]], quantum_context: Optional[QCState] = None, **kwargs) -> Dict:
         system_prompt = messages[0]['content']
         user_prompt = messages[-1]['content']
 
-        if '"lyapunov_certificate"' in system_prompt:
-            intent_dict = json.loads(user_prompt.split('Generate a complete plan for the following intent:\n')[-1])
-            response_content = self.plan_response_template.copy()
-            response_content["id"] = f"plan-{uuid.uuid4()}"
-            response_content["intent"] = intent_dict
+        # Check for a unique field from the PlanGenerationResult schema
+        if '"verification_points"' in system_prompt:
+            response_content = self.plan_generation_response
         elif '"cnl_translation"' in system_prompt:
             response_content = self.intent_response
         else:

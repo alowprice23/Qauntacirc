@@ -1,57 +1,74 @@
 import pytest
-from unittest.mock import AsyncMock, MagicMock
 from agents.hydro_spread.agent import HydroSpreadAgent
-from core.types import SystemState, AgentTask, EnergyBreakdown, LyapunovMetrics, Status, Module, SoftwareState
-from datetime import datetime
+from core.types import SystemState, GrowthParameters, GrowthPrediction, EnergyBreakdown, LyapunovMetrics, SoftwareState
 
 @pytest.fixture
-def mock_llm_client():
-    client = AsyncMock()
-    client.complete.return_value = {"content": '{"summary": "s", "explanation": "e", "recommendations": []}'}
-    return client
+def hydrospread_agent():
+    """Fixture for a HydroSpreadAgent instance."""
+    return HydroSpreadAgent()
 
 @pytest.fixture
-def hydrospread_agent(mock_llm_client):
-    return HydroSpreadAgent(
-        state_space=MagicMock(),
-        energy_calculator=MagicMock(),
-        metrics_logger=MagicMock(),
-        policy_engine=MagicMock(),
-        agent_memory=MagicMock(),
-        llm_client=mock_llm_client
-    )
+def system_state_for_growth():
+    """Fixture for a SystemState with data for growth prediction."""
+    growth_params = {
+        "density": 1.2,
+        "gravity": 9.8,
+        "time_horizons": [1, 10, 100]
+    }
 
-@pytest.fixture
-def initial_state():
-    energy_breakdown = EnergyBreakdown(total=170.0, complexity=100.0, coupling=50.0, constraint=20.0, debt=0.0)
-    lyapunov_metrics = LyapunovMetrics(phi=170.0, energy=170.0, test_penalty=0.0, obligation_penalty=0.0)
-    return SystemState(
+    state = SystemState(
         software_state=SoftwareState(),
-        energy_breakdown=energy_breakdown,
-        lyapunov_metrics=lyapunov_metrics,
+        energy_breakdown=EnergyBreakdown(total=100.0, complexity=50.0, coupling=30.0, constraint=20.0, debt=0.0),
+        lyapunov_metrics=LyapunovMetrics(phi=100.0, energy=100.0, test_penalty=0.0, obligation_penalty=0.0),
         module_count=10,
         team_size=5,
         total_complexity=50.0,
         coupling_density=0.2,
-        current_volume=100.0
+        current_volume=100.0,
+        metadata={
+            "hydro_spread_input": {
+                "growth_parameters": growth_params
+            }
+        }
+    )
+    return state
+
+def test_apply_physics_principle_success(hydrospread_agent, system_state_for_growth):
+    """
+    Tests that apply_physics_principle correctly predicts system growth.
+    """
+    # Act
+    result = hydrospread_agent.apply_physics_principle(system_state_for_growth)
+
+    # Assert
+    assert isinstance(result, GrowthPrediction)
+    assert result.success is True
+    assert result.agent_name == "hydro_spread"
+    assert result.physics_principle == "Viscous Spreading"
+
+    # Check that predictions were generated for all time horizons
+    assert len(result.predictions) == 3
+    assert result.predictions[0].time == 1
+    assert result.predictions[1].time == 10
+    assert result.predictions[2].time == 100
+
+    # Check that viscosity and spreading coefficient were calculated
+    assert result.viscosity > 0
+    assert result.spreading_coefficient > 0
+
+    # Check that growth is predicted
+    assert result.predictions[0].predicted_radius < result.predictions[-1].predicted_radius
+
+def test_apply_physics_principle_missing_metadata(hydrospread_agent):
+    """
+    Tests that the agent raises a ValueError if growth_parameters are missing.
+    """
+    state = SystemState(
+        software_state=SoftwareState(),
+        energy_breakdown=EnergyBreakdown(total=100.0, complexity=50.0, coupling=30.0, constraint=20.0, debt=0.0),
+        lyapunov_metrics=LyapunovMetrics(phi=100.0, energy=100.0, test_penalty=0.0, obligation_penalty=0.0),
+        metadata={} # Missing hydro_spread_input
     )
 
-@pytest.mark.asyncio
-async def test_analyze_state_success(hydrospread_agent, initial_state):
-    proposal = hydrospread_agent.analyze_state(initial_state)
-    assert proposal.status == Status.SUCCESS
-    assert "growth_prediction" in proposal.payload
-    prediction = proposal.payload["growth_prediction"]
-    assert len(prediction["predictions"]) > 0
-    assert "viscosity" in prediction
-
-def test_execute(hydrospread_agent):
-    proposal = AgentTask(
-        agent_name="hydrospread",
-        task_type="forecast",
-        payload={"growth_prediction": {"predictions": []}},
-        status=Status.SUCCESS
-    )
-    action = hydrospread_agent.execute(proposal)
-    assert action.status == Status.SUCCESS
-    assert "growth_prediction" in action.result
+    with pytest.raises(ValueError, match="HydroSpreadAgent requires 'growth_parameters' in metadata."):
+        hydrospread_agent.apply_physics_principle(state)

@@ -17,7 +17,7 @@ from pydantic import BaseModel
 
 from core.exceptions import MessagingError, QuantumStateError
 from core.types import QCState
-from messaging.nats_client import NATSClient
+from messaging.nats_client import NATSMessageBus
 from messaging.serialization import MessageSerializer, SerializationFormat
 
 log = logging.getLogger(__name__)
@@ -30,7 +30,7 @@ class MessagePublisher:
 
     def __init__(
         self,
-        nats_client: NATSClient,
+        nats_client: NATSMessageBus,
         serializer: MessageSerializer,
         max_retries: int = 3,
         retry_delay_base: float = 0.5,
@@ -39,13 +39,13 @@ class MessagePublisher:
         Initializes the MessagePublisher.
 
         Args:
-            nats_client: An instance of the NATSClient.
+            nats_client: An instance of the NATSMessageBus.
             serializer: An instance of the MessageSerializer.
             max_retries: The maximum number of times to retry publishing a message.
             retry_delay_base: The base delay in seconds for exponential backoff.
         """
-        if not isinstance(nats_client, NATSClient):
-            raise TypeError("nats_client must be an instance of NATSClient.")
+        if not isinstance(nats_client, NATSMessageBus):
+            raise TypeError("nats_client must be an instance of NATSMessageBus.")
         if not isinstance(serializer, MessageSerializer):
             raise TypeError("serializer must be an instance of MessageSerializer.")
 

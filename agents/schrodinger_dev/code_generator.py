@@ -6,7 +6,7 @@ from typing import List, Dict, Any, Tuple
 from llm.client import LLMClient
 from . import prompts, ops
 
-class QuantumCodeGenerator:
+class SchrodingerCodeGenerator:
     """
     Generates and evolves a superposition of code implementations.
     """

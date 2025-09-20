@@ -5,6 +5,7 @@ import bz2
 import lzma
 from datetime import datetime
 from typing import Dict
+import networkx as nx
 
 from core.types import SystemState, EnergyBreakdown, Module
 
@@ -103,12 +104,12 @@ class EnergyCalculator:
 
     def _compute_coupling_energy(self, state: SystemState) -> float:
         """E_coupling = Tr(L) where L is the dependency graph Laplacian"""
-        if state.dependency_graph is None or state.dependency_graph.adjacency_matrix is None:
+        if state.dependency_graph is None or not state.dependency_graph.nodes():
             return 0.0
 
-        adjacency_matrix = np.array(state.dependency_graph.adjacency_matrix)
-        if adjacency_matrix.size == 0:
-            return 0.0
+        # Convert to numpy array for matrix operations
+        # The node order is preserved by default.
+        adjacency_matrix = nx.to_numpy_array(state.dependency_graph)
 
         # Degree matrix is a diagonal matrix of vertex degrees
         degrees = np.sum(adjacency_matrix, axis=1)
@@ -117,9 +118,10 @@ class EnergyCalculator:
         # Laplacian matrix L = D - A
         laplacian = degree_matrix - adjacency_matrix
 
-        # Trace of the Laplacian is the sum of its eigenvalues
-        eigenvalues = np.linalg.eigvals(laplacian)
-        return float(np.sum(eigenvalues.real))
+        # The trace of the Laplacian is the sum of its diagonal elements, which is also
+        # the sum of the degrees, and also the sum of its eigenvalues.
+        # Using np.trace is more direct than calculating eigenvalues.
+        return float(np.trace(laplacian))
 
     def _compute_constraint_energy(self, state: SystemState) -> float:
         """E_constraint = Σₖ wₖ·max(0, gₖ(S))²"""

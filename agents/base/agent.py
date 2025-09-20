@@ -18,7 +18,16 @@ class PhysicsBasedAgent(ABC):
     Base agent with physics principles.
     Each agent implements a specific physics principle as a computational operator.
     """
-    def __init__(self, physics_principle: str, mathematical_formula: str):
+    def __init__(self, agent_name: str, physics_principle: str, mathematical_formula: str):
+        """
+        Initializes the agent with its fundamental physics principle.
+
+        Args:
+            agent_name: The unique identifier for the agent (e.g., "bose_boost").
+            physics_principle: The name of the physics principle (e.g., "Quantum Tunneling").
+            mathematical_formula: The core equation representing the principle.
+        """
+        self.agent_name = agent_name
         self.physics_principle = physics_principle
         self.formula = mathematical_formula
         self.mathematical_constants = {}

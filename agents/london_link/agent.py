@@ -15,6 +15,7 @@ class LondonLinkAgent(PhysicsBasedAgent):
         Initializes agent to optimize dependencies using a van der Waals force model.
         """
         super().__init__(
+            agent_name="london_link",
             physics_principle="van der Waals Forces",
             mathematical_formula="V(r) = -C₆/r⁶"
         )
@@ -27,7 +28,16 @@ class LondonLinkAgent(PhysicsBasedAgent):
         """
         dependency_graph = system_state.dependency_graph
         if not dependency_graph or not dependency_graph.nodes:
-            return DependencyOptimization(original_potential=0, optimized_moves=[], expected_potential_reduction=0, modularity_improvement=0)
+            return DependencyOptimization(
+                success=True,
+                agent_name=self.agent_name,
+                physics_principle=self.physics_principle,
+                message="No dependency graph to analyze.",
+                original_potential=0,
+                optimized_moves=[],
+                expected_potential_reduction=0,
+                modularity_improvement=0
+            )
 
         london_coefficients = self._compute_london_coefficients(dependency_graph)
         potential_matrix = self._compute_potential_matrix(dependency_graph, london_coefficients)
@@ -39,6 +49,10 @@ class LondonLinkAgent(PhysicsBasedAgent):
         )
 
         return DependencyOptimization(
+            success=True,
+            agent_name=self.agent_name,
+            physics_principle=self.physics_principle,
+            message="Successfully analyzed dependency graph for optimization.",
             original_potential=float(np.sum(potential_matrix)),
             optimized_moves=optimization_moves,
             expected_potential_reduction=self._compute_potential_reduction(optimization_moves),

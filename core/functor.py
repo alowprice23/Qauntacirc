@@ -47,7 +47,8 @@ class Functor:
 
         rho_matrix = self._map_to_density_matrix(state_dict)
 
-        density_matrix_list = rho_matrix.tolist()
+        # Convert the numpy array of floats to complex numbers before creating the list
+        density_matrix_list = rho_matrix.astype(np.complex128).tolist()
 
         return QuantumState(
             state_vector=[],
@@ -70,7 +71,6 @@ class Functor:
         mock_state.constraints = state_dict.get('constraints', [])
         mock_state.complexity = state_dict.get('complexity', 0)
         mock_state.coupling = state_dict.get('coupling', 0)
-        mock_state.constraints = state_dict.get('constraints', 0)
         mock_state.debt = state_dict.get('debt', 0)
 
 
@@ -79,7 +79,7 @@ class Functor:
         feature_vector = np.array([
             components["complexity"],
             components["coupling"],
-            components["constraints"],
+            components["constraint"],
             components["debt"]
         ])
         return feature_vector

@@ -17,6 +17,7 @@ class PauliGuardAgent(PhysicsBasedAgent):
         ensuring they are orthogonal in a semantic vector space.
         """
         super().__init__(
+            agent_name="pauli_guard",
             physics_principle="Exclusion Principle",
             mathematical_formula="⟨ψᵢ|ψⱼ⟩ = 0 for i ≠ j"
         )
@@ -33,8 +34,15 @@ class PauliGuardAgent(PhysicsBasedAgent):
 
         if not module_states_data or len(module_states_data) < 2:
             return OrthogonalizationResult(
-                modules=[], shared_components=[], eliminated_duplicates=0,
-                orthogonality_improvement=0.0, violations=[]
+                success=True,
+                agent_name=self.agent_name,
+                physics_principle=self.physics_principle,
+                message="Not enough modules to perform orthogonalization analysis.",
+                modules=[],
+                shared_components=[],
+                eliminated_duplicates=0,
+                orthogonality_improvement=0.0,
+                violations=[]
             )
 
         modules = [ModuleState(**data) for data in module_states_data]
@@ -45,6 +53,10 @@ class PauliGuardAgent(PhysicsBasedAgent):
         shared_components = self._extract_shared_components(violations)
 
         return OrthogonalizationResult(
+            success=True,
+            agent_name=self.agent_name,
+            physics_principle=self.physics_principle,
+            message="Successfully performed orthogonalization analysis.",
             modules=orthogonalized_modules,
             shared_components=shared_components,
             eliminated_duplicates=len(violations),

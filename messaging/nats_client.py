@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 # Type alias for a quantum-aware message handler
 QuantumAwareCallback = Callable[[Msg, Optional[QCState]], Awaitable[None]]
 
-class NATSClient:
+class NATSMessageBus:
     """
     A high-level asynchronous client for NATS and JetStream with built-in
     support for quantum state context propagation.
@@ -36,12 +36,12 @@ class NATSClient:
     def __init__(
         self,
         server_urls: List[str] | str,
-        client_name: str = "QuantaCirc_NATSClient",
+        client_name: str = "QuantaCirc_NATSMessageBus",
         connect_timeout: int = 10,
         reconnect_time_wait: int = 5,
     ):
         """
-        Initializes the NATSClient.
+        Initializes the NATSMessageBus.
 
         Args:
             server_urls: A list of NATS server URLs to connect to.

@@ -7,7 +7,7 @@ This package provides the core infrastructure for asynchronous, quantum-aware
 communication between system components using NATS JetStream.
 """
 
-from .nats_client import NATSClient
+from .nats_client import NATSMessageBus
 from .publisher import MessagePublisher
 from .subscriber import MessageSubscriber
 from .stream_manager import StreamManager
@@ -15,7 +15,7 @@ from .topic_manager import TopicManager
 from .serialization import MessageSerializer, SerializationFormat
 
 __all__ = [
-    "NATSClient",
+    "NATSMessageBus",
     "MessagePublisher",
     "MessageSubscriber",
     "StreamManager",

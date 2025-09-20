@@ -1,7 +1,7 @@
 import pytest
 from datetime import datetime, timedelta
 from core.types import (
-    QCState,
+    SystemState,
     SoftwareState,
     EnergyBreakdown,
     QuantumState,
@@ -15,7 +15,7 @@ from core.validators import (
     ValidationError,
 )
 
-# Helper to create a default valid QCState
+# Helper to create a default valid SystemState
 def create_valid_qc_state(phase="initialization", lyapunov=0.5, has_quantum_state=True):
     software_state = SoftwareState(
         component_versions={"comp": "1.0"}, config_hashes={"conf": "abc"}
@@ -24,9 +24,9 @@ def create_valid_qc_state(phase="initialization", lyapunov=0.5, has_quantum_stat
     lyapunov_metrics = LyapunovMetrics(phi=lyapunov, energy=energy_breakdown.total, test_penalty=0.0, obligation_penalty=0.0)
     quantum_state = None
     if has_quantum_state:
-        quantum_state = QuantumState(state_vector=[1.0, 0.0])
+        quantum_state = QuantumState(state_vector=[1.0+0j, 0.0+0j])
 
-    return QCState(
+    return SystemState(
         software_state=software_state,
         energy_breakdown=energy_breakdown,
         lyapunov_metrics=lyapunov_metrics,
@@ -36,7 +36,7 @@ def create_valid_qc_state(phase="initialization", lyapunov=0.5, has_quantum_stat
     )
 
 def test_validate_qc_state_consistency_valid():
-    """Tests that a consistent QCState passes validation."""
+    """Tests that a consistent SystemState passes validation."""
     state = create_valid_qc_state(phase="exploitation", lyapunov=0.5)
     validate_qc_state_consistency(state)  # Should not raise
 

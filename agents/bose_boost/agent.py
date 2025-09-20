@@ -15,6 +15,7 @@ class BoseBoostAgent(PhysicsBasedAgent):
         This agent allocates resources optimally using Bose-Einstein statistics.
         """
         super().__init__(
+            agent_name="bose_boost",
             physics_principle="Bose-Einstein Statistics",
             mathematical_formula="n_B = 1/(e^((ε-μ)/kT) - 1)"
         )
@@ -62,7 +63,13 @@ class BoseBoostAgent(PhysicsBasedAgent):
         deployment_plan = DeploymentPlan(topology={"details": "Topology optimization not implemented."})
 
         return ResourceAllocation(
-            allocations=allocations, chemical_potential=μ, temperature=temperature,
+            success=True,
+            agent_name=self.agent_name,
+            physics_principle=self.physics_principle,
+            message="Successfully allocated resources using Bose-Einstein statistics.",
+            allocations=allocations,
+            chemical_potential=μ,
+            temperature=temperature,
             deployment_plan=deployment_plan,
             total_efficiency=sum(alloc['efficiency_score'] for alloc in allocations.values())
         )
