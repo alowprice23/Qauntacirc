@@ -11,6 +11,7 @@ class PlanckForgeAgent(PhysicsBasedAgent):
         requirements into discrete energy levels, based on Planck's hypothesis.
         """
         super().__init__(
+            agent_name="planck_forge",
             physics_principle="Energy Quantization",
             mathematical_formula="E_n = n·h·ν"
         )
@@ -30,7 +31,14 @@ class PlanckForgeAgent(PhysicsBasedAgent):
 
         if not requirements_str:
             # Return an empty result if there are no requirements to process
-            return QuantizedTasks(quanta=[], total_energy=0.0)
+            return QuantizedTasks(
+                success=True,
+                agent_name="planck_forge",
+                physics_principle="Energy Quantization",
+                message="No requirements to process.",
+                quanta=[],
+                total_energy=0.0
+            )
 
         # Extract dominant frequencies (ν) from the requirements text
         frequencies = self.frequency_analyzer.extract_frequencies(requirements_str)
@@ -50,7 +58,14 @@ class PlanckForgeAgent(PhysicsBasedAgent):
                 quanta.append(task_quantum)
 
         total_energy = sum(q.energy for q in quanta)
-        return QuantizedTasks(quanta=quanta, total_energy=total_energy)
+        return QuantizedTasks(
+            success=True,
+            agent_name="planck_forge",
+            physics_principle="Energy Quantization",
+            message="Successfully quantized requirements.",
+            quanta=quanta,
+            total_energy=total_energy
+        )
 
     def measure_observable(self, system_state: SystemState) -> Observable:
         """

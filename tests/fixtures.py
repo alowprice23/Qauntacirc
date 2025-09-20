@@ -1,18 +1,32 @@
 import pytest
+from core.types import SystemState, SoftwareState, EnergyBreakdown, LyapunovMetrics
+from agents.planck_forge.agent import PlanckForgeAgent
+from agents.schrodinger_dev.agent import SchrodingerDevAgent
+from agents.pauli_guard.agent import PauliGuardAgent
 
 @pytest.fixture
 def test_system_state():
     """A pytest fixture to provide a baseline SystemState for tests."""
-    pytest.skip("Fixture test_system_state is not fully implemented.")
-    # In a real implementation, this would return a core.types.SystemState object
-    # initialized with sensible defaults for testing.
-    return {"requirements": [], "obligations": []}
+    return SystemState(
+        software_state=SoftwareState(),
+        energy_breakdown=EnergyBreakdown(
+            total=1000.0,
+            complexity=500.0,
+            coupling=300.0,
+            constraint=100.0,
+            debt=100.0
+        ),
+        lyapunov_metrics=LyapunovMetrics(
+            phi=1.0,
+            energy=1000.0,
+            test_penalty=0.0,
+            obligation_penalty=0.0
+        )
+    )
 
 @pytest.fixture
 def test_llm_client():
     """A pytest fixture to provide a mock LLM client."""
-    pytest.skip("Fixture test_llm_client is not fully implemented.")
-    # This would return a mock of llm.client.LLMClient
     class MockLLMClient:
         def generate(self, prompt):
             return "mocked LLM response"
@@ -20,4 +34,8 @@ def test_llm_client():
 
 # This is not a fixture, but a constant that can be imported by tests.
 # It should be populated with all the agent classes.
-ALL_AGENT_CLASSES = []
+ALL_AGENT_CLASSES = [
+    PlanckForgeAgent,
+    SchrodingerDevAgent,
+    PauliGuardAgent,
+]

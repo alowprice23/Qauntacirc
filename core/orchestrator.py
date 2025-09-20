@@ -166,6 +166,9 @@ class Orchestrator:
         else:
             result = agent.apply_physics_principle(current_state.model_copy(deep=True))
 
+        if asyncio.iscoroutine(result):
+            result = await result
+
         if result is None:
             return SystemEvolution(
                 initial_state=current_state,
