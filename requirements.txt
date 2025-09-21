@@ -95,3 +95,5 @@ urllib3==2.5.0
 z3-solver==4.15.3.0
 zipp==3.23.0
 zstandard==0.25.0
+sympy==1.12
+radon==6.0.1

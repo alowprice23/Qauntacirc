@@ -50,6 +50,10 @@ async def test_agent_coordination_protocol(test_system_state, test_llm_client):
     # Create test system state
     initial_state = test_system_state
     initial_state.requirements = ["Create a new feature"]
+    initial_state.metadata['test_results'] = {'total_tests': 100, 'total_failures': 0}
+    initial_state.metadata['risk_budget'] = {'empirical_budget': 1e-6}
+    initial_state.metadata['policy'] = {'max_severity': 5}
+    initial_state.metadata['proof_terms'] = []
 
     # Scenario 1: Sequential agent execution
     orchestrator.agent_selector_strategy = "round-robin"

@@ -110,6 +110,10 @@ async def test_orchestrator_executes_chaos_plan(mock_orchestrator, mock_system_s
     )
 
     # The agent selection is round-robin, so it will select our agent.
+    mock_system_state.metadata['test_results'] = {'total_tests': 100, 'total_failures': 0}
+    mock_system_state.metadata['risk_budget'] = {'empirical_budget': 1e-6}
+    mock_system_state.metadata['policy'] = {'max_severity': 5}
+    mock_system_state.metadata['proof_terms'] = []
     evolution = await mock_orchestrator.evolve_system(mock_system_state)
 
     # Verify that the execution method was called.

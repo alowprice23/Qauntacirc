@@ -40,11 +40,17 @@ class FluctuaTestAgent(PhysicsBasedAgent):
         # For now, we return a mock analysis.
         return {"vulnerability_score": random.uniform(0.1, 0.9)}
 
-    def _select_scenarios(self, vulnerability_analysis: Dict[str, Any], risk_budget: float) -> List[ChaosScenario]:
+    def _select_scenarios(self, vulnerability_analysis: Dict[str, Any], risk_budget: Any) -> List[ChaosScenario]:
         """Selects chaos scenarios based on analysis and risk budget. Placeholder."""
         print("Selecting chaos scenarios...")
+
+        if isinstance(risk_budget, dict):
+            budget = risk_budget.get('empirical_budget', 0.5)
+        else:
+            budget = risk_budget
+
         # For now, selects a random subset of available scenarios.
-        num_to_select = int(len(self.chaos_scenarios) * risk_budget)
+        num_to_select = int(len(self.chaos_scenarios) * budget)
         return random.sample(self.chaos_scenarios, k=max(0, min(len(self.chaos_scenarios), num_to_select))) if self.chaos_scenarios else []
 
     def _optimize_execution_order(self, scenarios: List[ChaosScenario]) -> List[int]:

@@ -5,6 +5,13 @@ from datetime import datetime, timedelta
 from pydantic import field_validator, model_validator, BaseModel, Field, validator
 from enum import Enum
 import re
+import numpy as np
+try:
+    from z3 import Solver, sat, unsat
+except ImportError:
+    Solver = None
+    sat = None
+    unsat = None
 
 class EnergyBreakdown(BaseModel):
     total: float
@@ -56,9 +63,10 @@ class Obligation(BaseModel):
 Requirement = str
 
 class ProofStep(BaseModel):
-    type: str
-    description: str
-    evidence: List[Dict[str, Any]]
+    step_number: int
+    statement: str
+    justification: str
+    formal_expression: str
 
 class CompletenessProof(BaseModel):
     obligation_count: int
@@ -619,8 +627,8 @@ class IrrefutabilityResult(BaseModel):
     logical_conjunction: bool
     acceptance_decision: bool
     axiom_ledger: List[Dict[str, Any]]
-    replayability_proof: Any
-    soundness_certificate: Any
+    replayability_proof: "ReplayabilityProof"
+    soundness_certificate: "SoundnessProof"
 
 class SystemVerification(BaseModel):
     """Placeholder for system verification data."""
@@ -633,10 +641,103 @@ class SystemVerification(BaseModel):
     statistical_tests: Any = None
     integration_results: Any = None
 
+class VerificationResult(BaseModel):
+    success: bool
+    error_log: Optional[str] = None
+
 class FinalCertificate(BaseModel):
     irrefutability_score: float
     mathematical_certainty_level: str
+    evidence_summary: Dict
+    theorem_proofs: Any
+    statistical_guarantees: Any
+    replayability_guarantee: bool
+    soundness_guarantee: bool
+    completeness_guarantee: bool
     final_verdict: str
+    certificate_hash: str
+    timestamp: float
+    signature: Any
+
+class ReplayCertificate(BaseModel):
+    predicate: str
+    witness_hash: Optional[str] = None
+    checker_id: str
+    timestamp: float
+    replay_command: str
+
+class ReplayabilityProof(BaseModel):
+    all_predicates_replayable: bool
+    replay_certificates: List[ReplayCertificate]
+    immutable_artifact_store: str
+    replay_environment: Dict[str, str]
+
+class DecidabilityProof(BaseModel):
+    decidable: bool
+    reason: str
+
+class SoundnessProof(BaseModel):
+    formal_proof: str
+    decidability_proofs: Dict[str, DecidabilityProof]
+    conjunction_decidable: bool
+    logical_validity: bool
+    mechanically_checkable: bool
+
+class VerifiedClaim(BaseModel):
+    claim: str
+    mathematical_basis: str
+    proof_method: str
+    witness: Any
+    certainty_level: str
+
+class ClaimVerification(BaseModel):
+    mathematically_certain: bool = False
+    mathematical_basis: Optional[str] = None
+    proof_method: Optional[str] = None
+    witness: Optional[Any] = None
+    checker_output: Optional[str] = None
+    statistically_bounded: bool = False
+    statistical_basis: Optional[str] = None
+    confidence_interval: Optional[Tuple[float, float]] = None
+    statistical_witness: Optional[str] = None
+    verification_status: Optional[str] = None
+
+class CertaintyVerification(BaseModel):
+    verified_claims: List[VerifiedClaim]
+    mathematical_certainty_count: int
+    statistical_certainty_count: int
+    unverified_count: int
+    overall_irrefutability: "OverallIrrefutability"
+
+class ConsistencyCheck(BaseModel):
+    valid: bool
+    proof: str
+    witness: Any
+
+class FoundationVerification(BaseModel):
+    mathematically_sound: bool
+    foundation_checks: Dict[str, ConsistencyCheck]
+    irrefutability_level: str
+    logical_basis: str
+    computational_complexity: Dict[str, str]
+
+class OverallIrrefutability(BaseModel):
+    score: float
+    level: str
+    explanation: str
+    mathematical_claims_ratio: float
+    statistical_claims_ratio: float
+    formal_verification_coverage: float
+    recommended_improvements: List[str]
+
+class IrrefutabilityTheorem(BaseModel):
+    statement: str
+    proof_steps: List[ProofStep]
+    logical_validity: bool
+    mechanically_verifiable: bool
+    certainty_level: str
+    assumptions: List[Dict[str, Any]]
+    decidable_predicates: List[str]
 
 
 # Final forward reference resolution

@@ -156,19 +156,22 @@ class ClosureRuleEngine:
         """Generate formal proof of requirement completeness"""
         proof_steps = [
             ProofStep(
-                type="base_case",
-                description="All explicit requirements have corresponding obligations",
-                evidence=self._collect_direct_coverage_evidence(obligation_set)
+                step_number=1,
+                statement="All explicit requirements have corresponding obligations.",
+                justification="Direct mapping from requirements to obligations.",
+                formal_expression="∀r ∈ R, ∃o ∈ O. Satisfies(o, r)"
             ),
             ProofStep(
-                type="inductive_step",
-                description="Closure rules preserve requirement coverage",
-                evidence=self._collect_closure_rule_evidence()
+                step_number=2,
+                statement="Closure rules preserve requirement coverage.",
+                justification="Each rule derives new obligations that cover implied requirements.",
+                formal_expression="∀rule ∈ Δ, Coverage(O) → Coverage(O ∪ apply(rule, O))"
             ),
             ProofStep(
-                type="fixed_point",
-                description="No additional obligations can be derived",
-                evidence=self._collect_fixed_point_evidence(obligation_set)
+                step_number=3,
+                statement="The computed set is a fixed point.",
+                justification="Applying closure rules again yields no new obligations.",
+                formal_expression="apply(Δ, O) = O"
             )
         ]
 

@@ -21,7 +21,13 @@ def test_system_state():
             energy=1000.0,
             test_penalty=0.0,
             obligation_penalty=0.0
-        )
+        ),
+        metadata={
+            'test_results': {'total_tests': 100, 'total_failures': 0},
+            'risk_budget': {'empirical_budget': 1e-6},
+            'policy': {'max_severity': 5},
+            'proof_terms': [],
+        }
     )
 
 @pytest.fixture

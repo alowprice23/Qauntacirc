@@ -11,12 +11,13 @@ from core.energy_calculator import EnergyCalculator
 from core.lyapunov_monitor import LyapunovMonitor
 from core.closure_validator import ClosureValidator
 from core.closure_rules import ClosureRuleEngine
+from core.irrefutability_engine import IrrefutabilityEngine
 from core.types import (
     SystemState, SystemEvolution, AgentAction, QuantizedTasks, CodeEvolution,
     OrthogonalizationResult, UncertaintyAnalysis, TunnelingResult,
     ResourceAllocation, FlowOptimization, ChaosTestResult,
     GrowthPrediction, DependencyOptimization, PhysicsResult, Obligation, ObligationType, ObligationStatus,
-    GateResult, MonitoringResult, CompletenessProof
+    GateResult, MonitoringResult, CompletenessProof, BuildArtifacts
 )
 from core.chaos_types import ChaosPlanResult
 from monitoring.resilience import ResilienceMonitor
@@ -45,6 +46,7 @@ class Orchestrator:
         self.comm_protocol = communication_protocol
         self.agent_selector_strategy = "round-robin"
         self.last_agent_idx = -1
+        self.irrefutability_engine = IrrefutabilityEngine()
 
         self.gates: Dict[str, Callable[[SystemState], GateResult]] = {}
         self.monitors: Dict[str, Callable[[SystemState], MonitoringResult]] = {}
@@ -61,6 +63,7 @@ class Orchestrator:
     def _register_default_components(self):
         """Registers the default gates and monitors."""
         self.add_gate("delta_closure", self._closure_gate)
+        self.add_gate("irrefutability_check", self._irrefutability_gate)
         self.add_monitor("closure_completeness", self._monitor_closure)
 
     def _suggest_closure_actions(self, closure_result: "ClosureResult") -> List[str]:
@@ -105,6 +108,46 @@ class Orchestrator:
             passed=True,
             reason="Δ-closure verified - all obligations captured",
             completeness_proof=closure_result.completeness_proof
+        )
+
+    def _irrefutability_gate(self, state: SystemState) -> GateResult:
+        """Gate function that verifies the irrefutability of the current state."""
+        print(f"DEBUG: state.metadata in orchestrator: {state.metadata}")
+
+        # The irrefutability engine expects file paths, but the state has module objects.
+        # We will use module.name as a stand-in for the file path.
+        files = [module.name for module in state.modules]
+
+        build_artifacts = BuildArtifacts(
+            files=files,
+            metadata={
+                'requirements': state.requirements,
+                'obligations': [o.model_dump() for o in state.obligations],
+                'policy': state.metadata.get('policy', {}),
+                'proof_terms': state.metadata.get('proof_terms', []),
+                'test_results': state.metadata.get('test_results', {}),
+                'risk_budget': state.metadata.get('risk_budget', {}),
+            }
+        )
+        print(f"DEBUG: build_artifacts.metadata in orchestrator: {build_artifacts.metadata}")
+
+        # We assume the acceptance decision is True for the purpose of this gate
+        irrefutability_result = self.irrefutability_engine.verify_acceptance_irrefutability(
+            build_artifacts=build_artifacts,
+            acceptance_decision=True
+        )
+
+        if not irrefutability_result.decision_irrefutable:
+            return GateResult(
+                passed=False,
+                reason="Irrefutability check failed. The acceptance decision is not mathematically sound.",
+                required_actions=["investigate_predicate_failures"],
+                blocking=True
+            )
+
+        return GateResult(
+            passed=True,
+            reason="Irrefutability check passed.",
         )
 
     def _monitor_closure(self, state: SystemState) -> MonitoringResult:
