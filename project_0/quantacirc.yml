@@ -1,0 +1,12 @@
+agents:
+  enabled:
+  - planck_forge
+  - schrodinger_dev
+  prompt_version: v1.0
+project:
+  name: project_0
+  template: default
+  version: 0.1.0
+quantum:
+  annealing_schedule: adaptive
+  convergence_threshold: 1.0e-06

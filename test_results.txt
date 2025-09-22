@@ -1,0 +1,247 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.11, pytest-8.4.2, pluggy-1.6.0
+benchmark: 5.1.0 (defaults: timer=time.perf_counter disable_gc=False min_rounds=5 min_time=0.000005 max_time=1.0 calibration_precision=10 warmup=False warmup_iterations=100000)
+rootdir: /app
+configfile: pyproject.toml
+plugins: xdist-3.8.0, benchmark-5.1.0, asyncio-1.2.0, mock-3.15.1, anyio-4.10.0, hypothesis-6.139.2, cov-7.0.0
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 15 items
+
+tests/e2e/test_01_cli_input_validation.py FFF.FFFFFFFFFFF                [100%]
+
+=================================== FAILURES ===================================
+____________ TestCliInputValidation.test_missing_required_argument _____________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e519ccb0>
+
+    def test_missing_required_argument(self):
+        result = runner.invoke(app, ["init", "create"])
+        assert result.exit_code != 0
+>       assert "Missing argument 'PROJECT_NAME'" in result.stdout
+E       assert "Missing argument 'PROJECT_NAME'" in ''
+E        +  where '' = <Result SystemExit(2)>.stdout
+
+tests/e2e/test_01_cli_input_validation.py:29: AssertionError
+__________________ TestCliInputValidation.test_extra_argument __________________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e519cd40>
+
+    def test_extra_argument(self):
+        result = runner.invoke(app, ["status", "extra_arg"])
+        assert result.exit_code != 0
+>       assert "Got unexpected extra argument (extra_arg)" in result.stdout
+E       AssertionError: assert 'Got unexpected extra argument (extra_arg)' in ''
+E        +  where '' = <Result SystemExit(2)>.stdout
+
+tests/e2e/test_01_cli_input_validation.py:35: AssertionError
+__________________ TestCliInputValidation.test_incorrect_flag __________________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e519ce90>
+
+    def test_incorrect_flag(self):
+        result = runner.invoke(app, ["init", "create", "my-proj", "--nonexistent-flag"])
+        assert result.exit_code != 0
+>       assert "No such option: --nonexistent-flag" in result.stdout
+E       AssertionError: assert 'No such option: --nonexistent-flag' in ''
+E        +  where '' = <Result SystemExit(2)>.stdout
+
+tests/e2e/test_01_cli_input_validation.py:41: AssertionError
+__________ TestCliInputValidation.test_special_characters_in_argument __________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e50fba70>
+temp_workspace = PosixPath('/tmp/pytest-of-jules/pytest-4/test_special_characters_in_arg0')
+
+    def test_special_characters_in_argument(self, temp_workspace):
+        project_name = "my; ls -la; project"
+        result = runner.invoke(app, ["init", "create", project_name])
+>       assert result.exit_code == 0
+E       assert 1 == 0
+E        +  where 1 = <Result TypeError("'NoneType' object is not subscriptable")>.exit_code
+
+/app/tests/e2e/test_01_cli_input_validation.py:57: AssertionError
+__________ TestCliInputValidation.test_unicode_and_emojis_in_argument __________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e50fb8c0>
+temp_workspace = PosixPath('/tmp/pytest-of-jules/pytest-4/test_unicode_and_emojis_in_arg0')
+
+    def test_unicode_and_emojis_in_argument(self, temp_workspace):
+        project_name = "project-🚀-你好"
+        result = runner.invoke(app, ["init", "create", project_name])
+>       assert result.exit_code == 0
+E       assert 1 == 0
+E        +  where 1 = <Result TypeError("'NoneType' object is not subscriptable")>.exit_code
+
+/app/tests/e2e/test_01_cli_input_validation.py:67: AssertionError
+_____________ TestCliInputValidation.test_script_injection_string ______________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e50fb260>
+temp_workspace = PosixPath('/tmp/pytest-of-jules/pytest-4/test_script_injection_string0')
+
+    def test_script_injection_string(self, temp_workspace):
+        project_name = "<script>alert('xss')</script>"
+        result = runner.invoke(app, ["init", "create", project_name])
+>       assert result.exit_code == 0
+E       assert 1 == 0
+E        +  where 1 = <Result TypeError("'NoneType' object is not subscriptable")>.exit_code
+
+/app/tests/e2e/test_01_cli_input_validation.py:74: AssertionError
+______________ TestCliInputValidation.test_empty_string_argument _______________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e50fb1d0>
+temp_workspace = PosixPath('/tmp/pytest-of-jules/pytest-4/test_empty_string_argument0')
+
+    def test_empty_string_argument(self, temp_workspace):
+        os.chdir(temp_workspace)
+        result = runner.invoke(app, ["init", "create", ""])
+        # Typer usually prevents this and asks for a value. In non-interactive, it should fail.
+        # In CliRunner, it might just create a directory named "".
+        # A robust CLI should handle this gracefully.
+        assert result.exit_code != 0
+>       assert "Missing argument 'PROJECT_NAME'" in result.stdout
+E       assert "Missing argument 'PROJECT_NAME'" in ''
+E        +  where '' = <Result TypeError("'NoneType' object is not subscriptable")>.stdout
+
+/app/tests/e2e/test_01_cli_input_validation.py:85: AssertionError
+____________ TestCliInputValidation.test_whitespace_string_argument ____________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e50fb320>
+temp_workspace = PosixPath('/tmp/pytest-of-jules/pytest-4/test_whitespace_string_argumen0')
+
+    def test_whitespace_string_argument(self, temp_workspace):
+        project_name = "   "
+        result = runner.invoke(app, ["init", "create", project_name])
+        # Similar to empty, this should ideally be caught.
+        # If not, it creates a directory with spaces. We test for that.
+>       assert result.exit_code == 0
+E       assert 1 == 0
+E        +  where 1 = <Result TypeError("'NoneType' object is not subscriptable")>.exit_code
+
+/app/tests/e2e/test_01_cli_input_validation.py:93: AssertionError
+________________ TestCliInputValidation.test_long_project_name _________________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e519cd10>
+temp_workspace = PosixPath('/tmp/pytest-of-jules/pytest-4/test_long_project_name0')
+
+    def test_long_project_name(self, temp_workspace):
+        project_name = "a" * 256 # Exceeds many filesystem limits for path components
+        result = runner.invoke(app, ["init", "create", project_name])
+        # We expect this to fail either at the CLI or filesystem level.
+        # A graceful failure is the goal.
+        if result.exit_code == 0:
+            # If it succeeds, that's okay on some filesystems, but we should check.
+            assert Path(project_name).is_dir()
+        else:
+>           assert "File name too long" in result.stdout or "Error" in result.stdout
+E           assert ('File name too long' in '' or 'Error' in '')
+E            +  where '' = <Result TypeError("'NoneType' object is not subscriptable")>.stdout
+E            +  and   '' = <Result TypeError("'NoneType' object is not subscriptable")>.stdout
+
+/app/tests/e2e/test_01_cli_input_validation.py:106: AssertionError
+____________ TestCliInputValidation.test_long_generate_requirement _____________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e519d1c0>
+
+    def test_long_generate_requirement(self):
+        requirement = "generate " + "a" * 4096 # A very long requirement string
+        result = runner.invoke(app, ["generate", "requirement", requirement])
+>       assert result.exit_code == 0
+E       assert 1 == 0
+E        +  where 1 = <Result TypeError("'NoneType' object is not subscriptable")>.exit_code
+
+tests/e2e/test_01_cli_input_validation.py:112: AssertionError
+_______________ TestCliInputValidation.test_invalid_config_path ________________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e519d310>
+
+    def test_invalid_config_path(self):
+        result = runner.invoke(app, ["--config", "/path/to/nonexistent/config.yml", "status"])
+        assert result.exit_code != 0
+>       assert "Configuration file not found" in result.stdout
+E       AssertionError: assert 'Configuration file not found' in ''
+E        +  where '' = <Result SystemExit(2)>.stdout
+
+tests/e2e/test_01_cli_input_validation.py:121: AssertionError
+______________ TestCliInputValidation.test_malformed_config_file _______________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e519d520>
+temp_workspace = PosixPath('/tmp/pytest-of-jules/pytest-4/test_malformed_config_file0')
+
+    def test_malformed_config_file(self, temp_workspace):
+        config_file = temp_workspace / "malformed.yml"
+        config_file.write_text("project: { name: my-project,") # Invalid YAML
+        result = runner.invoke(app, ["--config", str(config_file), "status"])
+        # This depends on the error handling in the config loader.
+        # A good system would report a parsing error.
+        assert result.exit_code != 0
+>       assert "Error" in result.stdout or "QuantaCircError" in result.stdout
+E       AssertionError: assert ('Error' in '' or 'QuantaCircError' in '')
+E        +  where '' = <Result SystemExit(2)>.stdout
+E        +  and   '' = <Result SystemExit(2)>.stdout
+
+/app/tests/e2e/test_01_cli_input_validation.py:131: AssertionError
+_____________ TestCliInputValidation.test_case_insensitive_options _____________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e519d6d0>
+
+    def test_case_insensitive_options(self):
+        result = runner.invoke(app, ["--CONFIG", "file.yml", "status"])
+        assert result.exit_code != 0
+>       assert "No such option: --CONFIG" in result.stdout
+E       AssertionError: assert 'No such option: --CONFIG' in ''
+E        +  where '' = <Result SystemExit(2)>.stdout
+
+tests/e2e/test_01_cli_input_validation.py:137: AssertionError
+__________ TestCliInputValidation.test_path_traversal_in_project_name __________
+
+self = <tests.e2e.test_01_cli_input_validation.TestCliInputValidation object at 0x7f18e519d8b0>
+temp_workspace = PosixPath('/tmp/pytest-of-jules/pytest-4/test_path_traversal_in_project0')
+
+    def test_path_traversal_in_project_name(self, temp_workspace):
+        project_name = "../traversal_test"
+        result = runner.invoke(app, ["init", "create", project_name])
+        # A secure CLI should sanitize path inputs to prevent writing outside the CWD.
+        # We check that a directory with the literal name is created inside the workspace.
+>       assert result.exit_code == 0
+E       assert 1 == 0
+E        +  where 1 = <Result TypeError("'NoneType' object is not subscriptable")>.exit_code
+
+/app/tests/e2e/test_01_cli_input_validation.py:145: AssertionError
+=============================== warnings summary ===============================
+../home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+../home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+../home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+../home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+../home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+../home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+../home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+../home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+../home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/pydantic/_internal/_config.py:323
+  /home/jules/.pyenv/versions/3.12.11/lib/python3.12/site-packages/pydantic/_internal/_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+<frozen importlib._bootstrap>:488
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:488
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:488
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_missing_required_argument
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_extra_argument
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_incorrect_flag
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_special_characters_in_argument
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_unicode_and_emojis_in_argument
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_script_injection_string
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_empty_string_argument
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_whitespace_string_argument
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_long_project_name
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_long_generate_requirement
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_invalid_config_path
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_malformed_config_file
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_case_insensitive_options
+FAILED tests/e2e/test_01_cli_input_validation.py::TestCliInputValidation::test_path_traversal_in_project_name
+================== 14 failed, 1 passed, 12 warnings in 3.04s ===================

@@ -151,25 +151,24 @@ def test_generate_final_irrefutability_certificate(engine):
     assert certificate.irrefutability_score == 1.0
     assert certificate.mathematical_certainty_level == "IRREFUTABLE"
 
-def test_generate_final_irrefutability_certificate_weighting(engine, mocker):
+def test_generate_final_irrefutability_certificate_weighting(engine):
     """Tests the weighting logic in the final certificate generation."""
     system_verification = SystemVerification()
 
-    mocker.patch.object(engine, '_analyze_mathematical_certainty', return_value={
+    with patch.object(engine, '_analyze_mathematical_certainty', return_value={
         'formal_proof_coverage': 0.8,
         'statistical_bound_quality': 0.7,
         'empirical_test_strength': 0.6,
         'logical_foundation_soundness': 0.5,
         'closure_complete': True,
-    })
-
-    certificate = engine.generate_final_irrefutability_certificate(system_verification)
+    }):
+        certificate = engine.generate_final_irrefutability_certificate(system_verification)
 
     expected_score = (0.4 * 0.8) + (0.3 * 0.7) + (0.2 * 0.6) + (0.1 * 0.5)
     assert abs(certificate.irrefutability_score - expected_score) < 1e-9
     assert certificate.mathematical_certainty_level == "STATISTICALLY_SOUND"
 
-def test_verify_mathematical_certainty(engine, mocker):
+def test_verify_mathematical_certainty(engine):
     """Tests the verification of mathematical certainty for a list of claims."""
     claims = [
         "Energy function is non-negative",
@@ -177,10 +176,10 @@ def test_verify_mathematical_certainty(engine, mocker):
         "This is a new claim"
     ]
 
-    mocker.patch.object(engine, '_execute_mathematical_verification', return_value={'proven': True, 'witness': 'w', 'checker_output': 'o'})
-    mocker.patch.object(engine, '_execute_statistical_verification', return_value={'significant': True, 'test_statistic': 's', 'confidence_interval': (0.1, 0.9), 'data_hash': 'h'})
+    with patch.object(engine, '_execute_mathematical_verification', return_value={'proven': True, 'witness': 'w', 'checker_output': 'o'}), \
+         patch.object(engine, '_execute_statistical_verification', return_value={'significant': True, 'test_statistic': 's', 'confidence_interval': (0.1, 0.9), 'data_hash': 'h'}):
 
-    result = engine.verify_mathematical_certainty(claims)
+        result = engine.verify_mathematical_certainty(claims)
 
     assert result.mathematical_certainty_count == 1
     assert result.statistical_certainty_count == 1

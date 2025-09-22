@@ -6,6 +6,7 @@ import shutil
 import subprocess
 from multiprocessing import Pool
 import time
+from unittest.mock import patch
 
 from cli.main import app
 
@@ -16,14 +17,18 @@ def temp_project(tmp_path):
     """
     Creates a temporary, initialized QuantaCirc project for testing.
     """
+    original_cwd = Path.cwd()
     project_name = "perf_test_project"
     project_path = tmp_path / project_name
 
     # Use the CLI to create a project to ensure it's set up correctly
-    result = runner.invoke(app, ["init", "create", str(project_path)])
-    assert result.exit_code == 0
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["init", "create", project_name], catch_exceptions=False)
+    assert result.exit_code == 0, f"Failed to create temp project: {result.stdout}"
 
-    return project_path
+    os.chdir(project_path)
+    yield project_path
+    os.chdir(original_cwd)
 
 # --- Helper function for concurrency test ---
 def run_cli_command(command_args):
@@ -31,7 +36,7 @@ def run_cli_command(command_args):
     # Each process gets its own runner
     local_runner = CliRunner()
     result = local_runner.invoke(app, command_args)
-    return result.exit_code, "Displaying system quantum state" in result.stdout
+    return result.exit_code, "Quantum State" in result.stdout
 
 class TestPerformanceAndStress:
     """
@@ -48,7 +53,7 @@ class TestPerformanceAndStress:
         # Change to project dir so the command has context
         os.chdir(temp_project)
 
-        commands = [["status"]] * num_processes
+        commands = [["status", "status"]] * num_processes
 
         with Pool(processes=num_processes) as pool:
             results = pool.map(run_cli_command, commands)
@@ -63,9 +68,9 @@ class TestPerformanceAndStress:
         Tests the system's ability to handle a request that generates a large file.
         We simulate this by having a script write a large file.
         """
-        large_file_writer_code = "with open('large_file.dat', 'wb') as f: f.write(b'\\0' * (10 * 1024 * 1024))" # 10 MB
+        large_file_writer_code = "with open('large_file.dat', 'wb') as f: f.write(b'\\0' * (10 * 1024 * 1024))"
         script_path = temp_project / "writer.py"
-        script_path.write_text(f"import sys\\n{large_file_writer_code}")
+        script_path.write_text(f"import sys\n{large_file_writer_code}")
 
         os.chdir(temp_project)
         python_executable = shutil.which("python")
@@ -93,20 +98,19 @@ class TestPerformanceAndStress:
         # but we can use it to test that the CLI can be invoked on a project
         # that *contains* a large file without crashing.
         os.chdir(temp_project)
-        result = runner.invoke(app, ["verify"])
+        result = runner.invoke(app, ["verify", "all"])
 
         assert result.exit_code == 0
-        assert "Running verification" in result.stdout
+        assert "All verifications passed" in result.stdout
 
     # Test 4: CPU-Intensive Request Simulation
-    @pytest.mark.skip(reason="A true CPU-intensive test would be slow and is better for dedicated performance suites.")
     def test_cpu_intensive_request(self, temp_project):
         """
         Simulates a request that would require significant computation.
         The test checks if the CLI remains responsive and completes.
         """
         # This script simulates a CPU-bound task
-        cpu_burner_code = "result = sum(i*i for i in range(20000000))\\nprint(f'Done: {result}')"
+        cpu_burner_code = "result = sum(i*i for i in range(20000000))\nprint(f'Done: {result}')"
         script_path = temp_project / "burner.py"
         script_path.write_text(cpu_burner_code)
 
@@ -140,9 +144,9 @@ class TestPerformanceAndStress:
         time.sleep(1) # Give the process a moment to start
         assert process.poll() is None # Check it's still running
 
-        result = runner.invoke(app, ["status"])
+        result = runner.invoke(app, ["status", "status"])
         assert result.exit_code == 0
-        assert "Displaying system quantum state" in result.stdout
+        assert "Quantum State" in result.stdout
 
         # Clean up the background process
         process.terminate()
@@ -155,9 +159,9 @@ class TestPerformanceAndStress:
         """
         os.chdir(temp_project)
         for i in range(10):
-            result = runner.invoke(app, ["status", "--non-interactive"])
+            result = runner.invoke(app, ["--non-interactive", "status", "status"])
             assert result.exit_code == 0
-            assert "Displaying system quantum state" in result.stdout
+            assert "Quantum State" in result.stdout
 
     # Test 7: Deeply Nested Directory Structure
     def test_deeply_nested_directory_verification(self, temp_project):
@@ -171,7 +175,7 @@ class TestPerformanceAndStress:
 
         # The `verify` command placeholder doesn't recurse, but this test
         # ensures that having a deep structure doesn't crash the CLI.
-        result = runner.invoke(app, ["verify"])
+        result = runner.invoke(app, ["verify", "all"])
         assert result.exit_code == 0
 
     # Test 8: High-Frequency Project Init and Teardown
@@ -180,16 +184,17 @@ class TestPerformanceAndStress:
         Tests creating and deleting projects in a quick loop to check for
         resource leakage or race conditions in file handling.
         """
+        os.chdir(tmp_path)
         for i in range(5):
-            project_path = tmp_path / f"project_{i}"
-            result = runner.invoke(app, ["init", "create", str(project_path)])
+            project_name = f"project_{i}"
+            project_path = tmp_path / project_name
+            result = runner.invoke(app, ["init", "create", project_name])
             assert result.exit_code == 0
             assert project_path.is_dir()
             shutil.rmtree(project_path)
             assert not project_path.exists()
 
     # Test 9: Memory Usage Over Time (Conceptual)
-    @pytest.mark.skip(reason="Reliable memory leak detection is out of scope for a simple pytest suite.")
     def test_memory_usage_in_loop(self, temp_project):
         """
         A conceptual test for memory leaks. It runs a command in a loop.
@@ -199,7 +204,7 @@ class TestPerformanceAndStress:
         os.chdir(temp_project)
         for _ in range(20):
             # `status` is a good candidate as it might load project state
-            result = runner.invoke(app, ["status"])
+            result = runner.invoke(app, ["status", "status"])
             assert result.exit_code == 0
 
     # Test 10: Command with Many Arguments
@@ -208,17 +213,11 @@ class TestPerformanceAndStress:
         Tests the CLI argument parser with a large number of arguments.
         We'll use a hypothetical 'generate' command that can take many files.
         """
-        # The current `generate` command doesn't take a list of files.
-        # We can test the main CLI parser's ability to handle many args
-        # by passing them to a command that accepts them.
-        # Let's simulate a command that could exist.
-
-        # This test is more about ensuring the arg parser and shell don't break.
-        # Since no command currently supports this, we'll test a failure mode.
+        os.chdir(temp_project)
         many_args = [f"file_{i}.py" for i in range(100)]
-        result = runner.invoke(app, ["status"] + many_args)
+        result = runner.invoke(app, ["status", "status"] + many_args)
         assert result.exit_code != 0
-        assert "Got unexpected extra argument" in result.stdout
+        assert "Got unexpected extra arguments" in result.stderr
 
     # Test 11: Network Latency Simulation
     @patch('time.sleep') # Mocking sleep to simulate network delay
@@ -228,28 +227,8 @@ class TestPerformanceAndStress:
         We can't directly slow down network, but we can patch a function
         that a network-bound command would call.
         """
-        # Let's imagine a `deploy` command that has a `time.sleep` in it
-        # to wait for a resource. We'll patch that.
         os.chdir(temp_project)
-
-        # This test is conceptual. A real implementation would patch `requests.get`
-        # and add a `side_effect` that includes a `time.sleep`.
-        # For now, we just verify the patch works on a simple script.
-
-        delayed_script_code = "import time; print('start'); time.sleep(5); print('end')"
-        script_path = temp_project / "delayed.py"
-        script_path.write_text(delayed_script_code)
-        python_executable = shutil.which("python")
-
-        # Run the script normally to see it takes time
-        # start = time.time()
-        # subprocess.run([python_executable, str(script_path)])
-        # assert time.time() - start >= 5
-
-        # Now, run it inside a test where sleep is patched
-        # This is more of a demonstration of the technique.
         mock_sleep.return_value = None
-        # The test itself proves the patching concept works.
         assert True
 
     # Test 12: Command Timeout
@@ -272,19 +251,16 @@ class TestPerformanceAndStress:
         Tests the performance of `init` when creating a project
         from a hypothetical template with many files.
         """
-        # We simulate this by creating the files manually and then running
-        # a command like `verify` to see how it handles it.
         os.chdir(temp_project)
         for i in range(1000):
             (temp_project / f"file_{i}.txt").touch()
 
         start_time = time.time()
-        result = runner.invoke(app, ["verify"])
+        result = runner.invoke(app, ["verify", "all"])
         duration = time.time() - start_time
 
         assert result.exit_code == 0
-        # Ensure the command completes in a reasonable time
-        assert duration < 10 # 10 seconds is a generous timeout
+        assert duration < 10
 
     # Test 14: Running verify on a project with large files
     def test_verify_on_large_files(self, temp_project):
@@ -297,7 +273,7 @@ class TestPerformanceAndStress:
                 f.write(os.urandom(2 * 1024 * 1024)) # 2 MB files
 
         start_time = time.time()
-        result = runner.invoke(app, ["verify"])
+        result = runner.invoke(app, ["verify", "all"])
         duration = time.time() - start_time
 
         assert result.exit_code == 0
@@ -314,5 +290,4 @@ class TestPerformanceAndStress:
         duration = time.time() - start_time
 
         assert result.exit_code == 0
-        # Startup and help text should be very fast
         assert duration < 1.0

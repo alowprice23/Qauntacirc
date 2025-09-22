@@ -10,7 +10,8 @@ from nats.aio.client import Client as NATSClient
 from core.types import EnergyDelta, AgentProposal, CoordinationResult
 
 class AgentCommunicationProtocol:
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
+        print(f"AgentCommunicationProtocol.__init__ called with: args={args}, kwargs={kwargs}")
         self.nc: NATSClient = NATSClient()
         self.topics = {
             "energy_updates": "qc.energy.updates",

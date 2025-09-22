@@ -39,61 +39,62 @@ class TestSubscriber:
 class DummyModel(BaseModel):
     message: str
 
-@pytest.mark.asyncio
-async def test_subscriber_receives_message():
+def test_subscriber_receives_message():
     """
     Tests that the subscriber correctly deserializes and processes a received message.
     """
-    mock_nats_client = AsyncMock(spec=NATSMessageBus)
-    mock_serializer = MagicMock(spec=MessageSerializer)
+    async def run_test():
+        mock_nats_client = AsyncMock(spec=NATSMessageBus)
+        mock_serializer = MagicMock(spec=MessageSerializer)
 
-    subscriber = MessageSubscriber(nats_client=mock_nats_client, serializer=mock_serializer)
+        subscriber = MessageSubscriber(nats_client=mock_nats_client, serializer=mock_serializer)
 
-    test_data = DummyModel(message="hello")
-    deserialized_data = DummyModel(message="hello")
+        test_data = DummyModel(message="hello")
+        deserialized_data = DummyModel(message="hello")
 
-    # Configure the mock serializer
-    mock_serializer.deserialize.return_value = deserialized_data
+        # Configure the mock serializer
+        mock_serializer.deserialize.return_value = deserialized_data
 
-    # This queue will be used to assert that the callback was called
-    received_queue = asyncio.Queue()
-    async def user_callback(data, context):
-        await received_queue.put((data, context))
+        # This queue will be used to assert that the callback was called
+        received_queue = asyncio.Queue()
+        async def user_callback(data, context):
+            await received_queue.put((data, context))
 
-    # Mock the subscribe_quantum_aware method to simulate a message reception
-    async def mock_subscribe_quantum_aware(subject, callback, **kwargs):
-        # In a real scenario, the NATS client would call the wrapped_callback.
-        # We simulate this by creating a test message and calling the callback.
-        test_msg = Msg(
-            _client=None,
-            subject=subject,
-            reply='',
-            data=b'{"message": "hello"}',
-            headers={
-                "X-Serialization-Format": "json",
-                "X-Payload-Compressed": "false",
-                "Nats-Msg-Id": "123"
-            }
+        # Mock the subscribe_quantum_aware method to simulate a message reception
+        async def mock_subscribe_quantum_aware(subject, callback, **kwargs):
+            # In a real scenario, the NATS client would call the wrapped_callback.
+            # We simulate this by creating a test message and calling the callback.
+            test_msg = Msg(
+                _client=None,
+                subject=subject,
+                reply='',
+                data=b'{"message": "hello"}',
+                headers={
+                    "X-Serialization-Format": "json",
+                    "X-Payload-Compressed": "false",
+                    "Nats-Msg-Id": "123"
+                }
+            )
+            test_msg.ack = AsyncMock()
+            with patch('nats.aio.msg.Msg.metadata', new_callable=MagicMock) as mock_metadata:
+                mock_metadata.num_delivered = 1
+                # The 'callback' passed to subscribe_quantum_aware is the wrapper
+                await callback(test_msg, None)
+
+        mock_nats_client.subscribe_quantum_aware = AsyncMock(side_effect=mock_subscribe_quantum_aware)
+
+        await subscriber.subscribe(
+            subject="test.subject",
+            target_class=DummyModel,
+            callback=user_callback
         )
-        test_msg.ack = AsyncMock()
-        with patch('nats.aio.msg.Msg.metadata', new_callable=MagicMock) as mock_metadata:
-            mock_metadata.num_delivered = 1
-            # The 'callback' passed to subscribe_quantum_aware is the wrapper
-            await callback(test_msg, None)
 
-    mock_nats_client.subscribe_quantum_aware = AsyncMock(side_effect=mock_subscribe_quantum_aware)
+        # Check that subscribe_quantum_aware was called
+        mock_nats_client.subscribe_quantum_aware.assert_called_once()
 
-    await subscriber.subscribe(
-        subject="test.subject",
-        target_class=DummyModel,
-        callback=user_callback
-    )
+        # Verify that the user callback was called with the correct data
+        received_data, received_context = await asyncio.wait_for(received_queue.get(), timeout=1.0)
 
-    # Check that subscribe_quantum_aware was called
-    mock_nats_client.subscribe_quantum_aware.assert_called_once()
-
-    # Verify that the user callback was called with the correct data
-    received_data, received_context = await asyncio.wait_for(received_queue.get(), timeout=1.0)
-
-    assert received_data == deserialized_data
-    mock_serializer.deserialize.assert_called_once()
+        assert received_data == deserialized_data
+        mock_serializer.deserialize.assert_called_once()
+    asyncio.run(run_test())

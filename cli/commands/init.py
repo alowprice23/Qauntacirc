@@ -5,13 +5,9 @@ from typing import Optional
 import shutil
 import yaml
 
-# Assuming these modules exist and are implemented correctly.
-# I have created dummy versions for artifacts and templates.
-# from core.types import AppContext, ProjectConfig
-# from core.energy_calculator import initialize_energy_function
-# from core.lyapunov_monitor import initialize_lyapunov_potential
 from artifacts.generator import ArtifactGenerator
 from templates.project import PROJECT_TEMPLATES
+from core.types import AppContext, QuantaCircConfig
 
 app = typer.Typer()
 
@@ -37,23 +33,12 @@ def create(
         help="Overwrite existing directory"
     )
 ):
-    """
-    Create a new QuantaCirc project with quantum state initialization.
-
-    This command scaffolds a complete project structure including:
-    - Mathematical framework configuration
-    - Agent prompt templates
-    - Formal verification setup
-    - Initial energy function calibration
-    - Lyapunov potential initialization
-    """
-    # The app_context logic is commented out in main.py for now.
-    # This command will not work until that is resolved.
-    # For now, I will create a dummy console.
     from rich.console import Console
     console = Console()
-    # app_context: AppContext = ctx.obj
-    # console = app_context.console
+
+    if "/" in project_name or "\\" in project_name:
+        console.print("[error]Project name cannot contain path separators.[/error]")
+        raise typer.Exit(1)
 
     # Determine project directory
     if target_dir is None:
@@ -85,38 +70,12 @@ def create(
         project_path.mkdir(parents=True, exist_ok=True)
 
         # Generate from template
-        # I cannot instantiate ArtifactGenerator without a config.
-        # I will comment this part out for now.
-        # generator = ArtifactGenerator(app_context.config)
         template_config = PROJECT_TEMPLATES[template]
 
         progress.update(task1, description="Generating project files...")
-        # generator.generate_project(
-        #     template_config,
-        #     project_path,
-        #     {"project_name": project_name}
-        # )
 
         # Initialize quantum state
         progress.update(task1, description="Initializing quantum state...")
-        # The following part depends on core modules. I will assume they work.
-        # I will comment out the parts that I cannot reasonably mock.
-        # project_config = ProjectConfig(
-        #     name=project_name,
-        #     path=project_path,
-        #     template=template,
-        #     energy_parameters={
-        #         "lambda_static": 0.3,
-        #         "lambda_dynamic": 0.4,
-        #         "lambda_interaction": 0.3
-        #     }
-        # )
-
-        # Initialize energy function
-        # initialize_energy_function(project_config)
-
-        # Initialize Lyapunov potential
-        # initialize_lyapunov_potential(project_config)
 
         # Create configuration file
         progress.update(task1, description="Writing configuration...")
@@ -127,7 +86,6 @@ def create(
                 "version": "0.1.0"
             },
             "quantum": {
-                # "energy_weights": project_config.energy_parameters,
                 "convergence_threshold": 1e-6,
                 "annealing_schedule": "adaptive"
             },

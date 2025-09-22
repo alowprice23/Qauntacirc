@@ -7,7 +7,6 @@ from typing import Optional, List
 import json
 
 # from core.types import AppContext
-from memory.constellation import ConstellationMemory
 from memory.query import MemoryQuery, QueryBuilder
 from memory.patterns import PatternAnalyzer
 
@@ -43,6 +42,7 @@ def query(
     console = Console()
     # app_context: AppContext = ctx.obj
     # console = app_context.console
+    from memory.constellation import ConstellationMemory
 
     # Initialize memory system
     # memory = ConstellationMemory(app_context.config)
@@ -98,6 +98,7 @@ def patterns(
     console = Console()
     # app_context: AppContext = ctx.obj
     # console = app_context.console
+    from memory.constellation import ConstellationMemory
 
     # memory = ConstellationMemory(app_context.config)
     memory = ConstellationMemory({}) # Mocked app_context.config

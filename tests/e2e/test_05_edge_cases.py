@@ -16,11 +16,17 @@ def temp_project(tmp_path):
     """
     Creates a temporary, initialized QuantaCirc project for testing.
     """
+    original_cwd = Path.cwd()
     project_name = "edge_case_project"
     project_path = tmp_path / project_name
-    runner.invoke(app, ["init", "create", str(project_path)], catch_exceptions=False)
+
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["init", "create", project_name], catch_exceptions=False)
+    assert result.exit_code == 0, f"Failed to create temp project: {result.stdout}"
+
     os.chdir(project_path)
     yield project_path
+    os.chdir(original_cwd)
 
 class TestEdgeCases:
     """
@@ -116,6 +122,6 @@ class TestEdgeCases:
         Tests the system's response to the smallest possible valid input.
         """
         # The smallest valid command might be `qc status` or `qc --version`.
-        result = runner.invoke(app, ["status"])
+        result = runner.invoke(app, ["status", "status"])
         assert result.exit_code == 0
-        assert "Displaying system quantum state" in result.stdout
+        assert "Quantum State" in result.stdout

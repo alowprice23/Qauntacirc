@@ -30,8 +30,10 @@ from tests.mocks import (
 )
 
 @pytest.mark.integration
-@pytest.mark.asyncio
-async def test_agent_coordination_protocol(test_system_state, test_llm_client):
+def test_agent_coordination_protocol(test_system_state, test_llm_client):
+    asyncio.run(async_test_agent_coordination_protocol(test_system_state, test_llm_client))
+
+async def async_test_agent_coordination_protocol(test_system_state, test_llm_client):
     """Test that all agents coordinate properly through the orchestrator"""
     # Initialize the orchestrator with mock components
     orchestrator = Orchestrator(

@@ -38,32 +38,33 @@ class TestPublisher:
 class DummyModel(BaseModel):
     message: str
 
-@pytest.mark.asyncio
-async def test_publish_single_message():
+def test_publish_single_message():
     """
     Tests that the publish method correctly serializes and publishes a single message.
     """
-    mock_nats_client = AsyncMock(spec=NATSMessageBus)
-    mock_serializer = MagicMock(spec=MessageSerializer)
+    async def run_test():
+        mock_nats_client = AsyncMock(spec=NATSMessageBus)
+        mock_serializer = MagicMock(spec=MessageSerializer)
 
-    publisher = MessagePublisher(nats_client=mock_nats_client, serializer=mock_serializer)
+        publisher = MessagePublisher(nats_client=mock_nats_client, serializer=mock_serializer)
 
-    test_data = DummyModel(message="hello")
-    test_subject = "test.subject"
+        test_data = DummyModel(message="hello")
+        test_subject = "test.subject"
 
-    # Configure the mock serializer to return a dummy payload
-    mock_serializer.serialize.return_value = (b'{"message": "hello"}', False)
+        # Configure the mock serializer to return a dummy payload
+        mock_serializer.serialize.return_value = (b'{"message": "hello"}', False)
 
-    message_id = await publisher.publish(test_subject, test_data)
+        message_id = await publisher.publish(test_subject, test_data)
 
-    # Verify that the serializer was called correctly
-    mock_serializer.serialize.assert_called_once_with(test_data, format=SerializationFormat.JSON)
+        # Verify that the serializer was called correctly
+        mock_serializer.serialize.assert_called_once_with(test_data, format=SerializationFormat.JSON)
 
-    # Verify that the NATS client was called to publish
-    mock_nats_client.publish_quantum_message.assert_called_once()
-    args, kwargs = mock_nats_client.publish_quantum_message.call_args
+        # Verify that the NATS client was called to publish
+        mock_nats_client.publish_quantum_message.assert_called_once()
+        args, kwargs = mock_nats_client.publish_quantum_message.call_args
 
-    assert kwargs['subject'] == test_subject
-    assert kwargs['payload'] == b'{"message": "hello"}'
-    assert "Nats-Msg-Id" in kwargs['headers']
-    assert kwargs['headers']['Nats-Msg-Id'] == message_id
+        assert kwargs['subject'] == test_subject
+        assert kwargs['payload'] == b'{"message": "hello"}'
+        assert "Nats-Msg-Id" in kwargs['headers']
+        assert kwargs['headers']['Nats-Msg-Id'] == message_id
+    asyncio.run(run_test())

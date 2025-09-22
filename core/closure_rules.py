@@ -7,14 +7,9 @@ from memory.types import ConstellationConfig
 class ClosureRuleEngine:
     """Implements Δ-closure verification for requirement completeness"""
 
-    def __init__(self):
+    def __init__(self, memory: ConstellationMemory):
         self.closure_rules = self._initialize_closure_rules()
-        default_config = ConstellationConfig(
-            neo4j_uri="bolt://localhost:7687",
-            embedding_dimension=128,
-            database_path="/tmp/constellation.db"
-        )
-        self.memory = ConstellationMemory(config=default_config)
+        self.memory = memory
 
     def verify_closure(self,
                       requirements: Set[Requirement],

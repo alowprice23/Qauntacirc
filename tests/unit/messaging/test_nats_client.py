@@ -35,129 +35,132 @@ class TestNatsMessageBus:
         except Exception as e:
             pytest.fail(diagnostic.format_failure_message(str(e)))
 
-@pytest.mark.asyncio
-async def test_nats_message_bus_connect_disconnect():
+def test_nats_message_bus_connect_disconnect():
     """
     Tests that the NATS message bus can connect and disconnect successfully.
     """
-    mock_nats_client = AsyncMock()
-    type(mock_nats_client).is_connected = PropertyMock(return_value=True)
-    type(mock_nats_client).is_closed = PropertyMock(return_value=False)
-    mock_nats_client.connected_url.netloc = "mock-server"
+    async def run_test():
+        mock_nats_client = AsyncMock()
+        type(mock_nats_client).is_connected = PropertyMock(return_value=True)
+        type(mock_nats_client).is_closed = PropertyMock(return_value=False)
+        mock_nats_client.connected_url.netloc = "mock-server"
 
-    with patch('nats.connect', new=AsyncMock(return_value=mock_nats_client)) as mock_connect:
-        client = NATSMessageBus(server_urls="nats://localhost:4222")
-        await client.connect()
+        with patch('nats.connect', new=AsyncMock(return_value=mock_nats_client)) as mock_connect:
+            client = NATSMessageBus(server_urls="nats://localhost:4222")
+            await client.connect()
 
-        assert client.nc is not None
-        assert client.js is not None
-        assert client._is_connected is True
-        mock_connect.assert_called_once()
+            assert client.nc is not None
+            assert client.js is not None
+            assert client._is_connected is True
+            mock_connect.assert_called_once()
 
-        await client.disconnect()
-        assert client._is_connected is False
-        mock_nats_client.close.assert_called_once()
+            await client.disconnect()
+            assert client._is_connected is False
+            mock_nats_client.close.assert_called_once()
+    asyncio.run(run_test())
 
-@pytest.mark.asyncio
-async def test_publish_with_quantum_context():
+def test_publish_with_quantum_context():
     """
     Tests that publishing a message correctly encodes and sends the quantum context.
     """
-    mock_nats_client = AsyncMock()
-    mock_js_context = AsyncMock()
-    from unittest.mock import MagicMock
-    mock_nats_client.jetstream = MagicMock(return_value=mock_js_context)
+    async def run_test():
+        mock_nats_client = AsyncMock()
+        mock_js_context = AsyncMock()
+        from unittest.mock import MagicMock
+        mock_nats_client.jetstream = MagicMock(return_value=mock_js_context)
 
-    with patch('nats.connect', new=AsyncMock(return_value=mock_nats_client)):
-        client = NATSMessageBus(server_urls="nats://localhost:4222")
-        await client.connect()
+        with patch('nats.connect', new=AsyncMock(return_value=mock_nats_client)):
+            client = NATSMessageBus(server_urls="nats://localhost:4222")
+            await client.connect()
 
-        energy_breakdown = EnergyBreakdown(total=1.0, complexity=1.0, coupling=0.0, constraint=0.0, debt=0.0)
-        lyapunov_metrics = LyapunovMetrics(phi=1.0, energy=1.0, test_penalty=0.0, obligation_penalty=0.0)
-        qc_state = SystemState(
-            id=uuid4(),
-            software_state=SoftwareState(component_versions={}, config_hashes={}),
-            energy_breakdown=energy_breakdown,
-            lyapunov_metrics=lyapunov_metrics,
-            contraction_factor=0.5
-        )
-        payload = b"test_payload"
-        subject = "test.subject"
+            energy_breakdown = EnergyBreakdown(total=1.0, complexity=1.0, coupling=0.0, constraint=0.0, debt=0.0)
+            lyapunov_metrics = LyapunovMetrics(phi=1.0, energy=1.0, test_penalty=0.0, obligation_penalty=0.0)
+            qc_state = SystemState(
+                id=uuid4(),
+                software_state=SoftwareState(component_versions={}, config_hashes={}),
+                energy_breakdown=energy_breakdown,
+                lyapunov_metrics=lyapunov_metrics,
+                contraction_factor=0.5
+            )
+            payload = b"test_payload"
+            subject = "test.subject"
 
-        with patch.object(client, '_encode_quantum_context', wraps=client._encode_quantum_context) as spy_encode:
-            await client.publish_quantum_message(subject, payload, qc_state)
+            with patch.object(client, '_encode_quantum_context', wraps=client._encode_quantum_context) as spy_encode:
+                await client.publish_quantum_message(subject, payload, qc_state)
 
-            spy_encode.assert_called_once_with(qc_state)
+                spy_encode.assert_called_once_with(qc_state)
 
-            # Check that js.publish was called with the encoded context in headers
-            args, kwargs = mock_js_context.publish.call_args
-            assert args[0] == subject
-            assert args[1] == payload
-            assert "headers" in kwargs
-            assert "X-Quantum-Context" in kwargs["headers"]
+                # Check that js.publish was called with the encoded context in headers
+                args, kwargs = mock_js_context.publish.call_args
+                assert args[0] == subject
+                assert args[1] == payload
+                assert "headers" in kwargs
+                assert "X-Quantum-Context" in kwargs["headers"]
+    asyncio.run(run_test())
 
-@pytest.mark.asyncio
-async def test_subscribe_and_receive_message():
+def test_subscribe_and_receive_message():
     """
     Tests that subscribing to a topic correctly receives and decodes a message
     with a quantum context.
     """
-    mock_nats_client = AsyncMock()
-    mock_js_context = AsyncMock()
-    from unittest.mock import MagicMock
-    mock_nats_client.jetstream = MagicMock(return_value=mock_js_context)
+    async def run_test():
+        mock_nats_client = AsyncMock()
+        mock_js_context = AsyncMock()
+        from unittest.mock import MagicMock
+        mock_nats_client.jetstream = MagicMock(return_value=mock_js_context)
 
-    with patch('nats.connect', new=AsyncMock(return_value=mock_nats_client)):
-        client = NATSMessageBus(server_urls="nats://localhost:4222")
-        await client.connect()
+        with patch('nats.connect', new=AsyncMock(return_value=mock_nats_client)):
+            client = NATSMessageBus(server_urls="nats://localhost:4222")
+            await client.connect()
 
-        energy_breakdown = EnergyBreakdown(total=1.0, complexity=1.0, coupling=0.0, constraint=0.0, debt=0.0)
-        lyapunov_metrics = LyapunovMetrics(phi=1.0, energy=1.0, test_penalty=0.0, obligation_penalty=0.0)
-        qc_state = SystemState(
-            id=uuid4(),
-            software_state=SoftwareState(component_versions={}, config_hashes={}),
-            energy_breakdown=energy_breakdown,
-            lyapunov_metrics=lyapunov_metrics,
-            contraction_factor=0.5
-        )
+            energy_breakdown = EnergyBreakdown(total=1.0, complexity=1.0, coupling=0.0, constraint=0.0, debt=0.0)
+            lyapunov_metrics = LyapunovMetrics(phi=1.0, energy=1.0, test_penalty=0.0, obligation_penalty=0.0)
+            qc_state = SystemState(
+                id=uuid4(),
+                software_state=SoftwareState(component_versions={}, config_hashes={}),
+                energy_breakdown=energy_breakdown,
+                lyapunov_metrics=lyapunov_metrics,
+                contraction_factor=0.5
+            )
 
-        # Manually create a message with encoded context
-        encoded_context = client._encode_quantum_context(qc_state)
-        test_msg = Msg(
-            _client=None,
-            subject='test.subject',
-            reply='',
-            data=b'test data',
-            headers=encoded_context
-        )
+            # Manually create a message with encoded context
+            encoded_context = client._encode_quantum_context(qc_state)
+            test_msg = Msg(
+                _client=None,
+                subject='test.subject',
+                reply='',
+                data=b'test data',
+                headers=encoded_context
+            )
 
-        # This queue will be used to assert that the callback was called
-        received_queue = asyncio.Queue()
+            # This queue will be used to assert that the callback was called
+            received_queue = asyncio.Queue()
 
-        async def my_callback(msg, context):
-            await received_queue.put((msg, context))
+            async def my_callback(msg, context):
+                await received_queue.put((msg, context))
 
-        # Mock the internal subscribe call to immediately call our wrapped_callback
-        # with the test message.
-        async def mock_subscribe(*args, **kwargs):
-            cb = kwargs.get('cb')
-            assert cb is not None, "Callback was not provided to subscribe"
-            # In a real scenario, the NATS server would invoke this.
-            # Here, we invoke it directly to simulate a received message.
-            await cb(test_msg)
+            # Mock the internal subscribe call to immediately call our wrapped_callback
+            # with the test message.
+            async def mock_subscribe(*args, **kwargs):
+                cb = kwargs.get('cb')
+                assert cb is not None, "Callback was not provided to subscribe"
+                # In a real scenario, the NATS server would invoke this.
+                # Here, we invoke it directly to simulate a received message.
+                await cb(test_msg)
 
-        mock_js_context.subscribe = AsyncMock(side_effect=mock_subscribe)
+            mock_js_context.subscribe = AsyncMock(side_effect=mock_subscribe)
 
-        await client.subscribe_quantum_aware(
-            subject="test.subject",
-            callback=my_callback,
-            stream="test_stream" # Required for js.subscribe
-        )
+            await client.subscribe_quantum_aware(
+                subject="test.subject",
+                callback=my_callback,
+                stream="test_stream" # Required for js.subscribe
+            )
 
-        # Verify that the callback was called and the context was decoded
-        received_msg, received_context = await asyncio.wait_for(received_queue.get(), timeout=1.0)
+            # Verify that the callback was called and the context was decoded
+            received_msg, received_context = await asyncio.wait_for(received_queue.get(), timeout=1.0)
 
-        assert received_msg.data == test_msg.data
-        assert received_context is not None
-        assert received_context.id == qc_state.id
-        assert received_context.lyapunov_metrics.energy == qc_state.lyapunov_metrics.energy
+            assert received_msg.data == test_msg.data
+            assert received_context is not None
+            assert received_context.id == qc_state.id
+            assert received_context.lyapunov_metrics.energy == qc_state.lyapunov_metrics.energy
+    asyncio.run(run_test())

@@ -76,24 +76,30 @@ def brain_instance():
 
 # --- Benchmark Tests ---
 
-def test_benchmark_extract_intent(benchmark, brain_instance, event_loop):
+import time
+
+def test_benchmark_extract_intent(brain_instance, event_loop):
     """Benchmark the performance of the extract_intent method."""
     user_request = "Build a secure payment API with rate limiting"
     session_context = {"session_id": uuid.uuid4()}
 
-    def f():
-        return event_loop.run_until_complete(brain_instance.extract_intent(user_request, session_context))
+    start_time = time.time()
+    result = event_loop.run_until_complete(brain_instance.extract_intent(user_request, session_context))
+    duration = time.time() - start_time
 
-    benchmark(f)
+    assert isinstance(result, Intent)
+    assert duration < 5  # Generous timeout for a functional check
 
-def test_benchmark_generate_plan(benchmark, brain_instance, event_loop):
+def test_benchmark_generate_plan(brain_instance, event_loop):
     """Benchmark the performance of the generate_plan method."""
     # First, generate an intent to use as input. This part is not benchmarked.
     user_request = "Build a secure payment API with rate limiting"
     session_context = {"session_id": uuid.uuid4()}
     intent = event_loop.run_until_complete(brain_instance.extract_intent(user_request, session_context))
 
-    def f():
-        return event_loop.run_until_complete(brain_instance.generate_plan(intent))
+    start_time = time.time()
+    result = event_loop.run_until_complete(brain_instance.generate_plan(intent))
+    duration = time.time() - start_time
 
-    benchmark(f)
+    assert isinstance(result, Plan)
+    assert duration < 5 # Generous timeout for a functional check

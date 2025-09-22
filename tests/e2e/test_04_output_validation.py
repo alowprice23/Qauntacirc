@@ -19,12 +19,20 @@ runner = CliRunner()
 def temp_project(tmp_path):
     """
     Creates a temporary, initialized QuantaCirc project for testing.
+    This fixture changes the current working directory to the project root.
     """
+    original_cwd = Path.cwd()
     project_name = "output_validation_project"
     project_path = tmp_path / project_name
-    runner.invoke(app, ["init", "create", str(project_path)], catch_exceptions=False)
+
+    # Use the CLI to create a project to ensure it's set up correctly
+    os.chdir(tmp_path)
+    result = runner.invoke(app, ["init", "create", project_name], catch_exceptions=False)
+    assert result.exit_code == 0, f"Failed to create temp project: {result.stdout}"
+
     os.chdir(project_path)
     yield project_path
+    os.chdir(original_cwd)
 
 class TestOutputValidation:
     """
@@ -38,7 +46,7 @@ class TestOutputValidation:
         Ensures that generated Python code is syntactically correct.
         """
         # "Generate" a Python file
-        generated_code = "def my_function():\\n    return 'hello'\\n"
+        generated_code = "def my_function():\n    return 'hello'\n"
         code_file = temp_project / "generated.py"
         code_file.write_text(generated_code)
 
@@ -56,7 +64,7 @@ class TestOutputValidation:
         Verifies that a generated class includes all requested methods.
         """
         # "Generate" a class
-        generated_code = "class User:\\n    def __init__(self): pass\\n    def get_name(self): pass\\n"
+        generated_code = "class User:\n    def __init__(self): pass\n    def get_name(self): pass\n"
         code_file = temp_project / "user.py"
         code_file.write_text(generated_code)
 
@@ -114,14 +122,16 @@ class TestOutputValidation:
         Checks a generated Markdown file for valid structure.
         """
         # "Generate" a Markdown file
-        md_content = "# Title\\n\\nThis is a paragraph.\\n\\n- Item 1\\n- Item 2"
+        md_content = "# Title\n\nThis is a paragraph.\n\n- Item 1\n- Item 2"
         md_file = temp_project / "README.md"
         md_file.write_text(md_content)
 
         # Simple validation checks
-        lines = md_content.split('\\n')
+        lines = md_content.split('\n')
         assert lines[0].startswith("# ") # Check for H1 header
-        assert lines[2].startswith("- ") # Check for list item
+        assert lines[1] == "" # Check for blank line
+        assert lines[3] == "" # Check for blank line
+        assert lines[4].startswith("- ") # Check for list item
 
     # Test 6: Dependency File Validation
     def test_requirements_file_syntax(self, temp_project):
@@ -146,7 +156,7 @@ class TestOutputValidation:
         Validates the structure of a generated .ini file.
         """
         import configparser
-        ini_content = "[database]\\nhost = localhost\\nuser=admin\\n"
+        ini_content = "[database]\nhost = localhost\nuser=admin\n"
         ini_file = temp_project / "config.ini"
         ini_file.write_text(ini_content)
 
@@ -163,7 +173,7 @@ class TestOutputValidation:
         """
         Checks that a generated test file contains valid pytest functions.
         """
-        test_code = "import pytest\\ndef test_feature_one():\\n    assert True\\nclass TestSuite:\\n    def test_something(self):\\n        pass"
+        test_code = "import pytest\ndef test_feature_one():\n    assert True\nclass TestSuite:\n    def test_something(self):\n        pass"
         test_file = temp_project / "test_generated.py"
         test_file.write_text(test_code)
 
@@ -195,7 +205,7 @@ class TestOutputValidation:
         """
         Checks if generated Python functions follow snake_case naming.
         """
-        code = "def myFunction(): pass\\ndef another_bad_name(): pass"
+        code = "def myFunction(): pass\ndef another_bad_name(): pass"
         code_file = temp_project / "naming.py"
         code_file.write_text(code)
 

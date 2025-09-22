@@ -35,54 +35,56 @@ class TestStreamManager:
         except Exception as e:
             pytest.fail(diagnostic.format_failure_message(str(e)))
 
-@pytest.mark.asyncio
-async def test_create_new_stream():
+def test_create_new_stream():
     """
     Tests creating a new stream when it doesn't exist.
     """
-    mock_nats_client = AsyncMock(spec=NATSMessageBus)
-    mock_js_context = AsyncMock()
-    # Simulate stream not found error, then success on add
-    mock_js_context.update_stream.side_effect = APIError(err_code=10059)
-    mock_js_context.add_stream = AsyncMock()
+    async def run_test():
+        mock_nats_client = AsyncMock(spec=NATSMessageBus)
+        mock_js_context = AsyncMock()
+        # Simulate stream not found error, then success on add
+        mock_js_context.update_stream.side_effect = APIError(err_code=10059)
+        mock_js_context.add_stream = AsyncMock()
 
-    # This is a bit tricky, we need to mock the _get_jsm method to return our mock_js_context
-    async def get_jsm():
-        return mock_js_context
+        # This is a bit tricky, we need to mock the _get_jsm method to return our mock_js_context
+        async def get_jsm():
+            return mock_js_context
 
-    manager = StreamManager(nats_client=mock_nats_client)
-    manager._get_jsm = get_jsm
+        manager = StreamManager(nats_client=mock_nats_client)
+        manager._get_jsm = get_jsm
 
-    stream_name = "new-stream"
-    subjects = ["new.subject.*"]
+        stream_name = "new-stream"
+        subjects = ["new.subject.*"]
 
-    await manager.create_or_update_stream(stream_name=stream_name, subjects=subjects)
+        await manager.create_or_update_stream(stream_name=stream_name, subjects=subjects)
 
-    mock_js_context.add_stream.assert_called_once()
-    args, kwargs = mock_js_context.add_stream.call_args
-    config = args[0]
-    assert isinstance(config, StreamConfig)
-    assert config.name == stream_name
-    assert config.subjects == subjects
+        mock_js_context.add_stream.assert_called_once()
+        args, kwargs = mock_js_context.add_stream.call_args
+        config = args[0]
+        assert isinstance(config, StreamConfig)
+        assert config.name == stream_name
+        assert config.subjects == subjects
+    asyncio.run(run_test())
 
-@pytest.mark.asyncio
-async def test_update_existing_stream():
+def test_update_existing_stream():
     """
     Tests updating an existing stream.
     """
-    mock_nats_client = AsyncMock(spec=NATSMessageBus)
-    mock_js_context = AsyncMock()
-    mock_js_context.update_stream = AsyncMock()
+    async def run_test():
+        mock_nats_client = AsyncMock(spec=NATSMessageBus)
+        mock_js_context = AsyncMock()
+        mock_js_context.update_stream = AsyncMock()
 
-    async def get_jsm():
-        return mock_js_context
+        async def get_jsm():
+            return mock_js_context
 
-    manager = StreamManager(nats_client=mock_nats_client)
-    manager._get_jsm = get_jsm
+        manager = StreamManager(nats_client=mock_nats_client)
+        manager._get_jsm = get_jsm
 
-    stream_name = "existing-stream"
-    config = StreamConfig(name=stream_name, subjects=["foo", "bar"])
+        stream_name = "existing-stream"
+        config = StreamConfig(name=stream_name, subjects=["foo", "bar"])
 
-    await manager.create_or_update_stream(stream_name=stream_name, config=config)
+        await manager.create_or_update_stream(stream_name=stream_name, config=config)
 
-    mock_js_context.update_stream.assert_called_once_with(config)
+        mock_js_context.update_stream.assert_called_once_with(config)
+    asyncio.run(run_test())

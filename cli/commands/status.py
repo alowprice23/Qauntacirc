@@ -15,7 +15,7 @@ import time
 app = typer.Typer()
 
 @app.command()
-def show(
+def status(
     ctx: typer.Context,
     watch: bool = typer.Option(
         False,
@@ -40,10 +40,8 @@ def show(
     Shows quantum state measurements, agent activity, error budgets,
     and overall system health in a comprehensive dashboard format.
     """
-    from rich.console import Console
-    console = Console()
-    # app_context: AppContext = ctx.obj
-    # console = app_context.console
+    app_context = ctx.obj
+    console = app_context.console
 
     def create_status_display():
         """Create comprehensive status display"""

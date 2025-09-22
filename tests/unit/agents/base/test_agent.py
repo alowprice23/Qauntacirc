@@ -87,30 +87,32 @@ def test_agent_initialization(mock_agent):
     assert mock_agent.formula == "E=mc^2"
     assert isinstance(mock_agent.measurement_apparatus, object) # MeasurementApparatus is a placeholder
 
-def test_apply_physics_principle_success(mock_agent, mock_state, mocker):
+from unittest.mock import patch
+
+def test_apply_physics_principle_success(mock_agent, mock_state):
     """Tests the successful execution of the physics principle application."""
-    mocker.patch.object(mock_agent, 'guard', return_value=True)
-    mocker.patch.object(mock_agent, 'propose', return_value=AgentAction(agent_id="test_agent", action_type="test_action", params={"test": "param"}))
+    with patch.object(mock_agent, 'guard', return_value=True) as mock_guard, \
+         patch.object(mock_agent, 'propose', return_value=AgentAction(agent_id="test_agent", action_type="test_action", params={"test": "param"})) as mock_propose:
 
-    result = mock_agent.apply_physics_principle(mock_state)
+        result = mock_agent.apply_physics_principle(mock_state)
 
-    assert result.success is True
-    assert result.message == "Proposal generated."
-    assert len(result.proposals) == 1
-    mock_agent.guard.assert_called_once_with(mock_state)
-    mock_agent.propose.assert_called_once_with(mock_state)
+        assert result.success is True
+        assert result.message == "Proposal generated."
+        assert len(result.proposals) == 1
+        mock_guard.assert_called_once_with(mock_state)
+        mock_propose.assert_called_once_with(mock_state)
 
-def test_apply_physics_principle_guard_fails(mock_agent, mock_state, mocker):
+def test_apply_physics_principle_guard_fails(mock_agent, mock_state):
     """Tests that if the guard fails, no proposal is made."""
-    mocker.patch.object(mock_agent, 'guard', return_value=False)
-    mocker.patch.object(mock_agent, 'propose')
+    with patch.object(mock_agent, 'guard', return_value=False) as mock_guard, \
+         patch.object(mock_agent, 'propose') as mock_propose:
 
-    result = mock_agent.apply_physics_principle(mock_state)
+        result = mock_agent.apply_physics_principle(mock_state)
 
-    assert result.success is False
-    assert result.message == "Guard failed."
-    mock_agent.guard.assert_called_once_with(mock_state)
-    mock_agent.propose.assert_not_called()
+        assert result.success is False
+        assert result.message == "Guard failed."
+        mock_guard.assert_called_once_with(mock_state)
+        mock_propose.assert_not_called()
 
 def test_measure_observable(mock_agent, mock_state):
     """Tests the measurement of an observable."""

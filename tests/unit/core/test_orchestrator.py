@@ -34,7 +34,9 @@ def test_orchestrator_instantiation():
     assert orchestrator.closure_rule_engine is mock_closure_rule_engine
     assert orchestrator.comm_protocol is mock_comm_protocol
 
-def test_irrefutability_gate_integration(mocker):
+from unittest.mock import patch
+
+def test_irrefutability_gate_integration():
     """
     Tests that the irrefutability gate is called during the gate running process.
     """
@@ -51,38 +53,37 @@ def test_irrefutability_gate_integration(mocker):
     mock_irrefutability_result.decision_irrefutable = True
     mock_irrefutability_engine.verify_acceptance_irrefutability.return_value = mock_irrefutability_result
 
-    mocker.patch('core.orchestrator.IrrefutabilityEngine', return_value=mock_irrefutability_engine)
+    with patch('core.orchestrator.IrrefutabilityEngine', return_value=mock_irrefutability_engine):
+        # Instantiate the Orchestrator
+        orchestrator = Orchestrator(
+            agents=[Mock()],
+            energy_calculator=mock_energy_calculator,
+            lyapunov_monitor=mock_lyapunov_monitor,
+            closure_validator=mock_closure_validator,
+            closure_rule_engine=mock_closure_rule_engine,
+            communication_protocol=mock_comm_protocol,
+        )
 
-    # Instantiate the Orchestrator
-    orchestrator = Orchestrator(
-        agents=[Mock()],
-        energy_calculator=mock_energy_calculator,
-        lyapunov_monitor=mock_lyapunov_monitor,
-        closure_validator=mock_closure_validator,
-        closure_rule_engine=mock_closure_rule_engine,
-        communication_protocol=mock_comm_protocol,
-    )
+        # Mock SystemState and other gate results
+        mock_state = Mock()
+        mock_state.modules = []
+        mock_state.requirements = []
+        mock_state.obligations = []
+        mock_state.metadata = {}
 
-    # Mock SystemState and other gate results
-    mock_state = Mock()
-    mock_state.modules = []
-    mock_state.requirements = []
-    mock_state.obligations = []
-    mock_state.metadata = {}
+        mock_closure_result = Mock()
+        mock_closure_result.is_closed = True
+        mock_closure_result.is_minimal = True
+        mock_closure_result.completeness_proof = CompletenessProof(
+            obligation_count=0,
+            proof_steps=[],
+            verification_method="mock",
+            confidence=1.0
+        )
+        orchestrator.closure_rule_engine.verify_closure.return_value = mock_closure_result
 
-    mock_closure_result = Mock()
-    mock_closure_result.is_closed = True
-    mock_closure_result.is_minimal = True
-    mock_closure_result.completeness_proof = CompletenessProof(
-        obligation_count=0,
-        proof_steps=[],
-        verification_method="mock",
-        confidence=1.0
-    )
-    orchestrator.closure_rule_engine.verify_closure.return_value = mock_closure_result
+        # Run gates
+        orchestrator.run_gates(mock_state)
 
-    # Run gates
-    orchestrator.run_gates(mock_state)
-
-    # Assert that the irrefutability engine was called
-    mock_irrefutability_engine.verify_acceptance_irrefutability.assert_called_once()
+        # Assert that the irrefutability engine was called
+        mock_irrefutability_engine.verify_acceptance_irrefutability.assert_called_once()

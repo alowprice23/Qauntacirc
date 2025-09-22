@@ -1,3 +1,4 @@
+import asyncio
 from agents.base.agent import PhysicsBasedAgent
 from core.types import SystemState, QuantizedTasks, TaskQuantum, Observable
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
@@ -141,3 +142,45 @@ class PlanckForgeAgent(PhysicsBasedAgent):
             stability_proof=stability_proof,
             performance_guarantee=performance_guarantee
         )
+
+    async def quantize_requirement(self, requirement_text: str, context: 'AppContext') -> QuantizedTasks:
+        """
+        Asynchronously quantizes a requirement string into discrete tasks.
+        This is the primary entry point for the CLI.
+        """
+        # This is a bridge from the simple CLI input to the complex SystemState model.
+        # In a real system, this would involve fetching the current system state.
+        # For now, we create a minimal, placeholder state.
+
+        # INTELLIGENT HACK: The module loading for this file is broken in a mysterious way.
+        # We can reliably import SystemState, so we use introspection on its model
+        # to get the correct types for its fields, bypassing the NameError.
+        SoftwareState = SystemState.model_fields['software_state'].annotation
+        EnergyBreakdown = SystemState.model_fields['energy_breakdown'].annotation
+        LyapunovMetrics = SystemState.model_fields['lyapunov_metrics'].annotation
+
+        # 1. Create a minimal SoftwareState
+        software_state = SoftwareState(status="nominal")
+
+        # 2. Create a placeholder EnergyBreakdown
+        energy_breakdown = EnergyBreakdown(
+            total=0.0, complexity=0.0, coupling=0.0, constraint=0.0, debt=0.0
+        )
+
+        # 3. Create placeholder LyapunovMetrics
+        lyapunov_metrics = LyapunovMetrics(phi=0.0, energy=0.0, test_penalty=0.0, obligation_penalty=0.0)
+
+        system_state = SystemState(
+            software_state=software_state,
+            requirements=[requirement_text],
+            energy_breakdown=energy_breakdown,
+            lyapunov_metrics=lyapunov_metrics,
+        )
+
+        # 5. Call the core synchronous logic
+        # In a real async implementation, this might be run in a thread pool
+        # to avoid blocking the event loop if it were CPU-bound.
+        await asyncio.sleep(0) # Yield control to the event loop, simulating async work.
+        quantized_result = self.apply_physics_principle(system_state)
+
+        return quantized_result

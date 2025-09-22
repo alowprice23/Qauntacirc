@@ -1,0 +1,71 @@
+INFO:faiss.loader:Loading faiss with AVX2 support.
+INFO:faiss.loader:Successfully loaded faiss with AVX2 support.
+============================= test session starts ==============================
+platform linux -- Python 3.12.11, pytest-8.4.2, pluggy-1.6.0
+rootdir: /app
+configfile: pyproject.toml
+plugins: anyio-4.10.0, hypothesis-6.139.2
+collected 20 items / 19 deselected / 1 selected
+
+tests/e2e/test_02_core_functionality.py F
+
+=================================== FAILURES ===================================
+_____________ TestCoreFunctionality.test_minimalistic_hello_world ______________
+
+self = <tests.e2e.test_02_core_functionality.TestCoreFunctionality object at 0x7f23cd48f890>
+mock_orchestrator = <MagicMock name='AgentOrchestrator' id='139791789548480'>
+mock_planck_forge = <MagicMock name='PlanckForgeAgent' id='139791732837456'>
+mock_constellation_memory = <MagicMock name='ConstellationMemory' id='139791732840960'>
+temp_project = PosixPath('/tmp/pytest-of-jules/pytest-47/test_minimalistic_hello_world0/test_project')
+
+    @patch('cli.commands.generate.ConstellationMemory')
+    @patch('cli.commands.generate.PlanckForgeAgent')
+    @patch('cli.commands.generate.AgentOrchestrator')
+    def test_minimalistic_hello_world(self, mock_orchestrator, mock_planck_forge, mock_constellation_memory, temp_project):
+        """
+        Tests the system's ability to handle a very simple request.
+        We mock the orchestrator to simulate a successful generation.
+        """
+        # Mock PlanckForge to return a successful quantization
+        mock_planck_instance = mock_planck_forge.return_value
+        mock_planck_instance.quantize_requirement.return_value = self.get_mock_quantized_tasks()
+
+        # Mock Orchestrator to return a successful generation
+        mock_orchestrator_instance = mock_orchestrator.return_value
+        mock_orchestrator_instance.execute_pipeline.return_value = {
+            "success": True,
+            "modified_files": ["src/main.py"],
+            "proofs": []
+        }
+
+        requirement = "a 'hello world' console app"
+        result = runner.invoke(app, ["generate", "requirement", requirement], catch_exceptions=False)
+
+>       assert result.exit_code == 0
+E       assert 1 == 0
+E        +  where 1 = <Result SystemExit(1)>.exit_code
+
+/app/tests/e2e/test_02_core_functionality.py:70: AssertionError
+=============================== warnings summary ===============================
+../home/jules/.cache/pypoetry/virtualenvs/quantacirc-9TtSrW0h-py3.12/lib/python3.12/site-packages/_pytest/config/__init__.py:1474
+  /home/jules/.cache/pypoetry/virtualenvs/quantacirc-9TtSrW0h-py3.12/lib/python3.12/site-packages/_pytest/config/__init__.py:1474: PytestConfigWarning: Unknown config option: asyncio_mode
+
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+../home/jules/.cache/pypoetry/virtualenvs/quantacirc-9TtSrW0h-py3.12/lib/python3.12/site-packages/pydantic/_internal/_config.py:323: 13 warnings
+  /home/jules/.cache/pypoetry/virtualenvs/quantacirc-9TtSrW0h-py3.12/lib/python3.12/site-packages/pydantic/_internal/_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+<frozen importlib._bootstrap>:488
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:488
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:488
+  <frozen importlib._bootstrap>:488: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/e2e/test_02_core_functionality.py::TestCoreFunctionality::test_minimalistic_hello_world
+================ 1 failed, 19 deselected, 17 warnings in 3.57s =================

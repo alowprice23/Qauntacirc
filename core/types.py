@@ -278,6 +278,13 @@ from typing import Any
 class QuantaCircConfig(BaseModel):
     pass
 
+class GenerationRequest(BaseModel):
+    requirement: str
+    interactive: bool
+    dry_run: bool
+    agent_filter: Optional[List[str]] = None
+    verification_level: str
+
 class AppContext(BaseModel):
     config: QuantaCircConfig
     console: Any

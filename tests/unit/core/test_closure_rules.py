@@ -1,13 +1,20 @@
 import pytest
+from unittest.mock import Mock
 from core.closure_rules import ClosureRuleEngine
 from core.types import Requirement, Obligation, ObligationType, ObligationStatus
+from memory.constellation import ConstellationMemory
 
-def test_closure_engine_derives_obligations():
+@pytest.fixture
+def mock_memory():
+    """Provides a mock ConstellationMemory instance."""
+    return Mock(spec=ConstellationMemory)
+
+def test_closure_engine_derives_obligations(mock_memory):
     """
     Tests that the ClosureRuleEngine correctly derives new obligations
     based on matching rules against requirements.
     """
-    engine = ClosureRuleEngine()
+    engine = ClosureRuleEngine(memory=mock_memory)
 
     requirements: set[Requirement] = {
         "The system must have secure user authentication required."
@@ -38,11 +45,11 @@ def test_closure_engine_derives_obligations():
     # Check that the initial obligation is still there
     assert "Implement login endpoint." in closed_set_descs
 
-def test_closure_engine_no_new_obligations():
+def test_closure_engine_no_new_obligations(mock_memory):
     """
     Tests that the engine does not derive new obligations if no rules match.
     """
-    engine = ClosureRuleEngine()
+    engine = ClosureRuleEngine(memory=mock_memory)
 
     requirements: set[Requirement] = {
         "The system should have a nice color scheme."
@@ -55,11 +62,11 @@ def test_closure_engine_no_new_obligations():
     assert result.derived_obligations == 0
     assert len(result.closed_set) == 0
 
-def test_closure_idempotency():
+def test_closure_idempotency(mock_memory):
     """
     Tests that running closure on an already closed set produces no new changes.
     """
-    engine = ClosureRuleEngine()
+    engine = ClosureRuleEngine(memory=mock_memory)
 
     requirements: set[Requirement] = {
         "A secure payment gateway is needed."
