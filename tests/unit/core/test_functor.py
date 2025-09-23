@@ -122,8 +122,54 @@ class TestFunctor:
         Tests the composition law for the functor. F(g . f) = F(g) . F(f).
         This is a more abstract property. We can approximate it by checking if the
         functor preserves some notion of distance or similarity.
-        For now, this test is a placeholder for a more rigorous mathematical validation.
+        A larger change in the software state should result in a larger distance
+        between the corresponding quantum states.
         """
-        # TODO: Implement this property test. It requires defining a composition
-        # operation on software states and verifying that the functor preserves it.
-        assert True
+        # 1. Setup
+        functor = Functor()
+
+        def create_state_and_metrics(complexity: float):
+            software_state = SoftwareState(
+                component_versions={"comp": "1.0"},
+                config_hashes={"config": "hash1"},
+                status="nominal"
+            )
+            module = Module(
+                name="a",
+                code="pass",
+                normalized_ast=b"pass",
+                semantic_tokens=["pass"],
+                cyclomatic_complexity=complexity,
+                duplication_factor=0,
+                coverage_deficit=0,
+                last_refactor=datetime.now()
+            )
+            metrics = {"code": "pass", "modules": [module], "module_dependencies": {}, "dependency_graph": None, "constraints": []}
+            return software_state, metrics
+
+        s0, m0 = create_state_and_metrics(1.0)
+        s1, m1 = create_state_and_metrics(2.0)  # Small change
+        s2, m2 = create_state_and_metrics(10.0) # Large change
+
+        # 2. Execution
+        rho0 = np.array(functor.map_software_to_quantum(s0, m0).density_matrix)
+        rho1 = np.array(functor.map_software_to_quantum(s1, m1).density_matrix)
+        rho2 = np.array(functor.map_software_to_quantum(s2, m2).density_matrix)
+
+        def trace_distance(rho_a, rho_b):
+            """Calculates the trace distance between two density matrices."""
+            diff = rho_a - rho_b
+            # Eigenvalues of a Hermitian matrix are real.
+            # sqrtm can be computationally expensive. Use eigenvalues instead.
+            # The trace distance is 0.5 * Tr(|A|), where |A| = sqrt(A*A).
+            # The trace of |A| is the sum of the singular values of A.
+            return 0.5 * np.sum(np.linalg.svd(diff, compute_uv=False))
+
+        dist_0_1 = trace_distance(rho0, rho1)
+        dist_0_2 = trace_distance(rho0, rho2)
+
+        # 3. Assertion
+        # A larger change in software state (complexity 1->10) should result in a
+        # larger trace distance than a smaller change (complexity 1->2).
+        assert dist_0_1 > 0, "Identical states should have non-zero distance for different complexities"
+        assert dist_0_2 > dist_0_1, "Functor should preserve distance ordering"

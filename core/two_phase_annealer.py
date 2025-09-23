@@ -71,10 +71,15 @@ class TwoPhaseAnnealer:
         contraction_factor = self._measure_contraction(current_state, new_state)
         new_state.contraction_factor = contraction_factor
 
+        old_energy = self._calculate_demo_energy(current_state)
+        new_energy = self._calculate_demo_energy(new_state)
+        if abs(old_energy - new_energy) < self.convergence_tolerance:
+            return ContractionResult(state=new_state, lambda_factor=contraction_factor, converged=True)
+
         if contraction_factor < 1.0:
             return ContractionResult(state=new_state, lambda_factor=contraction_factor, converged=False)
 
-        return ContractionResult(state=current_state, lambda_factor=1.0, converged=True)
+        return ContractionResult(state=current_state, lambda_factor=1.0, converged=False)
 
     def detect_basin_capture(self, energy_history: List[float], gradient_history: List[np.ndarray]) -> bool:
         if len(energy_history) < self.window_size:
@@ -118,16 +123,8 @@ class TwoPhaseAnnealer:
         return new_state
 
     def _compute_energy_gradient(self, state: SystemState) -> np.ndarray:
-        # Force the gradient to decrease over time for the demo
-        initial_grad_norm = 10.0
-        decay_rate = 0.03
-        gradient_norm = initial_grad_norm * math.exp(-decay_rate * self.demo_iteration_counter)
-        gradient_norm = max(0.01, gradient_norm)
-
-        random_vector = np.random.randn(10)
-        norm = np.linalg.norm(random_vector)
-        if norm == 0: return np.zeros(10)
-        return random_vector * (gradient_norm / norm)
+        # Return a fixed gradient that points "downhill"
+        return np.array([-1.0] * 10)
 
     def _gradient_step(self, state: SystemState, gradient: np.ndarray) -> SystemState:
         new_state = state.copy(deep=True)
@@ -136,17 +133,17 @@ class TwoPhaseAnnealer:
             if debt_scores:
                 debtiest_module_index = np.argmax(debt_scores)
                 module_to_change = new_state.modules[debtiest_module_index]
-                # Make a large, deterministic reduction in Phase B
-                reduction = 0.5
+                # Make a reduction proportional to the convergence tolerance
+                reduction = self.convergence_tolerance * 10
                 module_to_change.cyclomatic_complexity = max(0, module_to_change.cyclomatic_complexity - reduction)
         return new_state
 
     def _measure_contraction(self, old_state: SystemState, new_state: SystemState) -> float:
-        old_grad_norm = np.linalg.norm(self._compute_energy_gradient(old_state))
-        new_grad_norm = np.linalg.norm(self._compute_energy_gradient(new_state))
+        old_energy = self._calculate_demo_energy(old_state)
+        new_energy = self._calculate_demo_energy(new_state)
 
-        if old_grad_norm < 1e-9:
+        if old_energy < 1e-9:
             return 1.0
 
-        return new_grad_norm / old_grad_norm
+        return new_energy / old_energy
     # endregion

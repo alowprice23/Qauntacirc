@@ -83,37 +83,32 @@ async def _requirement_async_logic(
         console.print("\n[bold]Phase 1: Requirement Quantization[/bold]")
         planck_agent = PlanckForgeAgent()
 
-        try:
-            task_quanta = await planck_agent.quantize_requirement(
-                requirement_text=requirement,
-                context=app_context
-            )
+        task_quanta = await planck_agent.quantize_requirement(
+            requirement_text=requirement,
+            context=app_context
+        )
 
-            if not task_quanta.success or not task_quanta.quanta:
-                 console.print(f"[warning]Could not decompose requirement into actionable tasks. The agent reported: {task_quanta.message}[/warning]")
-                 raise typer.Exit(1)
+        if not task_quanta.success or not task_quanta.quanta:
+             console.print(f"[warning]Could not decompose requirement into actionable tasks. The agent reported: {task_quanta.message}[/warning]")
+             raise typer.Exit(1)
 
 
-            console.print(f"[success]✓[/success] Decomposed into {len(task_quanta.quanta)} task quanta")
+        console.print(f"[success]✓[/success] Decomposed into {len(task_quanta.quanta)} task quanta")
 
-            if interactive and not typer.confirm("\nProceed with generation?"):
-                console.print("[warning]Generation cancelled by user[/warning]")
-                raise typer.Exit(0)
+        if interactive and not typer.confirm("\nProceed with generation?"):
+            console.print("[warning]Generation cancelled by user[/warning]")
+            raise typer.Exit(0)
 
-            # Phase 2: Generation via Orchestrator
-            console.print("\n[bold]Phase 2: Code Generation[/bold]")
-            result = await orchestrator.execute_pipeline(task_quanta, gen_request)
+        # Phase 2: Generation via Orchestrator
+        console.print("\n[bold]Phase 2: Code Generation[/bold]")
+        result = await orchestrator.execute_pipeline(task_quanta, gen_request)
 
-            if result["success"]:
-                 console.print(f"\n[success]🎉 Generation completed successfully![/success]")
-                 console.print(f"Modified files: {', '.join(result['modified_files'])}")
-            else:
-                 console.print(f"\n[error]💥 Generation failed.[/error]")
-                 raise typer.Exit(1)
-
-        except Exception as e:
-            console.print(f"[error]Requirement decomposition failed: {str(e)}[/error]")
-            raise typer.Exit(1)
+        if result["success"]:
+             console.print(f"\n[success]🎉 Generation completed successfully![/success]")
+             console.print(f"Modified files: {', '.join(result['modified_files'])}")
+        else:
+             console.print(f"\n[error]💥 Generation failed.[/error]")
+             raise typer.Exit(1)
 
 
 @app.command()

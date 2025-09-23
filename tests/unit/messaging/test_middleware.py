@@ -39,6 +39,7 @@ class TestMiddleware:
 class DummySchema(BaseModel):
     field: str
 
+@patch('messaging.middleware.logging.STRUCTLOG_AVAILABLE', True)
 @patch('messaging.middleware.logging.log')
 def test_logging_middleware_log_publication(mock_log):
     """

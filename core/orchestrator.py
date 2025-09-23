@@ -18,7 +18,8 @@ from core.types import (
     OrthogonalizationResult, UncertaintyAnalysis, TunnelingResult,
     ResourceAllocation, FlowOptimization, ChaosTestResult,
     GrowthPrediction, DependencyOptimization, PhysicsResult, Obligation, ObligationType, ObligationStatus,
-    GateResult, MonitoringResult, CompletenessProof, BuildArtifacts
+    GateResult, MonitoringResult, CompletenessProof, BuildArtifacts,
+    SoftwareState, EnergyBreakdown, LyapunovMetrics
 )
 from core.chaos_types import ChaosPlanResult
 from monitoring.resilience import ResilienceMonitor
