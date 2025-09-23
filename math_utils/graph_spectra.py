@@ -88,3 +88,23 @@ def get_graph_energy(adj_matrix):
     """
     eigenvalues = eigh(adj_matrix, eigvals_only=True)
     return np.sum(np.abs(eigenvalues))
+
+class SpectralAnalysis:
+    """
+    Provides spectral analysis of graphs.
+    """
+    def __init__(self, laplacian_matrix: np.ndarray):
+        self.laplacian = laplacian_matrix
+
+    def get_connectivity(self) -> (int, float):
+        """
+        Analyzes the connectivity of a graph using its Laplacian spectrum.
+        """
+        return analyze_connectivity(self.laplacian)
+
+    def get_fiedler_value(self) -> float:
+        """
+        Returns the Fiedler value (algebraic connectivity).
+        """
+        _, fiedler_value = self.get_connectivity()
+        return fiedler_value

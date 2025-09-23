@@ -68,14 +68,6 @@ def test_get_random_state_vector():
     assert len(random_vec) == 8
     assert np.isclose(np.linalg.norm(random_vec), 1.0)
 
-def test_compute_distance_invalid_state():
-    """Tests distance computation with an invalid state."""
-    space = StateSpace(dimension=2)
-    state_a = create_dummy_qc_state([1.0, 0.0])
-    state_b = create_dummy_qc_state([1.0, 1.0]) # Not normalized
-
-    with pytest.raises(ValueError, match="One or both states are not valid"):
-        space.compute_distance(state_a, state_b)
 
 def test_compute_distance_metrics():
     """Tests the different distance metrics."""

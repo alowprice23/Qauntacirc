@@ -45,3 +45,45 @@ class ConstraintSolver:
                 return False
 
         return solver.check() == z3.sat
+
+from core.types import SystemState, Constraint
+from proofs.validators import ProofObligationTracker
+
+class ConstraintValidator:
+    """
+    Validates system constraints and computes constraint energy.
+    """
+    def __init__(self, use_smt_solver: bool = False, weights: Dict[str, float] = None):
+        self.smt_solver = ConstraintSolver() if use_smt_solver else None
+        self.proof_tracker = ProofObligationTracker()
+        self.weights = weights or {
+            'proof_obligation': 10.0,
+            'smt_failure': 100.0,
+        }
+
+    def validate_and_compute_energy(self, state: SystemState) -> float:
+        """
+        Computes the constraint energy based on violations.
+        E_constraint = Σₖ wₖ·max(0, gₖ(S))²
+        """
+        total_penalty = 0.0
+
+        # Standard constraints
+        for constraint in state.constraints:
+            violation = max(0.0, constraint.evaluate_violation(state))
+            penalty = constraint.weight * (violation ** 2)
+            total_penalty += penalty
+
+        # Proof obligations
+        self.proof_tracker.obligations = state.proof_obligations
+        unproven_count = self.proof_tracker.get_unproven_obligation_count()
+        total_penalty += self.weights['proof_obligation'] * unproven_count
+
+        # SMT constraints
+        if self.smt_solver and state.smt_constraints:
+            # A more realistic implementation would get variable declarations from the state
+            variables = getattr(state, 'smt_variables', {})
+            if not self.smt_solver.solve(state.smt_constraints, variables):
+                total_penalty += self.weights['smt_failure']
+
+        return total_penalty

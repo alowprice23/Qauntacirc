@@ -1,26 +1,38 @@
 import zlib
 import numpy as np
+from core.compression import MultiCompressor
 
-def kolmogorov_complexity_approximation(data):
+class KolmogorovApproximator:
     """
-    Approximates the Kolmogorov complexity of a string or bytes-like object
-    by using the length of its compressed version.
-
-    Kolmogorov complexity K(s) is the length of the shortest program that
-    produces s as output. It is uncomputable. However, it can be approximated
-    from above by the length of a compressed version of s, i.e., K(s) <= |C(s)|,
-    where C is a standard compressor like zlib.
-
-    Args:
-        data (str or bytes): The data to analyze.
-
-    Returns:
-        int: The approximate Kolmogorov complexity in bytes.
+    Approximates Kolmogorov complexity using a multi-compressor approach.
     """
-    if isinstance(data, str):
-        data = data.encode('utf-8')
+    def __init__(self):
+        self.compressor = MultiCompressor()
 
-    return len(zlib.compress(data))
+    def approximate(self, data: str | bytes) -> int:
+        """
+        Approximates the Kolmogorov complexity of a string or bytes-like object.
+        """
+        if isinstance(data, str):
+            data = data.encode('utf-8')
+
+        k_approx = self.compressor.get_best_compression_size(data)
+        self.validate_bounds(k_approx, data)
+        return k_approx
+
+    def validate_bounds(self, k_approx: int, data: bytes):
+        """
+        Performs a basic sanity check based on Bennett-Gács deviation bounds.
+        Since K(x) is uncomputable, we can't directly check the bound.
+        Instead, we check if K_approx is within a plausible range.
+        A simple check is that K_approx should not be much larger than the
+        original data length.
+        """
+        data_len = len(data)
+        # The compressed size should not be significantly larger than the original size.
+        # We add a small constant to account for overhead.
+        if k_approx > data_len + 100: # 100 is an arbitrary but reasonable constant
+            raise ValueError("Kolmogorov approximation is implausibly large.")
 
 def minimum_description_length(model_description_length, data_description_length):
     """
@@ -63,9 +75,10 @@ def normalized_compression_distance(s1, s2):
     if isinstance(s2, str):
         s2 = s2.encode('utf-8')
 
-    c_s1 = len(zlib.compress(s1))
-    c_s2 = len(zlib.compress(s2))
-    c_s1s2 = len(zlib.compress(s1 + s2))
+    approximator = KolmogorovApproximator()
+    c_s1 = approximator.approximate(s1)
+    c_s2 = approximator.approximate(s2)
+    c_s1s2 = approximator.approximate(s1 + s2)
 
     if max(c_s1, c_s2) == 0:
         return 0.0
@@ -91,7 +104,8 @@ def algorithmic_probability_bound(s):
     """
     # This is a conceptual function. A real implementation is not computable.
     # We use the approximation P(s) approx= 2^(-K(s)).
-    k_s = kolmogorov_complexity_approximation(s)
+    approximator = KolmogorovApproximator()
+    k_s = approximator.approximate(s)
 
     # The result is in bytes, so we convert to bits for the probability calculation.
     k_s_bits = k_s * 8

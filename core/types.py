@@ -131,7 +131,9 @@ class ComposedAction(BaseModel):
     parallel_groups: List[List[AgentAction]]
 
 class Module(BaseModel):
+    id: str
     name: str
+    code: str
     normalized_ast: bytes
     semantic_tokens: List[str]
     cyclomatic_complexity: float
@@ -180,6 +182,7 @@ class SystemState(BaseModel):
     team_size: int = 1
     current_volume: float = 1.0
     constraints: List[Constraint] = Field(default_factory=list)
+    smt_constraints: List[str] = Field(default_factory=list)
     obligations: List[Obligation] = Field(default_factory=list)
     failing_tests: List[str] = Field(default_factory=list)
 

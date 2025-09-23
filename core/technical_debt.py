@@ -1,63 +1,67 @@
-# core/technical_debt.py
-
-"""
-Calculates the technical debt component of the energy function.
-"""
-
 from __future__ import annotations
 import datetime
-import numpy as np
+from math_utils.kolmogorov_bounds import normalized_compression_distance
 
-class TechnicalDebtCalculator:
+class TechnicalDebtAnalyzer:
     """
-    Calculates technical debt with a temporal aging factor.
+    Analyzes technical debt based on cyclomatic complexity, code duplication,
+    and test coverage.
     """
-
-    def __init__(self, decay_constant: float, weights: dict = None):
-        """
-        Initializes the technical debt calculator.
-
-        Args:
-            decay_constant: A constant to control the rate of debt accumulation.
-            weights: A dictionary of weights for complexity, duplication, and coverage.
-        """
-        self.decay_constant = decay_constant
+    def __init__(self, weights: dict = None):
         self.weights = weights or {
             'complexity': 1.0,
             'duplication': 1.0,
             'coverage_deficit': 1.0
         }
 
-    def aging_factor(self, days_old: float) -> float:
+    def _calculate_cyclomatic_complexity(self, code: str) -> int:
         """
-        Calculates a factor that increases with age.
-        Using a simple linear growth model for predictability.
-        Factor = 1 + (t / τ)
+        Calculates cyclomatic complexity using the radon library.
         """
-        if self.decay_constant <= 0:
-            return 1.0
-        return 1.0 + (days_old / self.decay_constant)
+        from radon.visitors import ComplexityVisitor
+        try:
+            visitor = ComplexityVisitor.from_code(code)
+            # For a single module, we can take the average complexity.
+            # A more sophisticated approach might look at the max complexity
+            # or a weighted sum.
+            if not visitor.functions:
+                return 1 # A module with no functions has a complexity of 1.
+            return sum(f.complexity for f in visitor.functions)
+        except Exception:
+            # If radon fails to parse, return a high complexity as a penalty.
+            return 25
 
-    def calculate_debt(self, module: 'ModuleState') -> float:
+    def _calculate_code_duplication(self, module_a_code: str, module_b_code: str) -> float:
         """
-        Calculates the technical debt for a single module.
-        D(m) = w₁·complexity + w₂·duplication + w₃·coverage_deficit
-        E_debt = D(m) · (1 + t/τ)
+        Calculates code duplication using Normalized Compression Distance.
+        """
+        return normalized_compression_distance(module_a_code, module_b_code)
+
+    def analyze_module_debt(self, module: 'ModuleState', all_modules: list['ModuleState']) -> float:
+        """
+        Analyzes the technical debt for a single module.
         """
         w = self.weights
 
-        complexity = getattr(module, 'cyclomatic_complexity', 0)
-        duplication = getattr(module, 'duplication_ratio', 0)
+        # Cyclomatic complexity
+        complexity = self._calculate_cyclomatic_complexity(module.code)
+
+        # Code duplication
+        total_duplication = 0.0
+        if len(all_modules) > 1:
+            for other_module in all_modules:
+                if module.id != other_module.id:
+                    total_duplication += self._calculate_code_duplication(module.code, other_module.code)
+            duplication = total_duplication / (len(all_modules) - 1)
+        else:
+            duplication = 0.0
+
+        # Test coverage deficit
         coverage = getattr(module, 'test_coverage', 1.0)
         coverage_deficit = 1.0 - coverage
 
-        raw_debt = (w['complexity'] * complexity +
-                    w['duplication'] * duplication +
-                    w['coverage_deficit'] * coverage_deficit)
+        debt_score = (w['complexity'] * complexity +
+                      w['duplication'] * duplication +
+                      w['coverage_deficit'] * coverage_deficit)
 
-        last_modified = getattr(module, 'last_modified', datetime.datetime.now())
-        days_old = (datetime.datetime.now() - last_modified).total_seconds() / (24 * 3600)
-
-        aging = self.aging_factor(days_old)
-
-        return raw_debt * aging
+        return debt_score

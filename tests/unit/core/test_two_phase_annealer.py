@@ -783,7 +783,7 @@ class TestLyapunovMonitoring:
 
         initial_state = SystemState(
             software_state=SoftwareState(),
-            modules=[Module(name="m1", cyclomatic_complexity=10.0, last_refactor=datetime.now(), normalized_ast=b'', semantic_tokens=[], duplication_factor=0.0, coverage_deficit=0.0)],
+            modules=[Module(id="m1", name="m1", code="", cyclomatic_complexity=10.0, last_refactor=datetime.now(), normalized_ast=b'', semantic_tokens=[], duplication_factor=0.0, coverage_deficit=0.0)],
             failing_tests=['test_a', 'test_b'],
             energy_breakdown=EnergyBreakdown(total=initial_energy, complexity=50.0, coupling=30.0, constraint=10.0, debt=10.0),
             lyapunov_metrics=LyapunovMetrics(phi=initial_phi, energy=initial_energy, test_penalty=initial_test_penalty, obligation_penalty=0.0)
@@ -894,7 +894,7 @@ class TestTwoPhaseIntegration:
         # I will create a sample SystemState manually.
         initial_state = SystemState(
             software_state=SoftwareState(),
-            modules=[Module(name="m1", cyclomatic_complexity=50.0, last_refactor=datetime.now(), normalized_ast=b'', semantic_tokens=[], duplication_factor=0.0, coverage_deficit=0.0)],
+            modules=[Module(id="m1", name="m1", code="", cyclomatic_complexity=50.0, last_refactor=datetime.now(), normalized_ast=b'', semantic_tokens=[], duplication_factor=0.0, coverage_deficit=0.0)],
             energy_breakdown=EnergyBreakdown(total=100.0, complexity=50.0, coupling=30.0, constraint=10.0, debt=10.0),
             lyapunov_metrics=LyapunovMetrics(phi=100.0, energy=100.0, test_penalty=0.0, obligation_penalty=0.0)
         )

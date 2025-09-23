@@ -16,8 +16,8 @@ def uncertain_agent():
 def system_state_with_uncertainty():
     """Fixture for a SystemState with data for uncertainty analysis."""
     modules = [
-        Module(name="a.py", normalized_ast=b"...", semantic_tokens=["a", "b", "c"], cyclomatic_complexity=5, duplication_factor=0.1, coverage_deficit=0.2, last_refactor=datetime.now()),
-        Module(name="b.py", normalized_ast=b"...", semantic_tokens=["d", "e", "f", "g"], cyclomatic_complexity=10, duplication_factor=0.0, coverage_deficit=0.1, last_refactor=datetime.now())
+        Module(id="a", name="a.py", code="...", normalized_ast=b"...", semantic_tokens=["a", "b", "c"], cyclomatic_complexity=5, duplication_factor=0.1, coverage_deficit=0.2, last_refactor=datetime.now()),
+        Module(id="b", name="b.py", code="...", normalized_ast=b"...", semantic_tokens=["d", "e", "f", "g"], cyclomatic_complexity=10, duplication_factor=0.0, coverage_deficit=0.1, last_refactor=datetime.now())
     ]
     requirements = [
         "The system must be secure.",

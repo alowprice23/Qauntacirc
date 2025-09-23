@@ -69,6 +69,7 @@ class Functor:
         mock_state.policy_violations = state_dict.get('policy_violations', [])
         mock_state.dependency_graph = state_dict.get('dependency_graph')
         mock_state.constraints = state_dict.get('constraints', [])
+        mock_state.smt_constraints = state_dict.get('smt_constraints', [])
         mock_state.complexity = state_dict.get('complexity', 0)
         mock_state.coupling = state_dict.get('coupling', 0)
         mock_state.debt = state_dict.get('debt', 0)

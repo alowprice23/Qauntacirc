@@ -83,10 +83,14 @@ async def _requirement_async_logic(
         console.print("\n[bold]Phase 1: Requirement Quantization[/bold]")
         planck_agent = PlanckForgeAgent()
 
-        task_quanta = await planck_agent.quantize_requirement(
-            requirement_text=requirement,
-            context=app_context
-        )
+        try:
+            task_quanta = await planck_agent.quantize_requirement(
+                requirement_text=requirement,
+                context=app_context
+            )
+        except Exception as e:
+            console.print(f"[error]Requirement decomposition failed: {e}[/error]")
+            raise typer.Exit(1)
 
         if not task_quanta.success or not task_quanta.quanta:
              console.print(f"[warning]Could not decompose requirement into actionable tasks. The agent reported: {task_quanta.message}[/warning]")
@@ -101,7 +105,11 @@ async def _requirement_async_logic(
 
         # Phase 2: Generation via Orchestrator
         console.print("\n[bold]Phase 2: Code Generation[/bold]")
-        result = await orchestrator.execute_pipeline(task_quanta, gen_request)
+        try:
+            result = await orchestrator.execute_pipeline(task_quanta, gen_request)
+        except Exception as e:
+            console.print(f"\n[error]💥 Generation failed: {e}[/error]")
+            raise typer.Exit(1)
 
         if result["success"]:
              console.print(f"\n[success]🎉 Generation completed successfully![/success]")

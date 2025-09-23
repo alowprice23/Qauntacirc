@@ -28,6 +28,7 @@ class TestFunctor:
             "code": "def f(x): return x",
             "modules": [
                 Module(
+                    id="mod_a",
                     name="mod_a",
                     code="...",
                     normalized_ast=b"...",
@@ -38,6 +39,7 @@ class TestFunctor:
                     last_refactor=datetime.now()
                 ),
                 Module(
+                    id="mod_b",
                     name="mod_b",
                     code="...",
                     normalized_ast=b"...",
@@ -89,6 +91,7 @@ class TestFunctor:
             status="nominal"
         )
         module = Module(
+            id="a",
             name="a",
             code="pass",
             normalized_ast=b"pass",
@@ -135,6 +138,7 @@ class TestFunctor:
                 status="nominal"
             )
             module = Module(
+                id="a",
                 name="a",
                 code="pass",
                 normalized_ast=b"pass",

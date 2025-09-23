@@ -5,7 +5,6 @@ from typing import Optional
 import shutil
 import yaml
 
-from artifacts.generator import ArtifactGenerator
 from templates.project import PROJECT_TEMPLATES
 from core.types import AppContext, QuantaCircConfig
 

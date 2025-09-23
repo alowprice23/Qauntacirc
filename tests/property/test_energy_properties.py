@@ -354,7 +354,7 @@ class TestEnergyOptimizationProperties:
         # 2. Create an initial state with a known energy
         initial_state = SystemState(
             software_state=SoftwareState(),
-            modules=[Module(name="m1", normalized_ast=b"", semantic_tokens=[], cyclomatic_complexity=10.0, duplication_factor=0, coverage_deficit=0, last_refactor=datetime.now())],
+            modules=[Module(id="m1", name="m1", code="", normalized_ast=b"", semantic_tokens=[], cyclomatic_complexity=10.0, duplication_factor=0, coverage_deficit=0, last_refactor=datetime.now())],
             energy_breakdown=EnergyBreakdown(total=100.0, complexity=50.0, coupling=20.0, constraint=10.0, debt=20.0),
             lyapunov_metrics=LyapunovMetrics(phi=100.0, energy=100.0, test_penalty=0, obligation_penalty=0)
         )
