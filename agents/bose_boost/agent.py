@@ -7,6 +7,7 @@ from core.types import (
     SystemState, WorkloadDistribution, ResourceAllocation, Observable, DeploymentPlan
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
+from agents.bose_boost.physics import BoseEinsteinStatistics
 
 class BoseBoostAgent(PhysicsBasedAgent):
     def __init__(self):
@@ -19,7 +20,7 @@ class BoseBoostAgent(PhysicsBasedAgent):
             physics_principle="Bose-Einstein Statistics",
             mathematical_formula="n_B = 1/(e^((ε-μ)/kT) - 1)"
         )
-        self.k_B = 8.617333e-5  # Effective Boltzmann constant
+        self.physics = BoseEinsteinStatistics(k_B=8.617333e-5)
 
     def apply_physics_principle(self, system_state: SystemState) -> ResourceAllocation:
         """
@@ -35,17 +36,17 @@ class BoseBoostAgent(PhysicsBasedAgent):
 
         workload = WorkloadDistribution(**workload_data)
 
-        energy_levels = self._extract_task_energy_levels(workload)
+        energy_levels = self.physics.extract_task_energy_levels(workload)
         if not energy_levels:
             return ResourceAllocation(allocations={}, chemical_potential=0, temperature=temperature, total_efficiency=0)
 
-        μ = self._compute_chemical_potential(
+        μ = self.physics.compute_chemical_potential(
             workload.total_resources, energy_levels, temperature
         )
 
         allocations = {}
         for task_type, ε in energy_levels.items():
-            exponent = (ε - μ) / (self.k_B * temperature)
+            exponent = (ε - μ) / (self.physics.k_B * temperature)
 
             if exponent <= 1e-9 or math.exp(exponent) - 1 < 1e-9:
                 n_B = workload.max_replicas_per_task
@@ -73,43 +74,6 @@ class BoseBoostAgent(PhysicsBasedAgent):
             deployment_plan=deployment_plan,
             total_efficiency=sum(alloc['efficiency_score'] for alloc in allocations.values())
         )
-
-    def _extract_task_energy_levels(self, workload: WorkloadDistribution) -> Dict[str, float]:
-        """Extracts task energy levels from the workload, using complexity as a proxy for energy."""
-        return {
-            task_type: data.get('complexity', 1.0) * 1e-5
-            for task_type, data in workload.tasks.items()
-        }
-
-    def _compute_chemical_potential(self, total_resources: float, energy_levels: Dict[str, float], T: float) -> float:
-        """Solves for the chemical potential μ that satisfies the total resource constraint."""
-        if not energy_levels: return 0.0
-        min_energy = min(energy_levels.values())
-
-        def f(mu):
-            if mu >= min_energy: return float('inf')
-            kT = self.k_B * T
-            return sum(1.0 / (math.exp((epsilon - mu) / kT) - 1.0) for epsilon in energy_levels.values()) - total_resources
-
-        low = min_energy - 5 * abs(min_energy) if min_energy != 0 else -5.0
-        high = min_energy - 1e-9
-
-        try:
-            f_low = f(low)
-            f_high = f(high)
-            if f_low * f_high >= 0:
-                return high if f_high < 0 else low
-        except (ValueError, OverflowError):
-            return min_energy - 1.0 # Fallback
-
-        for _ in range(100):
-            mid = (low + high) / 2
-            if mid == low or mid == high: break
-            f_mid = f(mid)
-            if f_mid < 0: high = mid
-            else: low = mid
-
-        return (low + high) / 2
 
     def measure_observable(self, system_state: SystemState) -> Observable:
         """Measures the total efficiency of the resource allocation."""

@@ -5,6 +5,7 @@ from agents.base.agent import PhysicsBasedAgent
 from core.types import SystemState, Observable
 from core.chaos_types import ChaosScenario, ChaosTestingPlan, ChaosPlanResult
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
+from agents.fluctua_test.physics import GreenKubo
 
 # A mock LLMClient for the new structure.
 class LLMClient:
@@ -23,8 +24,8 @@ class FluctuaTestAgent(PhysicsBasedAgent):
         # The physics principle is kept for consistency with the base class.
         super().__init__(
             agent_name="fluctua_test",
-            physics_principle="Fluctuation-Dissipation Theorem",
-            mathematical_formula="S_AA(ω) = (2kT/ω)Im(χ_AA(ω))"
+            physics_principle="Green-Kubo Relations",
+            mathematical_formula="η = V/kT ∫₀^∞ ⟨σ(0)σ(t)⟩dt"
         )
         # In a real scenario, we might need to handle the absence of the scenarios file.
         try:
@@ -89,6 +90,16 @@ class FluctuaTestAgent(PhysicsBasedAgent):
             # Return an empty plan if no scenarios are chosen.
             chaos_plan = ChaosTestingPlan(scenarios=[], execution_order=[], monitoring_setup={}, recovery_procedures={})
         else:
+            # This is a placeholder for where the Green-Kubo calculation would be used.
+            # In a real scenario, the stress tensor history would be obtained from simulations.
+            V = 1.0
+            kT = 1.0
+            green_kubo = GreenKubo(V, kT)
+            stress_tensor_history = [random.random() for _ in range(100)]
+            time_points = list(range(100))
+            viscosity = green_kubo.calculate_viscosity(stress_tensor_history, time_points)
+            print(f"Calculated viscosity: {viscosity}")
+
             chaos_plan = ChaosTestingPlan(
                 scenarios=selected_scenarios,
                 execution_order=self._optimize_execution_order(selected_scenarios),

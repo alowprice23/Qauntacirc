@@ -7,6 +7,7 @@ from monitoring.performance import PerformanceProfiler, PerformanceProfile, Perf
 from math_utils.optimization import BarrierEscapeOptimizer, OptimizationCandidate
 from core.types import SystemState, PerformanceBarrier
 from llm.client import LLMClient
+from agents.tunnel_fix.physics import QuantumTunneling
 
 class TunnelFixAgent(QuantumAgent):
     """
@@ -23,6 +24,7 @@ class TunnelFixAgent(QuantumAgent):
         self.llm_client = llm_client
         self.profiler = PerformanceProfiler()
         self.optimizer = BarrierEscapeOptimizer()
+        self.physics = QuantumTunneling()
 
     def _has_performance_bottlenecks(self, state: SystemState) -> bool:
         """Check for performance bottlenecks."""
@@ -72,7 +74,7 @@ class TunnelFixAgent(QuantumAgent):
             barrier_height = barrier.height
             barrier_width = barrier.width
 
-            tunneling_prob = self._compute_tunneling_probability(
+            tunneling_prob = self.physics.compute_tunneling_probability(
                 barrier_height,
                 barrier_width,
                 system_temperature
@@ -101,28 +103,6 @@ class TunnelFixAgent(QuantumAgent):
             optimizations=optimization_proposals,
             mathematical_justification="Quantum tunneling enables barrier escape: T ∝ e^(-2κd)"
         )
-
-    def _compute_tunneling_probability(self,
-                                     barrier_height: float,
-                                     barrier_width: float,
-                                     temperature: float) -> float:
-        """
-        Compute tunneling probability using quantum mechanics formula
-        T = A * exp(-2κd) where κ = √(2m(V-E))/ℏ
-        """
-        if temperature <= 0:
-            return 0.0
-
-        # The prompt uses self.physics.parameters["transmission_coeff"], which doesn't exist.
-        # Using a constant value.
-        transmission_coeff = 1.0
-
-        kappa = np.sqrt(2 * barrier_height / temperature)
-        distance = barrier_width
-
-        tunneling_prob = transmission_coeff * np.exp(-2 * kappa * distance)
-
-        return min(1.0, tunneling_prob)
 
     def apply_physics_principle(self, system_state: SystemState) -> Any:
         """

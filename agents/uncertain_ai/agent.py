@@ -9,6 +9,7 @@ from core.types import (
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from common.utils import UncertaintyGuidedTestGenerator, RiskQuantifier
+from agents.uncertain_ai.physics import UncertaintyPrinciple
 
 class UncertainAIAgent(PhysicsBasedAgent):
     def __init__(self):
@@ -22,7 +23,7 @@ class UncertainAIAgent(PhysicsBasedAgent):
             physics_principle="Uncertainty Principle",
             mathematical_formula="Δx·Δp ≥ ℏ/2"
         )
-        self.hbar_effective = 1.0  # Effective ℏ for software systems
+        self.physics = UncertaintyPrinciple(hbar_effective=1.0)
         self.test_generator = UncertaintyGuidedTestGenerator()
         self.risk_quantifier = RiskQuantifier()
 
@@ -30,11 +31,11 @@ class UncertainAIAgent(PhysicsBasedAgent):
         """
         Apply the uncertainty principle to determine minimum test coverage.
         """
-        spec_uncertainty = self._measure_specification_uncertainty(system_state)
-        impl_uncertainty = self._measure_implementation_uncertainty(system_state)
+        spec_uncertainty = self.physics.measure_specification_uncertainty(system_state)
+        impl_uncertainty = self.physics.measure_implementation_uncertainty(system_state)
 
         uncertainty_product = spec_uncertainty * impl_uncertainty
-        min_uncertainty = self.hbar_effective / 2
+        min_uncertainty = self.physics.hbar_effective / 2
 
         additional_tests = []
         if 0 < uncertainty_product < min_uncertainty:
@@ -68,41 +69,10 @@ class UncertainAIAgent(PhysicsBasedAgent):
             risk_bounds=risk_bounds
         )
 
-    def _measure_specification_uncertainty(self, state: SystemState) -> float:
-        """Measure uncertainty in specifications (Δx) via Shannon entropy."""
-        if not state.requirements:
-            return 0.0
-        entropies = [self._calculate_shannon_entropy(req) for req in state.requirements]
-        return np.std(entropies) if entropies else 0.0
-
-    def _measure_implementation_uncertainty(self, state: SystemState) -> float:
-        """Measure uncertainty in implementation (Δp) via a composite metric."""
-        if not state.modules:
-            return 0.0
-        entropies = [self._calculate_module_entropy(mod) for mod in state.modules]
-        return np.std(entropies) if entropies else 0.0
-
-    def _calculate_shannon_entropy(self, text: str) -> float:
-        """Calculates the Shannon entropy of a string."""
-        if not text:
-            return 0.0
-        counts = Counter(text)
-        total_len = len(text)
-        return -sum((count / total_len) * math.log2(count / total_len) for count in counts.values())
-
-    def _calculate_module_entropy(self, module: Module) -> float:
-        """Calculates a composite entropy for a module."""
-        norm_complexity = module.cyclomatic_complexity / 50.0
-        norm_duplication = module.duplication_factor
-        token_entropy = self._calculate_shannon_entropy(" ".join(module.semantic_tokens))
-        norm_token_entropy = token_entropy / 10.0
-
-        return 0.4 * norm_complexity + 0.4 * norm_duplication + 0.2 * norm_token_entropy
-
     def measure_observable(self, system_state: SystemState) -> Observable:
         """Measures the uncertainty product (Δx·Δp)."""
-        spec_uncertainty = self._measure_specification_uncertainty(system_state)
-        impl_uncertainty = self._measure_implementation_uncertainty(system_state)
+        spec_uncertainty = self.physics.measure_specification_uncertainty(system_state)
+        impl_uncertainty = self.physics.measure_implementation_uncertainty(system_state)
         uncertainty_product = spec_uncertainty * impl_uncertainty
 
         return Observable(

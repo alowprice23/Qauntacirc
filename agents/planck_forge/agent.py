@@ -2,7 +2,7 @@ import asyncio
 from agents.base.agent import PhysicsBasedAgent
 from core.types import SystemState, QuantizedTasks, TaskQuantum, Observable
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
-from common.utils import FrequencyAnalyzer
+from agents.planck_forge.physics import EnergyQuantizer
 
 class PlanckForgeAgent(PhysicsBasedAgent):
     def __init__(self):
@@ -18,19 +18,14 @@ class PlanckForgeAgent(PhysicsBasedAgent):
         )
         # Using a scaled Planck constant for software modeling purposes
         self.h = 6.62607015e-34
-        self.frequency_analyzer = FrequencyAnalyzer()
+        self.energy_quantizer = EnergyQuantizer(planck_constant=self.h)
 
     def apply_physics_principle(self, system_state: SystemState) -> QuantizedTasks:
         """
         Convert continuous requirements into discrete task quanta.
         This is the core application of the E_n = n·h·ν principle.
         """
-        requirements_str = " ".join(system_state.requirements) if system_state.requirements else ""
-
-        if not requirements_str and "planck_forge_input" in system_state.metadata:
-             requirements_str = system_state.metadata["planck_forge_input"].get("requirements", "")
-
-        if not requirements_str:
+        if not system_state.requirements:
             # Return an empty result if there are no requirements to process
             return QuantizedTasks(
                 success=True,
@@ -41,22 +36,13 @@ class PlanckForgeAgent(PhysicsBasedAgent):
                 total_energy=0.0
             )
 
-        # Extract dominant frequencies (ν) from the requirements text
-        frequencies = self.frequency_analyzer.extract_frequencies(requirements_str)
+        # In a real implementation, we would parse the requirements and create TaskQuanta objects.
+        # For now, we create a dummy TaskQuanta object for each requirement.
+        tasks = []
+        for i, req in enumerate(system_state.requirements):
+            tasks.append(TaskQuantum(id=str(i), description=req, verification_criteria=[], dependencies=[]))
 
-        # Quantize into discrete energy levels (E_n)
-        quanta = []
-        for freq_data in frequencies:
-            ν = freq_data.frequency
-            # Calculate quantum numbers (n) for different energy levels
-            for n in range(1, freq_data.max_harmonics + 1):
-                energy_level = n * self.h * ν
-                task_quantum = TaskQuantum(
-                    n=n, frequency=ν, energy=energy_level,
-                    description=freq_data.task_description,
-                    dependencies=freq_data.dependencies
-                )
-                quanta.append(task_quantum)
+        quanta = self.energy_quantizer.quantize_batch(tasks)
 
         total_energy = sum(q.energy for q in quanta)
         return QuantizedTasks(

@@ -1,11 +1,6 @@
-"""
-Energy Quantizer for PlanckForge Agent
-Implements the E_n = n * h * v model for task energy calculation.
-"""
-
 from typing import List, Dict
 from core.types import TaskQuanta
-from .dependencies import calculate_node_levels
+from agents.planck_forge.dependencies import calculate_node_levels
 
 class EnergyQuantizer:
     """

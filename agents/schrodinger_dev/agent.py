@@ -9,6 +9,7 @@ from core.types import (
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from agents.schrodinger_dev.code_generator import SchrodingerCodeGenerator
 from common.utils import ProofSynthesizer
+from agents.schrodinger_dev.physics import HamiltonianBuilder
 
 class SchrodingerDevAgent(PhysicsBasedAgent):
     def __init__(self, llm_client: "LLMClient" = None):
@@ -28,24 +29,26 @@ class SchrodingerDevAgent(PhysicsBasedAgent):
             llm_client = LLMClient()
         self.code_generator = SchrodingerCodeGenerator(llm_client=llm_client, num_superpositions=5)
         self.proof_synthesizer = ProofSynthesizer()
+        self.hamiltonian_builder = HamiltonianBuilder(weights={'complexity': 0.5, 'constraints': 1.0, 'similarity': 0.2})
 
     def apply_physics_principle(self, system_state: SystemState) -> CodeEvolution:
         """
         Evolve the code state using the Schrödinger equation.
-        This function requires 'code_state', 'hamiltonian', 'dt', and 'implementations' to be present
+        This function requires 'code_state', 'dt', and 'implementations' to be present
         in the system_state.metadata.
         """
         metadata = system_state.metadata.get("schrodinger_dev_input", {})
         current_code_state_data = metadata.get("code_state")
-        hamiltonian_data = metadata.get("hamiltonian")
         dt = metadata.get("dt")
         implementations = metadata.get("implementations")
+        parsed_spec = metadata.get("parsed_spec", {})
 
-        if not all([current_code_state_data, hamiltonian_data, dt is not None, implementations is not None]):
-            raise ValueError("SchrödingerDevAgent requires 'code_state', 'hamiltonian', 'dt', and 'implementations' in metadata.")
+        if not all([current_code_state_data, dt is not None, implementations is not None]):
+            raise ValueError("SchrödingerDevAgent requires 'code_state', 'dt', and 'implementations' in metadata.")
 
         current_code_state = CodeState(**current_code_state_data)
-        hamiltonian = Hamiltonian(**hamiltonian_data)
+        hamiltonian_matrix = self.hamiltonian_builder.from_specification(implementations, parsed_spec)
+        hamiltonian = Hamiltonian(matrix=hamiltonian_matrix.tolist())
 
         initial_psi = np.array(current_code_state.state_vector, dtype=complex)
 

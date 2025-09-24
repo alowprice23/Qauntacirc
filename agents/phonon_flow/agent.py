@@ -9,38 +9,7 @@ from core.types import (
 )
 from common.verification import AgentCertificate, ConservationProof, ConvergenceProof, StabilityProof, PerformanceGuarantee
 from common.utils import LatticeFlowOptimizer
-
-class LatticeModel:
-    """A model to represent a communication graph as a physical lattice."""
-    def __init__(self, graph: CommunicationGraph):
-        self.graph = graph
-        self.node_map = {node.id: i for i, node in enumerate(graph.nodes)}
-        self.adj_matrix = self._create_adj_matrix()
-
-    def _create_adj_matrix(self) -> np.ndarray:
-        n = len(self.graph.nodes)
-        adj = np.zeros((n, n))
-        for edge in self.graph.edges:
-            i = self.node_map.get(edge.source.id)
-            j = self.node_map.get(edge.target.id)
-            if i is not None and j is not None:
-                adj[i, j] = edge.weight
-                adj[j, i] = edge.weight
-        return adj
-
-    def k_space_sampling(self) -> List[np.ndarray]:
-        """A simplified sampling of the Brillouin zone."""
-        return [np.array([kx, ky]) for kx in [-1, 0, 1] for ky in [-1, 0, 1] if kx != 0 or ky != 0]
-
-    def get_avg_spring_constant(self) -> float:
-        """Acoustic modes relate to the average 'stiffness' (dependency strength)."""
-        strengths = self.adj_matrix[self.adj_matrix > 0]
-        return np.mean(strengths) if strengths.size > 0 else 0.0
-
-    def get_stiffness_variance(self) -> float:
-        """Optical modes relate to the variance in 'stiffness'."""
-        strengths = self.adj_matrix[self.adj_matrix > 0]
-        return np.var(strengths) if strengths.size > 0 else 0.0
+from agents.phonon_flow.physics import LatticeDynamics
 
 class PhononFlowAgent(PhysicsBasedAgent):
     def __init__(self):
@@ -50,9 +19,8 @@ class PhononFlowAgent(PhysicsBasedAgent):
             physics_principle="Lattice Dynamics",
             mathematical_formula="ℏω = ℏv_s·k"
         )
-        self.hbar = 1.0
+        self.physics = LatticeDynamics(hbar=1.0, min_efficiency_threshold=0.5)
         self.flow_optimizer = LatticeFlowOptimizer()
-        self.min_efficiency_threshold = 0.5
 
     def apply_physics_principle(self, system_state: SystemState) -> FlowOptimization:
         """Optimizes information flow using phonon dispersion relations."""
@@ -83,29 +51,29 @@ class PhononFlowAgent(PhysicsBasedAgent):
 
         comm_graph = CommunicationGraph(nodes=nodes, edges=edges)
 
-        lattice = self._map_to_lattice(comm_graph)
+        lattice = self.physics.map_to_lattice(comm_graph)
         dispersion_relations = []
         for mode_type in ["acoustic", "optical"]:
             for k_vector in lattice.k_space_sampling():
-                v_s = self._compute_sound_velocity(lattice, mode_type)
+                v_s = self.physics.compute_sound_velocity(lattice, mode_type)
                 k_norm = np.linalg.norm(k_vector)
                 if k_norm == 0: continue
 
                 ω = v_s * k_norm
-                group_velocity = self._compute_group_velocity(v_s, k_vector)
+                group_velocity = self.physics.compute_group_velocity(v_s, k_vector)
 
                 dispersion_relations.append(DispersionRelation(
                     k_vector=k_vector.tolist(), frequency=ω, mode_type=mode_type,
-                    group_velocity=group_velocity, energy=self.hbar * ω
+                    group_velocity=group_velocity, energy=self.physics.hbar * ω
                 ))
 
         optimized_channels = []
         for relation in dispersion_relations:
-            if relation.group_velocity > self.min_efficiency_threshold:
+            if relation.group_velocity > self.physics.min_efficiency_threshold:
                 optimization = self.flow_optimizer.create_flow_channel(
                     k_vector=np.array(relation.k_vector),
                     group_velocity=relation.group_velocity,
-                    bandwidth=self._compute_bandwidth(relation)
+                    bandwidth=self.physics.compute_bandwidth(relation)
                 )
                 optimized_channels.append(optimization)
 
@@ -117,32 +85,8 @@ class PhononFlowAgent(PhysicsBasedAgent):
             dispersion_relations=dispersion_relations,
             optimized_channels=optimized_channels,
             total_bandwidth=sum(opt.bandwidth for opt in optimized_channels),
-            latency_improvement=self._compute_latency_improvement(optimized_channels)
+            latency_improvement=self.physics.compute_latency_improvement(optimized_channels)
         )
-
-    def _map_to_lattice(self, communication_graph: CommunicationGraph) -> LatticeModel:
-        return LatticeModel(communication_graph)
-
-    def _compute_sound_velocity(self, lattice: LatticeModel, mode_type: str) -> float:
-        """Computes effective sound velocity based on lattice properties (v ~ sqrt(K/m))."""
-        if mode_type == "acoustic":
-            K = lattice.get_avg_spring_constant()
-            return math.sqrt(K) if K > 0 else 0.0
-        else:
-            K_var = lattice.get_stiffness_variance()
-            return 1.0 / (1.0 + math.sqrt(K_var)) if K_var > 0 else 1.0
-
-    def _compute_group_velocity(self, v_s: float, k_vector: np.ndarray) -> float:
-        """For linear dispersion ω=v_s*k, group velocity equals phase velocity."""
-        return v_s
-
-    def _compute_bandwidth(self, relation: DispersionRelation) -> float:
-        return relation.group_velocity * 10
-
-    def _compute_latency_improvement(self, optimizations: List[OptimizedChannel]) -> float:
-        if not optimizations: return 0.0
-        avg_new_velocity = np.mean([opt.group_velocity for opt in optimizations])
-        return (avg_new_velocity - 1.0) * 100
 
     def measure_observable(self, system_state: SystemState) -> Observable:
         """Measures the total bandwidth of the optimized channels found."""
