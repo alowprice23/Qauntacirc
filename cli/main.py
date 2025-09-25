@@ -1,13 +1,19 @@
+import sys
+from pathlib import Path
+import os
+
+# Ensure the project root is in the Python path
+project_root = Path(__file__).resolve().parents[1]
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
+
 import typer
 from rich.console import Console
 from rich.theme import Theme
 from typing import Optional, Any
-import sys
-import os
-from pathlib import Path
 
 from . import __version__
-from .commands import init, generate, verify, deploy, demo, status, memory
+from .commands import init, generate, verify, deploy, demo, status, memory, chat, process, self_test
 from core.types import AppContext, QuantaCircConfig
 from core.config_loader import load_config
 from core.exceptions import QuantaCircError
@@ -122,6 +128,12 @@ app.add_typer(deploy.app, name="deploy", help="Deploy to target environment")
 app.add_typer(demo.app, name="demo", help="Run demonstration scenarios")
 app.add_typer(status.app, name="status", help="Display system quantum state")
 app.add_typer(memory.app, name="memory", help="Interact with Constellation memory")
+
+# New communication commands
+app.add_typer(chat.app, name="chat", help="Start an interactive chat session")
+app.add_typer(process.app, name="process", help="Process a single intent in batch mode")
+app.add_typer(self_test.app, name="self-test", help="Run a self-test of the system")
+
 
 if __name__ == "__main__":
     app()

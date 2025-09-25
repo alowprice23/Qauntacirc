@@ -1,0 +1,42 @@
+# QuantaCirc Configuration File
+
+nats:
+  server_url: "nats://localhost:4222"
+  credentials_file: null
+
+orchestrator:
+  max_iterations: 100
+  status_topic: "qc.orchestrator.status"
+  intent_topic: "qc.cli.intent"
+
+agents:
+  - name: "PlanckForge"
+    module: "agents.planck_forge.agent"
+    enabled: true
+  - name: "SchrodingerDev"
+    module: "agents.schrodinger_dev.agent"
+    enabled: true
+  - name: "PauliGuard"
+    module: "agents.pauli_guard.agent"
+    enabled: true
+  - name: "TunnelFix"
+    module: "agents.tunnel_fix.agent"
+    enabled: true
+  - name: "UncertainAI"
+    module: "agents.uncertain_ai.agent"
+    enabled: true
+  - name: "BoseBoost"
+    module: "agents.bose_boost.agent"
+    enabled: true
+  - name: "FluctuaTest"
+    module: "agents.fluctua_test.agent"
+    enabled: true
+  - name: "HydroSpread"
+    module: "agents.hydro_spread.agent"
+    enabled: true
+  - name: "LondonLink"
+    module: "agents.london_link.agent"
+    enabled: true
+  - name: "PhononFlow"
+    module: "agents.phonon_flow.agent"
+    enabled: true

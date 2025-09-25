@@ -1,0 +1,129 @@
+version: '3.8'
+
+services:
+  nats:
+    image: nats:latest
+    ports:
+      - "4222:4222"
+      - "8222:8222"
+    command: "-js"
+
+  orchestrator:
+    build: .
+    command: python run_orchestrator.py
+    volumes:
+      - .:/app
+    depends_on:
+      - nats
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  planck_forge:
+    build: .
+    command: python agents/planck_forge/agent.py
+    volumes:
+      - .:/app
+    depends_on:
+      - nats
+      - orchestrator
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  schrodinger_dev:
+    build: .
+    command: python agents/schrodinger_dev/agent.py
+    volumes:
+      - .:/app
+    depends_on:
+      - nats
+      - orchestrator
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  pauli_guard:
+    build: .
+    command: python agents/pauli_guard/agent.py
+    volumes:
+      - .:/app
+    depends_on:
+      - nats
+      - orchestrator
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  tunnel_fix:
+    build: .
+    command: python agents/tunnel_fix/agent.py
+    volumes:
+      - .:/app
+    depends_on:
+      - nats
+      - orchestrator
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  uncertain_ai:
+    build: .
+    command: python agents/uncertain_ai/agent.py
+    volumes:
+      - .:/app
+    depends_on:
+      - nats
+      - orchestrator
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  bose_boost:
+    build: .
+    command: python agents/bose_boost/agent.py
+    volumes:
+      - .:/app
+    depends_on:
+      - nats
+      - orchestrator
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  fluctua_test:
+    build: .
+    command: python agents/fluctua_test/agent.py
+    volumes:
+      - .:/app
+    depends_on:
+      - nats
+      - orchestrator
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  hydro_spread:
+    build: .
+    command: python agents/hydro_spread/agent.py
+    volumes:
+      - .:/app
+    depends_on:
+      - nats
+      - orchestrator
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  london_link:
+    build: .
+    command: python agents/london_link/agent.py
+    volumes:
+      - .:/app
+    depends_on:
+      - nats
+      - orchestrator
+    environment:
+      - PYTHONUNBUFFERED=1
+
+  phonon_flow:
+    build: .
+    command: python agents/phonon_flow/agent.py
+    volumes:
+      - .:/app
+    depends_on:
+      - nats
+      - orchestrator
+    environment:
+      - PYTHONUNBUFFERED=1

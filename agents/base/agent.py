@@ -1,127 +1,133 @@
 import abc
+import asyncio
+import logging
 import uuid
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional, List, Tuple
 
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import AgentTask as Proposal, AgentResult as Action, QCState as State
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from .contracts import Contract
-from .policies import PolicyEngine
-from .memory import AgentMemory
+from nats.aio.msg import Msg
 
+from core.types import (
+    QuantaCircConfig, AgentTask, AgentResult, QCState, Status
+)
+from messaging.nats_client import NATSClient
+from messaging.publisher import MessagePublisher
+from messaging.subscriber import MessageSubscriber
+from messaging.serialization import MessageSerializer
+
+log = logging.getLogger(__name__)
 
 class QuantumAgent(abc.ABC):
     """
-    Abstract Base Class for all agents operating within the quantum computing framework.
-
-    Each agent must implement methods for analyzing system state, validating proposals,
-    and executing actions. The base class provides a structured lifecycle, contract
-    enforcement, and integration with monitoring and memory systems.
+    Abstract Base Class for message-aware agents with full life-cycle and
+    request-reply handling.
     """
-    def __init__(
-        self,
-        name: str,
-        state_space: "StateSpace",
-        energy_calculator: "EnergyCalculator",
-        metrics_logger: "MetricsLogger",
-        policy_engine: "PolicyEngine",
-        agent_memory: "AgentMemory",
-        contracts: Optional[List["Contract"]] = None,
-        agent_id: Optional[str] = None,
-    ):
-        """
-        Initializes the QuantumAgent.
-        """
+    def __init__(self, name: str, config: QuantaCircConfig, agent_id: Optional[str] = None):
         self.agent_id = agent_id or str(uuid.uuid4())
         self.name = name
-        self.state_space = state_space
-        self.energy_calculator = energy_calculator
-        self.metrics_logger = metrics_logger
-        self.policy_engine = policy_engine
-        self.agent_memory = agent_memory
-        self.contracts = contracts or []
-        self.is_active = False
+        self.config = config
 
-        self.metrics_logger.register_counter(f"agent_{self.name}_proposals", "Number of proposals generated")
-        self.metrics_logger.register_counter(f"agent_{self.name}_executions", "Number of successful executions")
-        self.metrics_logger.register_histogram(f"agent_{self.name}_execution_duration", "Duration of agent execution")
+        self.nats_client = NATSClient(
+            server_urls=config.nats.server_url
+        )
+        self.serializer = MessageSerializer()
+        self._is_running = False
+        self._heartbeat_task: Optional[asyncio.Task] = None
+        self._task_subscription = None
 
-    def initialize(self):
-        """Initializes the agent's resources."""
-        print(f"Agent {self.name} ({self.agent_id}) initialized.")
-
-    def activate(self):
-        """Activates the agent, making it ready to process tasks."""
-        self.is_active = True
-        print(f"Agent {self.name} ({self.agent_id}) activated.")
-
-    def deactivate(self):
-        """Deactivates the agent, releasing resources."""
-        self.is_active = False
-        print(f"Agent {self.name} ({self.agent_id}) deactivated.")
-
+    @property
     @abc.abstractmethod
-    def analyze_state(self, state: "State") -> "Proposal":
-        """
-        Analyzes the current system state and generates a proposal for action.
-        """
+    def capabilities(self) -> List[str]:
+        """A list of capabilities this agent provides."""
         pass
 
-    @abc.abstractmethod
-    def validate_proposal(self, proposal: "Proposal") -> bool:
-        """
-        Validates a proposal against internal logic and constraints.
-        """
-        pass
+    async def connect(self):
+        if not self.nats_client.is_connected:
+            await self.nats_client.connect()
+            log.info(f"Agent {self.name} connected to NATS.")
 
-    @abc.abstractmethod
-    def execute(self, proposal: "Proposal") -> "Action":
-        """
-        Executes a validated proposal.
-        """
-        pass
+    async def disconnect(self):
+        if self.nats_client.is_connected:
+            await self.nats_client.disconnect()
+            log.info(f"Agent {self.name} disconnected from NATS.")
 
-    def _enforce_preconditions(self, state: "State"):
-        """Enforces all preconditions defined in contracts."""
-        for contract in self.contracts:
-            if not contract.check_preconditions(state):
-                raise ValueError(f"Precondition failed for contract {contract.name}")
+    async def announce(self):
+        """Announces the agent's presence."""
+        announcement_payload = {"name": self.name, "agent_id": self.agent_id, "capabilities": self.capabilities}
+        await self.nats_client.publish(subject="qc.agent.announce", payload=self.serializer.serialize(announcement_payload)[0])
 
-    def _enforce_postconditions(self, state: "State", action: "Action"):
-        """Enforces all postconditions defined in contracts."""
-        for contract in self.contracts:
-            if not contract.check_postconditions(state, action):
-                raise ValueError(f"Postcondition failed for contract {contract.name}")
-
-    def run(self, state: "State") -> Optional["Action"]:
-        """
-        The main execution loop for the agent.
-        """
-        if not self.is_active:
-            print(f"Agent {self.name} is not active.")
-            return None
-
-        with self.metrics_logger.log_duration(f"agent_{self.name}_execution_duration"):
+    async def _heartbeat(self, interval: int = 30):
+        while self._is_running:
             try:
-                self._enforce_preconditions(state)
-
-                proposal = self.analyze_state(state)
-                self.metrics_logger.increment_counter(f"agent_{self.name}_proposals")
-
-                if not self.validate_proposal(proposal) or not self.policy_engine.validate(proposal):
-                    return None
-
-                action = self.execute(proposal)
-
-                self._enforce_postconditions(state, action)
-
-                self.metrics_logger.increment_counter(f"agent_{self.name}_executions")
-                self.agent_memory.record_decision(state, proposal, action)
-
-                return action
-
+                await self.announce()
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                break
             except Exception as e:
-                self.metrics_logger.increment_counter(f"agent_{self.name}_errors")
-                print(f"Agent {self.name} failed execution: {e}")
-                return None
+                log.error(f"Agent {self.name} heartbeat failed: {e}")
+                await asyncio.sleep(interval)
+
+    async def _handle_task(self, msg: Msg):
+        """Handles incoming tasks from the orchestrator."""
+        try:
+            task = AgentTask.model_validate_json(msg.data)
+
+            can_handle, reason = self.can_handle(task)
+            if not can_handle:
+                result = AgentResult(
+                    task_id=task.id,
+                    agent_name=self.name,
+                    action_taken=False,
+                    status=Status.FAILED,
+                    error=f"Precondition not met: {reason}"
+                )
+            else:
+                result = await self.process_task(task)
+
+            await self.nats_client.publish(subject=msg.reply, payload=result.model_dump_json().encode())
+
+        except Exception as e:
+            log.error(f"Error processing task: {e}", exc_info=True)
+            # Optionally, publish an error result back
+            if 'task' in locals() and msg.reply:
+                error_result = AgentResult(task_id=task.id, agent_name=self.name, status=Status.FAILED, error=str(e))
+                await self.nats_client.publish(subject=msg.reply, payload=error_result.model_dump_json().encode())
+
+    async def start(self):
+        """Starts the agent's services, including heartbeat and task subscription."""
+        if self._is_running: return
+        self._is_running = True
+        await self.connect()
+
+        # Subscribe to dedicated task topic
+        task_subject = f"qc.agent.tasks.{self.name}"
+        self._task_subscription = await self.nats_client.subscribe(task_subject, callback=self._handle_task, queue=f"{self.name}_queue")
+
+        self._heartbeat_task = asyncio.create_task(self._heartbeat())
+        log.info(f"Agent {self.name} started and listening on '{task_subject}'.")
+
+    async def stop(self):
+        """Stops the agent's services."""
+        if not self._is_running: return
+        self._is_running = False
+
+        if self._task_subscription:
+            await self._task_subscription.unsubscribe()
+        if self._heartbeat_task:
+            self._heartbeat_task.cancel()
+            try: await self._heartbeat_task
+            except asyncio.CancelledError: pass
+
+        await self.disconnect()
+        log.info(f"Agent {self.name} stopped.")
+
+    def can_handle(self, task: AgentTask) -> Tuple[bool, str]:
+        """
+        Checks if the agent can handle the given task.
+        Override this method to implement precondition checks.
+        """
+        return True, ""
+
+    @abc.abstractmethod
+    async def process_task(self, task: AgentTask) -> AgentResult:
+        """Processes a task assigned by the orchestrator."""
+        pass

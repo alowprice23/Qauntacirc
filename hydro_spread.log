@@ -1,0 +1,14 @@
+Traceback (most recent call last):
+  File "/app/agents/hydro_spread/agent.py", line 5, in <module>
+    from agents.base.agent import QuantumAgent
+  File "/app/agents/__init__.py", line 4, in <module>
+    from .base import QuantumAgent, AgentRouter
+  File "/app/agents/base/__init__.py", line 7, in <module>
+    from .metrics import AgentMetrics
+  File "/app/agents/base/metrics.py", line 7, in <module>
+    from monitoring.metrics import QuantumMetrics as MetricsLogger
+  File "/app/monitoring/__init__.py", line 8, in <module>
+    from .tracing import QuantumTracer
+  File "/app/monitoring/tracing.py", line 3, in <module>
+    from opentelemetry import trace
+ModuleNotFoundError: No module named 'opentelemetry'

@@ -13,6 +13,7 @@ import asyncio
 from deployment.deployer import QuantaCircDeployer, DeploymentResult
 # from monitoring.health.readiness import ReadinessProbe
 # from monitoring.health.liveness import LivenessProbe
+from cli.auth import ensure_authorized
 
 app = typer.Typer()
 
@@ -43,7 +44,8 @@ def to_env(
         False,
         "--force",
         help="Force deployment even if verification fails"
-    )
+    ),
+    user: str = typer.Depends(lambda: ensure_authorized(required_role="admin"))
 ):
     """
     Deploy QuantaCirc project to specified environment.
@@ -56,6 +58,7 @@ def to_env(
     # app_context: AppContext = ctx.obj
     # console = app_context.console
 
+    console.print(f"Authenticated as user: '{user}'")
     # Load deployment configuration
     if config_path is None:
         config_path = Path("deployment") / f"{environment}.yml"
@@ -106,10 +109,16 @@ def to_env(
         raise typer.Exit(1)
 
 @app.command()
-def rollback(ctx: typer.Context, environment: str, version: Optional[str] = None):
+def rollback(
+    ctx: typer.Context,
+    environment: str,
+    version: Optional[str] = None,
+    user: str = typer.Depends(lambda: ensure_authorized(required_role="admin"))
+):
     """Rollback deployment to previous version"""
     from rich.console import Console
     console = Console()
+    console.print(f"Authenticated as user: '{user}'")
     console.print(f"Rolling back deployment in {environment} to version {version}...")
 
 def run_verification_suite(app_context) -> bool:

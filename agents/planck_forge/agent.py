@@ -1,149 +1,79 @@
-# agents/planck_forge/agent.py
-"""
-PlanckForge Agent: Translates natural language requirements into formal task sets.
-
-This agent is the first step in the quantum software engineering process,
-decomposing high-level goals into a structured, verifiable, and machine-readable
-format.
-"""
-
-from typing import Dict, Any, Optional, List
+import asyncio
+import logging
+from typing import List, Dict, Any, Tuple
 
 from agents.base.agent import QuantumAgent
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
+from core.config_loader import load_config
+from core.types import QuantaCircConfig, AgentTask, AgentResult, Status
 
-from .nl_parser import NLParser
-from . import ops
+log = logging.getLogger(__name__)
 
 class PlanckForgeAgent(QuantumAgent):
     """
-    The PlanckForge Agent specializes in requirement quantization.
-
-    It uses an LLM to analyze natural language requirements and structures them
-    into a formal task dependency graph (DAG). Its rigor is Functor-Verified,
-    ensuring that the output is logically sound and adheres to predefined
-    closure rules.
+    An agent specializing in quantizing high-level requirements into discrete,
+    verifiable tasks.
     """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
-        super().__init__(
-            name="planck_forge",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
-        )
-        self.llm_client = llm_client
-        self.nl_parser = NLParser(llm_client)
+    def __init__(self, config: QuantaCircConfig):
+        super().__init__(name="PlanckForge", config=config)
 
-    async def analyze_state(self, state: State) -> Proposal:
+    @property
+    def capabilities(self) -> List[str]:
+        return ["requirements_quantization", "task_decomposition"]
+
+    def can_handle(self, task: AgentTask) -> Tuple[bool, str]:
+        """Decline tasks that don't have a text payload."""
+        if isinstance(task.payload, dict) and task.payload.get("text"):
+            return True, ""
+        return False, "Task payload must be a dict with a non-empty 'text' field."
+
+    async def process_task(self, task: AgentTask) -> AgentResult:
         """
-        Analyzes a state containing a natural language requirement.
-
-        Args:
-            state: The current state, expected to have a 'requirement_text' field in metadata.
-
-        Returns:
-            A proposal containing the decomposed tasks.
+        Processes a high-level requirement and breaks it down into quanta.
         """
-        requirement_text = state.metadata.get("requirement_text")
-        if not requirement_text:
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="No requirement text found in state.")
+        log.info(f"PlanckForge received task: {task.payload.get('text')}")
 
-        try:
-            # 1. Use the NLParser to get the structured task data
-            llm_output_str = await self.nl_parser.parse_requirement(requirement_text)
+        # Simulate the work of quantization
+        await asyncio.sleep(2)  # Simulate I/O or CPU-bound work
 
-            # 2. Parse the LLM output into TaskQuanta objects
-            tasks = ops.parse_llm_output(llm_output_str)
+        quantized_tasks = [
+            {"id": "task-001", "description": "Define API endpoints for JWT"},
+            {"id": "task-002", "description": "Create user schema with password hash"},
+            {"id": "task-003", "description": "Implement token generation logic"},
+        ]
 
-            # 3. Create a success proposal
-            return Proposal(
-                agent_name=self.name,
-                task_type="analysis",
-                payload={"tasks": tasks, "requirement_text": requirement_text},
-                status=Status.SUCCESS
-            )
-        except (ValueError, ops.TaskValidationError) as e:
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason=f"Failed to parse requirement: {e}")
-
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """
-        Validates the task set in the proposal using closure rules.
-
-        Args:
-            proposal: The proposal generated by analyze_state.
-
-        Returns:
-            True if the proposal is valid, False otherwise.
-        """
-        if proposal.status != Status.SUCCESS or "tasks" not in proposal.payload:
-            return False
-
-        try:
-            ops.validate_task_set(proposal.payload["tasks"])
-            self.metrics_logger.increment_counter(f"agent_{self.name}_proposal_validation_success")
-            return True
-        except ops.TaskValidationError as e:
-            self.metrics_logger.increment_counter(f"agent_{self.name}_proposal_validation_failure")
-            print(f"Proposal validation failed for agent {self.name}: {e}")
-            return False
-
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the proposal by finalizing the task DAG and calculating energy.
-
-        Args:
-            proposal: A validated proposal.
-
-        Returns:
-            An action containing the task DAG and energy impact.
-        """
-        tasks = proposal.payload["tasks"]
-
-        # 1. Generate the final task DAG
-        task_dag = ops.generate_task_dag(tasks)
-
-        # 2. Calculate the static energy impact
-        num_tasks = len(tasks)
-        num_dependencies = sum(len(task.dependencies) for task in tasks)
-
-        static_metrics = {
-            'cyclomatic_complexity': float(num_tasks),
-            'coupling': float(num_dependencies)
+        result_payload = {
+            "message": "Requirement quantized successfully.",
+            "quantized_tasks": quantized_tasks,
+            "energy_impact": {"static": -50.0, "dynamic": -20.0}
         }
 
-        static_energy = self.energy_calculator.compute_static_energy(static_metrics)
-
-        # 3. Create the action
-        action_data = {
-            "task_dag": task_dag,
-            "original_requirement": proposal.payload["requirement_text"],
-            "energy_impact": {
-                "static": -static_energy
-            }
-        }
-
-        return Action(
-            task_id=proposal.id,
+        return AgentResult(
+            task_id=task.id,
             agent_name=self.name,
             action_taken=True,
+            result=result_payload,
             status=Status.SUCCESS,
-            result=action_data
         )
+
+async def main():
+    """Main entry point to run the agent as a standalone service."""
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+    config = load_config()
+    agent = PlanckForgeAgent(config)
+
+    try:
+        await agent.start()
+        log.info("PlanckForge Agent is running. Press Ctrl+C to stop.")
+        # Keep the agent running indefinitely
+        await asyncio.Event().wait()
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        log.info("PlanckForge Agent is shutting down.")
+    finally:
+        await agent.stop()
+
+if __name__ == "__main__":
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        pass

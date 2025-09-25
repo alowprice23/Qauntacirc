@@ -1,128 +1,157 @@
-"""
-Orchestrator
-"""
-from typing import Optional, List
-from uuid import uuid4
-from agents.contracts.composition import ContractComposer
-from core.closure_rules import ClosureRuleSet
-from core.energy_calculator import EnergyCalculator
-from core.energy_conservation import ConservationMonitor
-from core.lyapunov_monitor import LyapunovMonitor
-from core.two_phase_annealer import TwoPhaseAnnealer
-from core.functor import Functor
-from core.types import QCState, AgentTask, AgentResult, SoftwareState, EnergyComponents, Status
-from messaging.agent_router import AgentRouter
-from messaging.types import Message
+import asyncio
+import logging
+from typing import Dict, List, Optional
 
+from core.types import (
+    QuantaCircConfig, QCState, AgentTask, AgentResult, SoftwareState,
+    EnergyComponents, Status
+)
+from messaging.nats_client import NATSClient
+from messaging.publisher import MessagePublisher
+from messaging.subscriber import MessageSubscriber
+from messaging.serialization import MessageSerializer
+
+log = logging.getLogger(__name__)
 
 class Orchestrator:
     """
-    The orchestrator is responsible for managing the overall process.
+    Manages agent coordination, state evolution, and communication.
     """
 
-    def __init__(
-            self,
-            agents: List,
-            energy_calculator: EnergyCalculator,
-            lyapunov_monitor: LyapunovMonitor,
-            annealer: TwoPhaseAnnealer,
-            functor: Functor,
-            closure_rules: ClosureRuleSet,
-            agent_router: AgentRouter,
-    ):
-        self.agents = agents
-        self.energy_calculator = energy_calculator
-        self.lyapunov_monitor = lyapunov_monitor
-        self.annealer = annealer
-        self.functor = functor
-        self.closure_rules = closure_rules
-        self.state_history: List[QCState] = []
-        self.agent_router = agent_router
-        self.contract_composer = ContractComposer()
-
-    async def execute_pipeline(self, requirement: str, max_iterations: int = 100) -> QCState:
-        # 1. Initial state from requirement
-        initial_software_state = SoftwareState(component_versions={}, config_hashes={}, status="new")
-        initial_energy_components = EnergyComponents(static=1000.0, dynamic=500.0, interaction=200.0)
-        initial_state = QCState(
-            software_state=initial_software_state,
-            energy=initial_energy_components.total,
-            energy_components=initial_energy_components,
-            lyapunov_potential=initial_energy_components.total,  # Initially, potential = energy
-            contraction_factor=1.0,
-            metadata={"requirement_text": requirement}
+    def __init__(self, config: QuantaCircConfig):
+        self.config = config
+        self.nats_client = NATSClient(
+            server_urls=config.nats.server_url
         )
-        self.state_history.append(initial_state)
-        # Initialize the energy conservation monitor
-        conservation_monitor = ConservationMonitor(initial_energy=initial_state.energy)
+        serializer = MessageSerializer()
+        self.publisher = MessagePublisher(self.nats_client, serializer)
+        self.subscriber = MessageSubscriber(self.nats_client, serializer)
 
-        # 2. Run optimization loop
-        current_state = initial_state
-        proposal = None
-        for i in range(max_iterations):
-            # In a real scenario, we would select agents based on the current state and phase
-            selected_agent = self.agents[i % len(self.agents)]
+        self.agent_registry: Dict[str, Dict] = {}
+        self.state_history: List[QCState] = []
+        self._is_running = False
+        self._pruner_task: Optional[asyncio.Task] = None
 
-            # Agent proposes a task
-            proposal: AgentTask = await selected_agent.analyze_state(current_state)
+    async def _publish_status(self, message: str, status_type: str = "info", extra: Optional[Dict] = None):
+        """Helper to publish status updates to the CLI."""
+        payload = {"type": status_type, "message": message, "data": extra or {}}
+        try:
+            await self.publisher.publish(
+                subject=self.config.orchestrator.status_topic,
+                data=payload
+            )
+        except Exception as e:
+            log.error(f"Failed to publish status update: {e}")
 
-            if not selected_agent.validate_proposal(proposal):
-                continue
+    def _select_agent_for_task(self, task_type: str) -> Optional[str]:
+        """Selects a suitable agent from the registry based on capability."""
+        for name, details in self.agent_registry.items():
+            if task_type in details.get("capabilities", []):
+                return name
+        return None
 
-            # Creating a contract for the current action
-            action_contract = selected_agent.get_contract(proposal)
-            if not action_contract.precondition(current_state):
-                continue  # Skip if precondition is not met
+    async def _prune_stale_agents(self, stale_threshold: int = 60):
+        """Periodically removes agents that have not sent a heartbeat."""
+        while self._is_running:
+            await asyncio.sleep(stale_threshold / 2)
+            try:
+                now = asyncio.get_event_loop().time()
+                stale_agents = [
+                    name for name, details in self.agent_registry.items()
+                    if now - details.get("last_seen", 0) > stale_threshold
+                ]
+                for name in stale_agents:
+                    del self.agent_registry[name]
+                    log.warning(f"Pruned stale agent: {name}")
+                    await self._publish_status(f"Agent '{name}' has gone offline (timeout).", "agent_status")
+            except Exception as e:
+                log.error(f"Error during agent pruning: {e}")
 
-            action: AgentResult = selected_agent.execute(proposal)
-            energy_impact = action.result.get("energy_impact", {})
+    async def _handle_intent(self, payload: dict, context: Optional[QCState]):
+        """Callback for handling incoming CLI intents."""
+        intent_text = payload.get("text")
+        if not intent_text:
+            log.warning("Received intent with no text.")
+            return
 
-            delta_energy = sum(energy_impact.values())
-            new_energy = current_state.energy + delta_energy
+        log.info(f"Received intent: '{intent_text}'")
+        await self._publish_status(f"Received intent: '{intent_text}'. Starting execution pipeline.")
+        asyncio.create_task(self.execute_pipeline(intent_text))
 
-            # Track energy change with the conservation monitor
-            conservation_monitor.track_energy_change(delta_energy)
-            if not conservation_monitor.is_conserved():
-                # Handle energy conservation violation
-                pass
+    async def _handle_agent_announcement(self, payload: dict, context: Optional[QCState]):
+        """Callback for agent registration and health checks."""
+        agent_name = payload.get("name")
+        if not agent_name:
+            return
 
-            if self.annealer.should_accept(new_energy, current_state.energy):
-                # Create a new state based on the action
-                new_energy_components = current_state.energy_components.copy(deep=True)
-                new_energy_components.static += energy_impact.get("static", 0.0)
-                new_energy_components.dynamic += energy_impact.get("dynamic", 0.0)
-                new_energy_components.interaction += energy_impact.get("interaction", 0.0)
-                new_software_state = current_state.software_state.copy(deep=True)
+        self.agent_registry[agent_name] = {
+            "name": agent_name,
+            "capabilities": payload.get("capabilities", []),
+            "last_seen": asyncio.get_event_loop().time()
+        }
+        log.info(f"Agent '{agent_name}' announced its presence with capabilities: {payload.get('capabilities')}")
+        await self._publish_status(f"Agent '{agent_name}' is online.", "agent_status")
 
-                new_state = QCState(
-                    software_state=new_software_state,
-                    energy=new_energy,
-                    energy_components=new_energy_components,
-                    lyapunov_potential=new_energy,  # Simplified
-                    contraction_factor=0.9,  # Simplified
-                    metadata=current_state.metadata,
-                )
+    async def start(self):
+        """Connects to NATS and starts listening for messages."""
+        if self._is_running:
+            return
 
-                if action_contract.postcondition(new_state):
-                    current_state = new_state
-                    self.state_history.append(current_state)
-                    self.lyapunov_monitor.track_state(current_state)
+        await self.nats_client.connect()
+        self._is_running = True
+        self._pruner_task = asyncio.create_task(self._prune_stale_agents())
+        log.info("Orchestrator started. Subscribing to topics.")
 
-                    # Example of broadcasting a message to other agents
-                    msg = Message(sender_id=selected_agent.id, receiver_id='broadcast',
-                                  topic='state_update', payload=new_state)
-                    await self.agent_router.publish(msg)
+        await self.subscriber.subscribe(self.config.orchestrator.intent_topic, dict, self._handle_intent, "orchestrator_intent_queue")
+        await self.subscriber.subscribe("qc.agent.announce", dict, self._handle_agent_announcement, "orchestrator_agent_listeners")
 
-            self.annealer.temperature = self.annealer.initial_temp / (1 + i)  # Simplified cooling
+        await self._publish_status("Orchestrator is online and ready.", "system_status")
 
-            # Check for convergence
-            if self.lyapunov_monitor.verify_stability().is_stable:
-                break
+    async def stop(self):
+        """Gracefully shuts down the orchestrator."""
+        if not self._is_running:
+            return
+        self._is_running = False
+        if self._pruner_task:
+            self._pruner_task.cancel()
+        await self.nats_client.disconnect()
+        log.info("Orchestrator shut down.")
 
-        # 3. Final verification
-        if proposal:
-            mock_action = AgentResult(task_id=proposal.id, agent_name="final_verification", action_taken=False,
-                                      status=Status.SUCCESS)
-            self.closure_rules.is_satisfied(current_state, mock_action)
+    async def execute_pipeline(self, requirement: str):
+        """The main execution loop for processing a requirement."""
+        task_type = "requirements_quantization"
+        agent_name = self._select_agent_for_task(task_type)
 
-        return current_state
+        if not agent_name:
+            await self._publish_status(f"No agent available for task '{task_type}'.", "error")
+            return
+
+        await self._publish_status(f"Engaging agent '{agent_name}' for '{task_type}'.")
+        task = AgentTask(agent_name=agent_name, task_type=task_type, payload={"text": requirement})
+
+        try:
+            response_msg = await self.nats_client.request(
+                subject=f"qc.agent.tasks.{agent_name}",
+                payload=task.model_dump_json().encode(),
+                timeout=15.0
+            )
+            result = AgentResult.model_validate_json(response_msg.data)
+
+            if result.status == Status.FAILED:
+                await self._publish_status(f"Agent '{agent_name}' declined task: {result.error}", "warning")
+                return
+
+            await self._publish_status(
+                f"Agent '{agent_name}' completed task. Result: {result.result.get('message')}",
+                "progress",
+                extra={"agent": agent_name, "result": result.result}
+            )
+            # Here, you would continue the pipeline with subsequent tasks...
+            await self._publish_status("Execution pipeline finished.", "complete")
+
+        except asyncio.TimeoutError:
+            await self._publish_status(f"Agent '{agent_name}' timed out. Removing from registry.", "error")
+            if agent_name in self.agent_registry:
+                del self.agent_registry[agent_name]
+        except Exception as e:
+            await self._publish_status(f"An error occurred while communicating with '{agent_name}': {e}", "error")

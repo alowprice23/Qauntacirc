@@ -127,11 +127,38 @@ class ProofCertificate(BaseModel):
     prover: str
     content: str
 
+class NATSConfig(BaseModel):
+    server_url: str = "nats://localhost:4222"
+    credentials_file: Optional[str] = None
+
+class OrchestratorConfig(BaseModel):
+    max_iterations: int = 100
+    status_topic: str = "qc.orchestrator.status"
+    intent_topic: str = "qc.cli.intent"
+
+class AgentConfig(BaseModel):
+    name: str
+    module: str
+    enabled: bool = True
+    parameters: Dict[str, Any] = Field(default_factory=dict)
+
 class QuantaCircConfig(BaseModel):
-    pass
+    nats: NATSConfig = Field(default_factory=NATSConfig)
+    orchestrator: OrchestratorConfig = Field(default_factory=OrchestratorConfig)
+    agents: List[AgentConfig] = Field(default_factory=list)
 
 class AppContext(BaseModel):
     config: QuantaCircConfig
+    console: Any  # Rich console instance
+    interactive: bool = True
+    log_level: str = "INFO"
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    def verify_quantum_state(self) -> bool:
+        # Placeholder for quantum state verification logic
+        return True
 
 Proposal = AgentTask
 State = QCState

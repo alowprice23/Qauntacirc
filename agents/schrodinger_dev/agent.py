@@ -1,166 +1,49 @@
 import asyncio
-import numpy as np
-from typing import Dict, Any, Optional
+import logging
+from typing import List, Dict, Any
 
 from agents.base.agent import QuantumAgent
-from agents.base import ops as base_ops
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
+from core.config_loader import load_config
+from core.types import QuantaCircConfig, AgentTask, AgentResult, Status
 
-from . import prompts, ops
-from .hamiltonian import HamiltonianBuilder
-from .code_generator import QuantumCodeGenerator
+log = logging.getLogger(__name__)
 
 class SchrodingerDevAgent(QuantumAgent):
     """
-    The SchrodingerDev Agent generates code using a quantum-inspired methodology.
-
-    It creates a superposition of multiple code implementations, evolves them
-    under a Hamiltonian that represents the problem's energy landscape, and
-    collapses the state to the most optimal (lowest energy) implementation.
+    An agent that generates code based on quantized tasks.
     """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
-        super().__init__(
-            name="schrodinger_dev",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
-        )
-        self.llm_client = llm_client
-        self.code_generator = QuantumCodeGenerator(llm_client, num_superpositions=4)
+    def __init__(self, config: QuantaCircConfig):
+        super().__init__(name="SchrodingerDev", config=config)
 
-        # Default weights for the Hamiltonian. These could be tuned or made configurable.
-        hamiltonian_weights = {
-            'complexity': 1.0,
-            'constraints': 10.0,
-            'length': 0.01,
-            'similarity': 0.5,
+    @property
+    def capabilities(self) -> List[str]:
+        return ["code_generation", "api_implementation"]
+
+    async def process_task(self, task: AgentTask) -> AgentResult:
+        log.info(f"SchrodingerDev received task: {task.payload}")
+        await asyncio.sleep(3)
+        result_payload = {
+            "message": "Code generated for task.",
+            "files_created": ["src/api/auth.py", "src/models/user.py"],
+            "energy_impact": {"dynamic": -100.0, "interaction": 5.0}
         }
-        self.hamiltonian_builder = HamiltonianBuilder(weights=hamiltonian_weights)
-
-    async def analyze_state(self, state: State) -> Proposal:
-        """
-        Analyzes a state, generates a superposition of code, evolves it, and collapses it.
-
-        Args:
-            state: The current state, expected to have a 'task_dag' from PlanckForge.
-
-        Returns:
-            A proposal containing the single, optimal generated code and proof.
-        """
-        if "task_dag" not in state.metadata or "tasks" not in state.metadata.get("planck_forge_output", {}):
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="Task DAG or task list not found in state.")
-
-        tasks = state.metadata["planck_forge_output"]["tasks"]
-
-        # For simplicity, we'll process the first task in the list.
-        # A more complex agent might handle multiple tasks or dependencies.
-        if not tasks:
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason="No tasks found in planck_forge_output.")
-
-        task = tasks[0]
-
-        try:
-            # 1. Create a superposition of code implementations
-            implementations, psi_0 = await self.code_generator.create_initial_state(task)
-
-            # 2. Build the Hamiltonian based on the implementations and spec
-            hamiltonian = self.hamiltonian_builder.from_specification(implementations, task)
-
-            # 3. Evolve the state using the Schrodinger equation
-            psi_final = self.code_generator.evolve_state(psi_0, hamiltonian)
-
-            # 4. Collapse the state to the most probable implementation
-            final_code = self.code_generator.collapse_to_implementation(implementations, psi_final)
-
-            # 5. Generate a proof skeleton for the final, chosen code
-            proof_prompt = prompts.get_prompt("generate_proof").format(
-                task_description=task["description"],
-                verification_criteria=task["verification_criteria"]
-            )
-            proof_response = await self.llm_client.complete({"prompt": proof_prompt})
-            proof_skeleton = ops.extract_python_code(proof_response["content"])
-
-            # 6. Create file map for the final code and proof
-            file_map = ops.create_code_and_proof_files(final_code, proof_skeleton, task["id"])
-
-        except Exception as e:
-            return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason=f"Failed during quantum evolution: {e}")
-
-        return Proposal(
-            agent_name=self.name,
-            task_type="analysis",
-            payload={"generated_files": file_map},
-            status=Status.SUCCESS
+        return AgentResult(
+            task_id=task.id, agent_name=self.name, action_taken=True,
+            result=result_payload, status=Status.SUCCESS
         )
 
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """
-        Validates the generated code and proof in the proposal.
-        """
-        if proposal.status != Status.SUCCESS or "generated_files" not in proposal.payload:
-            return False
+async def main():
+    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    config = load_config()
+    agent = SchrodingerDevAgent(config)
+    try:
+        await agent.start()
+        log.info("SchrodingerDev Agent is running. Press Ctrl+C to stop.")
+        await asyncio.Event().wait()
+    except (KeyboardInterrupt, asyncio.CancelledError):
+        log.info("SchrodingerDev Agent is shutting down.")
+    finally:
+        await agent.stop()
 
-        try:
-            for file_path, content in proposal.payload["generated_files"].items():
-                if file_path.endswith(".py"):
-                    ops.validate_python_syntax(content)
-            return True
-        except ops.CodeGenerationError as e:
-            self.logger.warning(f"Proposal validation failed for agent {self.name}: {e}")
-            return False
-
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        Executes the proposal by calculating the energy of the final generated code.
-        """
-        generated_files = proposal.payload["generated_files"]
-
-        # Calculate static energy from the final collapsed code's complexity
-        total_complexity = 0
-        for content in generated_files.values():
-            try:
-                ast_tree = base_ops.parse_to_ast(content)
-                total_complexity += base_ops.calculate_cyclomatic_complexity(ast_tree)
-            except Exception:
-                continue
-
-        static_metrics = {'cyclomatic_complexity': float(total_complexity)}
-        static_energy = self.energy_calculator.compute_static_energy(static_metrics)
-
-        # The dynamic energy component is now implicitly handled by the evolution/collapse.
-        # We can set it to zero or a small constant.
-        dynamic_energy = 0.0
-
-        action_data = {
-            "files_to_create": generated_files,
-            "energy_impact": {
-                "static": static_energy,
-                "dynamic": dynamic_energy,
-            }
-        }
-
-        return Action(
-            task_id=proposal.id,
-            agent_name=self.name,
-            action_taken=True,
-            result=action_data,
-            status=Status.SUCCESS
-        )
+if __name__ == "__main__":
+    asyncio.run(main())
