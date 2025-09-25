@@ -1,5 +1,5 @@
 import time
-import threading
+import asyncio
 from typing import Optional
 
 # from core.quantum_state import QuantumState
@@ -8,7 +8,7 @@ class QuantumState:
 
 class RateLimiter:
     """
-    A token bucket rate limiter that can be aware of quantum states.
+    An asyncio-compatible token bucket rate limiter.
     """
 
     def __init__(
@@ -23,7 +23,7 @@ class RateLimiter:
         self.request_interval = 60.0 / requests_per_minute
         self.token_interval = 60.0 / tokens_per_minute
 
-        self.lock = threading.Lock()
+        self.lock = asyncio.Lock()
         self.last_request_time = 0
 
         # For token-based rate limiting
@@ -31,24 +31,24 @@ class RateLimiter:
         self.current_tokens = bucket_size
         self.last_token_refill_time = time.monotonic()
 
-    def wait(self, tokens_required: int = 1):
+    async def wait(self, tokens_required: int = 1):
         """
         Waits if necessary to comply with the rate limit.
         """
-        with self.lock:
+        async with self.lock:
             self._refill_tokens()
 
             # Wait for request interval
             elapsed_time = time.monotonic() - self.last_request_time
             if elapsed_time < self.request_interval:
-                time.sleep(self.request_interval - elapsed_time)
+                await asyncio.sleep(self.request_interval - elapsed_time)
 
             # Wait for enough tokens
             while self.current_tokens < tokens_required:
                 # Not enough tokens, calculate how long to wait to get them
                 tokens_needed = tokens_required - self.current_tokens
                 wait_time = tokens_needed * (60.0 / self.tokens_per_minute)
-                time.sleep(wait_time)
+                await asyncio.sleep(wait_time)
                 self._refill_tokens()
 
             self.current_tokens -= tokens_required

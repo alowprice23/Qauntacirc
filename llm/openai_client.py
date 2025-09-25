@@ -3,6 +3,7 @@ import logging
 from typing import Any, Dict, List, Optional
 
 import openai
+from openai import AsyncOpenAI
 
 from .client import LLMClient, QuantumState, StandardChatResponse
 
@@ -22,9 +23,9 @@ class OpenAIClient(LLMClient):
         super().__init__(api_key=api_key or os.environ.get("OPENAI_API_KEY"), model=model, **kwargs)
         if self.api_key is None:
             raise ValueError("OpenAI API key is required.")
-        self.client = openai.OpenAI(api_key=self.api_key)
+        self.client = AsyncOpenAI(api_key=self.api_key)
 
-    def _do_generate(
+    async def _do_generate(
         self,
         prompt: str,
         quantum_context: Optional[QuantumState] = None,
@@ -32,10 +33,10 @@ class OpenAIClient(LLMClient):
     ) -> str:
         """Generate a text completion from a prompt."""
         messages = [{"role": "user", "content": prompt}]
-        chat_completion = self._do_chat(messages, quantum_context, **kwargs)
+        chat_completion = await self._do_chat(messages, quantum_context, **kwargs)
         return chat_completion["choices"][0]["message"]["content"]
 
-    def _do_chat(
+    async def _do_chat(
         self,
         messages: List[Dict[str, str]],
         quantum_context: Optional[QuantumState] = None,
@@ -43,12 +44,12 @@ class OpenAIClient(LLMClient):
     ) -> StandardChatResponse:
         """Generate a chat response from a list of messages."""
 
-        def api_call() -> StandardChatResponse:
+        async def api_call() -> StandardChatResponse:
             quantum_params = self._preserve_quantum_context(quantum_context)
             # In a real scenario, quantum_params would be merged into the request
             # For now, it's a placeholder.
 
-            response = self.client.chat.completions.create(
+            response = await self.client.chat.completions.create(
                 model=self.model,
                 messages=messages,
                 **kwargs,
@@ -56,9 +57,9 @@ class OpenAIClient(LLMClient):
             self._track_cost_from_usage(response.usage)
             return response.to_dict()
 
-        return self._handle_request(api_call)
+        return await self._handle_request(api_call)
 
-    def embed(
+    async def embed(
         self,
         texts: List[str],
         quantum_context: Optional[QuantumState] = None,
@@ -67,8 +68,8 @@ class OpenAIClient(LLMClient):
     ) -> List[List[float]]:
         """Generate embeddings for a list of texts."""
 
-        def api_call():
-            response = self.client.embeddings.create(
+        async def api_call():
+            response = await self.client.embeddings.create(
                 input=texts,
                 model=embedding_model,
                 **kwargs,
@@ -76,7 +77,7 @@ class OpenAIClient(LLMClient):
             self._track_cost_from_usage(response.usage, model=embedding_model)
             return [item.embedding for item in response.data]
 
-        return self._handle_request(api_call)
+        return await self._handle_request(api_call)
 
     def _track_cost_from_usage(self, usage: Any, model: Optional[str] = None) -> None:
         """Calculate and track cost based on token usage."""

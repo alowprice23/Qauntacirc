@@ -13,6 +13,8 @@ from messaging.nats_client import NATSClient
 from messaging.publisher import MessagePublisher
 from messaging.subscriber import MessageSubscriber
 from messaging.serialization import MessageSerializer
+from llm.factory import get_llm_client
+from llm.client import LLMClient
 
 log = logging.getLogger(__name__)
 
@@ -30,9 +32,68 @@ class QuantumAgent(abc.ABC):
             server_urls=config.nats.server_url
         )
         self.serializer = MessageSerializer()
+
+        # Initialize LLM clients with fallback support
+        self.llm_clients: List[LLMClient] = []
+        providers = [config.llm.provider] + config.llm.fallback_providers
+        unique_providers = list(dict.fromkeys(providers)) # Remove duplicates, preserve order
+
+        for provider in unique_providers:
+            try:
+                client = get_llm_client(
+                    provider=provider,
+                    api_key=config.llm.api_key, # Factory will use env var if this is None
+                    model=config.llm.model,
+                )
+                self.llm_clients.append(client)
+            except Exception as e:
+                log.error(f"Failed to initialize LLM client for provider {provider}: {e}")
+
+        if not self.llm_clients:
+            log.critical("No LLM clients could be initialized. Agent may not function correctly.")
+            self.llm_client = None # No primary client
+        else:
+            self.llm_client = self.llm_clients[0]
+
         self._is_running = False
         self._heartbeat_task: Optional[asyncio.Task] = None
         self._task_subscription = None
+
+    async def llm_generate_with_fallback(self, prompt: str, **kwargs: Any) -> str:
+        """
+        Generates text using the primary LLM client, with fallback to others on failure.
+        """
+        if not self.llm_clients:
+            raise RuntimeError("No LLM clients are configured.")
+
+        last_exception = None
+        for client in self.llm_clients:
+            try:
+                log.info(f"Attempting LLM generation with {client.model} via {type(client).__name__}")
+                return await client.generate(prompt, **kwargs)
+            except Exception as e:
+                last_exception = e
+                log.warning(f"LLM client {type(client).__name__} failed: {e}. Trying next fallback.")
+
+        raise RuntimeError(f"All LLM clients failed. Last error: {last_exception}") from last_exception
+
+    async def llm_chat_with_fallback(self, messages: List[Dict[str, str]], **kwargs: Any) -> Dict[str, Any]:
+        """
+        Generates a chat response using the primary LLM client, with fallback.
+        """
+        if not self.llm_clients:
+            raise RuntimeError("No LLM clients are configured.")
+
+        last_exception = None
+        for client in self.llm_clients:
+            try:
+                log.info(f"Attempting LLM chat with {client.model} via {type(client).__name__}")
+                return await client.chat(messages, **kwargs)
+            except Exception as e:
+                last_exception = e
+                log.warning(f"LLM client {type(client).__name__} failed: {e}. Trying next fallback.")
+
+        raise RuntimeError(f"All LLM clients failed. Last error: {last_exception}") from last_exception
 
     @property
     @abc.abstractmethod

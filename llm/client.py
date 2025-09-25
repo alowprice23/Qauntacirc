@@ -1,4 +1,5 @@
 import abc
+import asyncio
 import time
 import logging
 from typing import Any, Dict, List, Optional, TypedDict
@@ -70,6 +71,7 @@ class LLMClient(abc.ABC):
         rate_limiter: Optional[RateLimiter] = None,
         validator: Optional[ResponseValidator] = None,
         injection_detector: Optional[InjectionDetector] = None,
+        cache_enabled: bool = True,
     ):
         self.api_key = api_key
         self.model = model
@@ -78,8 +80,10 @@ class LLMClient(abc.ABC):
         self.validator = validator or ResponseValidator()
         self.injection_detector = injection_detector or InjectionDetector()
         self.total_cost = 0.0
+        self.cache_enabled = cache_enabled
+        self.cache: Dict[str, Any] = {}
 
-    def generate(
+    async def generate(
         self,
         prompt: str,
         quantum_context: Optional[QuantumState] = None,
@@ -88,10 +92,10 @@ class LLMClient(abc.ABC):
         """Generate a text completion from a prompt."""
         if self.injection_detector.detect(prompt):
             raise ValueError("Prompt injection detected")
-        return self._do_generate(prompt, quantum_context, **kwargs)
+        return await self._do_generate(prompt, quantum_context, **kwargs)
 
     @abc.abstractmethod
-    def _do_generate(
+    async def _do_generate(
         self,
         prompt: str,
         quantum_context: Optional[QuantumState] = None,
@@ -100,18 +104,35 @@ class LLMClient(abc.ABC):
         """Abstract method for generating a text completion."""
         pass
 
-    def chat(
+    async def chat(
         self,
         messages: List[Dict[str, str]],
         quantum_context: Optional[QuantumState] = None,
         **kwargs: Any,
     ) -> StandardChatResponse:
-        """Generate a chat response from a list of messages."""
+        """Generate a chat response from a list of messages, with caching."""
+        if self.cache_enabled:
+            # Create a cache key from the content and relevant kwargs
+            cache_key_parts = [str(msg) for msg in messages]
+            for key in sorted(kwargs.keys()):
+                cache_key_parts.append(f"{key}={kwargs[key]}")
+            cache_key = "".join(cache_key_parts)
+
+            if cache_key in self.cache:
+                log.info("Returning cached response.")
+                return self.cache[cache_key]
+
         sanitized_messages = self.injection_detector.sanitize(messages)
-        return self._do_chat(sanitized_messages, quantum_context, **kwargs)
+        response = await self._do_chat(sanitized_messages, quantum_context, **kwargs)
+
+        if self.cache_enabled and 'cache_key' in locals():
+            self.cache[cache_key] = response
+            log.info("Cached new response.")
+
+        return response
 
     @abc.abstractmethod
-    def _do_chat(
+    async def _do_chat(
         self,
         messages: List[Dict[str, str]],
         quantum_context: Optional[QuantumState] = None,
@@ -120,16 +141,16 @@ class LLMClient(abc.ABC):
         """Abstract method for generating a chat response."""
         pass
 
-    def complete(self, messages: List[Dict[str, str]], **kwargs: Any) -> Dict[str, Any]:
+    async def complete(self, messages: List[Dict[str, str]], **kwargs: Any) -> Dict[str, Any]:
         """A simplified chat method for compatibility."""
-        chat_response = self.chat(messages, **kwargs)
+        chat_response = await self.chat(messages, **kwargs)
         return {
             "response": chat_response["choices"][0]["message"]["content"],
             "usage": chat_response.get("usage"),
         }
 
     @abc.abstractmethod
-    def embed(
+    async def embed(
         self,
         texts: List[str],
         quantum_context: Optional[QuantumState] = None,
@@ -145,18 +166,18 @@ class LLMClient(abc.ABC):
         self.total_cost += cost
         logger.info(f"Cost for this request: ${cost:.6f}. Total cost: ${self.total_cost:.6f}")
 
-    def _apply_rate_limit(self):
+    async def _apply_rate_limit(self):
         """Apply rate limiting before making an API call."""
         if self.rate_limiter:
-            self.rate_limiter.wait()
+            await self.rate_limiter.wait()
 
-    def _handle_request(self, request_func, *args, **kwargs):
+    async def _handle_request(self, request_func, *args, **kwargs):
         """Generic request handler with retries and rate limiting."""
-        self._apply_rate_limit()
+        await self._apply_rate_limit()
         max_retries = 3
         for attempt in range(max_retries):
             try:
-                response = request_func(*args, **kwargs)
+                response = await request_func(*args, **kwargs)
                 if self.validator.validate(response):
                     return response
                 else:
@@ -166,7 +187,7 @@ class LLMClient(abc.ABC):
             except Exception as e:
                 logger.error(f"API call failed on attempt {attempt + 1}: {e}")
                 if attempt < max_retries - 1:
-                    time.sleep(2 ** attempt)  # Exponential backoff
+                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
                 else:
                     raise
 

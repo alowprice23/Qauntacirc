@@ -142,10 +142,17 @@ class AgentConfig(BaseModel):
     enabled: bool = True
     parameters: Dict[str, Any] = Field(default_factory=dict)
 
+class LLMConfig(BaseModel):
+    provider: str = "openai"
+    model: str = "gpt-4"
+    api_key: Optional[str] = None
+    fallback_providers: List[str] = ["anthropic", "groq"]
+
 class QuantaCircConfig(BaseModel):
     nats: NATSConfig = Field(default_factory=NATSConfig)
     orchestrator: OrchestratorConfig = Field(default_factory=OrchestratorConfig)
     agents: List[AgentConfig] = Field(default_factory=list)
+    llm: LLMConfig = Field(default_factory=LLMConfig)
 
 class AppContext(BaseModel):
     config: QuantaCircConfig
