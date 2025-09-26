@@ -2,13 +2,6 @@
 """
 Implements the Two-Phase Annealing optimization algorithm as described in
 Part 4 of the QuantaCirc project plan.
-
-This module provides a simulated annealer that separates the optimization
-process into two distinct phases:
-1. Phase A: Global exploration with a slow, logarithmic cooling schedule
-   to find promising basins of the energy landscape.
-2. Phase B: Local refinement with a faster, exponential cooling schedule
-   to efficiently find the minimum within a basin.
 """
 
 import math
@@ -16,160 +9,123 @@ import numpy as np
 from typing import List, Optional, Dict, Any
 
 from .types import QCState
-
-class MetropolisAcceptor:
-    """
-    Implements the Metropolis-Hastings acceptance criterion.
-    """
-    def __init__(self, seed: Optional[int] = None):
-        self._rng = np.random.default_rng(seed)
-
-    def acceptance_probability(self, delta_energy: float, temperature: float) -> float:
-        """
-        Calculates the acceptance probability.
-        P(accept) = min(1, exp(-ΔE/T))
-        """
-        if delta_energy <= 0:
-            return 1.0
-        if temperature < 1e-9:
-            return 0.0
-        return math.exp(-delta_energy / temperature)
-
-    def should_accept(self, delta_energy: float, temperature: float) -> bool:
-        """
-        Decides whether to accept a new state.
-        """
-        prob = self.acceptance_probability(delta_energy, temperature)
-        return self._rng.random() < prob
-
+from math_utils.annealing import TemperatureSchedule
+from math_utils.contractive_maps import is_contraction_mapping
 
 class TwoPhaseAnnealer:
     """
-    Manages a two-phase simulated annealing process. This class is designed
-    to be used by a master orchestrator, which drives the main optimization loop.
-    This annealer provides the logic for temperature scheduling, phase switching,
-    and acceptance criteria.
+    Manages a two-phase simulated annealing process.
     """
     def __init__(self, config: Dict[str, Any]):
-        """
-        Initializes the annealer with configuration.
-
-        Args:
-            config: A dictionary containing annealing parameters.
-                Expected keys: 'initial_temp', 'min_temp', 'phase_a_cooling_const',
-                'phase_b_cooling_rate', 'phase_switch_window', 'convergence_window',
-                'convergence_tolerance'.
-        """
-        self.initial_temp = config.get("initial_temp", 10.0)
-        self.min_temp = config.get("min_temp", 0.01)
-        self.phase_a_cooling_const = config.get("phase_a_cooling_const", 10.0) # 'c' in the formula
-        self.phase_b_cooling_rate = config.get("phase_b_cooling_rate", 0.98)
+        self.config = config
+        self.phase_a_schedule = TemperatureSchedule(
+            initial_temp=config.get("initial_temp", 1000.0),
+            schedule_type='logarithmic'
+        )
+        self.phase_b_schedule = TemperatureSchedule(
+            initial_temp=config.get("phase_b_start_temp", 100.0),
+            final_temp=config.get("min_temp", 0.1),
+            steps=config.get("phase_b_steps", 1000),
+            schedule_type='exponential'
+        )
         self.phase_switch_window = config.get("phase_switch_window", 50)
-        self.convergence_window = config.get("convergence_window", 30)
         self.convergence_tolerance = config.get("convergence_tolerance", 1e-5)
 
-        self.temperature = self.initial_temp
         self.phase = "A"
-        self.current_state: Optional[QCState] = None
+        self.temperature = self.phase_a_schedule.initial_temp
         self.energy_history: List[float] = []
+        self.gradient_norm_history: List[float] = []
+        self.contraction_factor_history: List[float] = []
+        self.phase_switch_iteration: int = -1
 
     def initialize_state(self, initial_state: QCState):
-        """Sets the initial state for the annealing process."""
-        self.current_state = initial_state
-        self.temperature = self.initial_temp
         self.phase = "A"
+        self.temperature = self.phase_a_schedule.initial_temp
         self.energy_history = [initial_state.energy]
+        self.gradient_norm_history = []
+        self.contraction_factor_history = []
+        self.phase_switch_iteration = -1
 
-    def should_accept(self, new_energy: float, old_energy: float) -> bool:
-        """
-        Decides whether to accept a new state using the Metropolis-Hastings criterion.
-        """
-        if new_energy < old_energy:
-            return True
-
-        # Avoid division by zero at low temperatures
-        if self.temperature < 1e-9:
-            return False
-
-        acceptance_probability = math.exp((old_energy - new_energy) / self.temperature)
-        return np.random.rand() < acceptance_probability
-
-    def update_annealer_state(self, iteration: int, new_state: QCState):
-        """
-        Updates the annealer's internal state after a step, including temperature
-        and phase checks.
-        """
-        self.current_state = new_state
-        self.energy_history.append(new_state.energy)
-        if len(self.energy_history) > self.phase_switch_window * 2:
-            self.energy_history.pop(0) # Keep history from growing indefinitely
-
-        self._update_phase_and_temperature(iteration)
-
-    def _update_phase_and_temperature(self, iteration: int):
-        """Updates the temperature based on the current phase and cooling schedule."""
+    def update_temperature(self, iteration: int):
+        """Updates the temperature based on the current phase and schedule."""
         if self.phase == "A":
-            if self._check_phase_switch():
-                self.phase = "B"
-                print(f"Switching to Phase B at iteration {iteration}.")
-                # When switching, we might want to reset the temperature to a
-                # specific value for the start of Phase B.
-                self.temperature = self.initial_temp / 10.0 # Example reset
-            else:
-                # Logarithmic cooling for Phase A: T_k = c / log(k + 2)
-                self.temperature = self.phase_a_cooling_const / math.log(iteration + 2)
+            self.temperature = self.phase_a_schedule.get_temperature(iteration)
+        else: # Phase B
+            # Phase B step counting should be relative to the start of Phase B
+            phase_b_iter = iteration - self.phase_switch_iteration
+            self.temperature = self.phase_b_schedule.get_temperature(phase_b_iter)
 
-        elif self.phase == "B":
-            # Exponential cooling for Phase B
-            self.temperature *= self.phase_b_cooling_rate
+        self.temperature = max(self.temperature, self.config.get("min_temp", 0.1))
 
-        self.temperature = max(self.temperature, self.min_temp)
-
-    def _check_phase_switch(self) -> bool:
+    def check_phase_switch(self, iteration: int) -> bool:
         """
-        Checks if the criteria for switching from Phase A to B are met,
-        based on the stabilization of energy.
+        Checks if the criteria for switching from Phase A to B are met.
+        Basin capture detection via gradient magnitude and variance stabilization.
         """
         if len(self.energy_history) < self.phase_switch_window:
             return False
 
+        # Criterion 1: Variance stabilization
         recent_energies = self.energy_history[-self.phase_switch_window:]
-
-        # Criterion 1: Energy variance has dropped below a threshold.
-        # This indicates we are no longer making large exploratory jumps.
-        variance = np.var(recent_energies)
-        variance_threshold = (self.initial_temp / 20.0)**2
-        if variance > variance_threshold:
+        energy_variance = np.var(recent_energies)
+        variance_threshold = self.config.get("phase_switch_variance_threshold", 0.1)
+        if energy_variance > variance_threshold:
             return False
 
-        # Criterion 2: The median of recent energy changes is consistently negative.
-        # This indicates we are in a basin and generally moving downhill.
-        deltas = np.diff(recent_energies)
-        if np.median(deltas) >= 0:
+        # Criterion 2: Gradient magnitude stabilization
+        if len(self.gradient_norm_history) < self.phase_switch_window:
+            return False
+        recent_gradients = self.gradient_norm_history[-self.phase_switch_window:]
+        gradient_mean = np.mean(recent_gradients)
+        gradient_threshold = self.config.get("phase_switch_gradient_threshold", 0.01)
+        if gradient_mean > gradient_threshold:
+            return False
+
+        print(f"Switching to Phase B at iteration {iteration}.")
+        self.phase = "B"
+        self.phase_switch_iteration = iteration
+        return True
+
+    def measure_contraction_factor(self, state_transformer_func, space_definition):
+        """
+        Measures the contraction factor λ of the state transformation function.
+        """
+        is_contraction, factor = is_contraction_mapping(
+            state_transformer_func,
+            space_definition,
+            samples=self.config.get("contraction_samples", 100)
+        )
+        if is_contraction:
+            self.contraction_factor_history.append(factor)
+        return factor
+
+    def check_convergence(self) -> bool:
+        """
+        Checks for convergence in Phase B.
+        """
+        if self.phase != "B":
+            return False
+
+        # Criterion 1: Contraction factor consistently < 1
+        if len(self.contraction_factor_history) < self.phase_switch_window:
+            return False
+        recent_factors = self.contraction_factor_history[-self.phase_switch_window:]
+        if np.mean(recent_factors) >= 1.0:
+            return False
+
+        # Criterion 2: Energy has stabilized
+        if len(self.energy_history) < self.phase_switch_window:
+            return False
+        recent_energies = self.energy_history[-self.phase_switch_window:]
+        if np.std(recent_energies) > self.convergence_tolerance:
             return False
 
         return True
 
-    def check_convergence(self) -> bool:
-        """
-        Checks if the optimization has converged.
-
-        Convergence is determined by the change in energy over a recent window,
-        indicating a "flatlined" energy landscape.
-        """
-        window_size = self.convergence_window
-        if len(self.energy_history) < window_size:
-            return False
-
-        recent_energies = np.array(self.energy_history[-window_size:])
-
-        # Check for flatness using standard deviation
-        energy_std = np.std(recent_energies)
-
-        # Convergence is met if the energy has flatlined (low std dev) in the
-        # final phase at the minimum temperature.
-        is_converged = (self.phase == "B" and
-                        self.temperature <= self.min_temp and
-                        energy_std < self.convergence_tolerance)
-
-        return is_converged
+    def record_step(self, energy: float, gradient_norm: float):
+        self.energy_history.append(energy)
+        self.gradient_norm_history.append(gradient_norm)
+        # Keep history from growing indefinitely
+        if len(self.energy_history) > self.phase_switch_window * 2:
+            self.energy_history.pop(0)
+            self.gradient_norm_history.pop(0)

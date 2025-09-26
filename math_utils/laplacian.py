@@ -81,3 +81,18 @@ def get_heat_kernel(adj_matrix, t):
     eigenvalues, eigenvectors = eigh(L)
     exp_diag = np.diag(np.exp(-t * eigenvalues))
     return eigenvectors @ exp_diag @ eigenvectors.T
+
+def calculate_laplacian_trace(adj_matrix: np.ndarray) -> float:
+    """
+    Calculates the trace of the graph Laplacian.
+    Tr(L) = sum of degrees of all vertices.
+
+    Args:
+        adj_matrix (np.ndarray): The adjacency matrix of the graph.
+
+    Returns:
+        float: The trace of the Laplacian.
+    """
+    # The trace of the combinatorial Laplacian is the sum of the diagonal elements,
+    # which is the sum of the degrees of all vertices.
+    return np.sum(adj_matrix)

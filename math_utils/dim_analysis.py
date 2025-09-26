@@ -1,84 +1,102 @@
-import numpy as np
-from . import units
+from collections import Counter
+
+class Dimension:
+    """Represents a physical dimension as a product of base dimensions."""
+    def __init__(self, dims: dict[str, float]):
+        self.dims = {k: v for k, v in dims.items() if v != 0}
+
+    def __eq__(self, other):
+        return self.dims == other.dims
+
+    def __mul__(self, other):
+        new_dims = Counter(self.dims)
+        new_dims.update(other.dims)
+        return Dimension(dict(new_dims))
+
+    def __truediv__(self, other):
+        new_dims = Counter(self.dims)
+        new_dims.subtract(other.dims)
+        return Dimension(dict(new_dims))
+
+    def __pow__(self, power):
+        new_dims = {k: v * power for k, v in self.dims.items()}
+        return Dimension(new_dims)
+
+    def is_dimensionless(self) -> bool:
+        return not self.dims
+
+    def __repr__(self):
+        return f"Dimension({self.dims})"
 
 class DimensionalAnalyzer:
     """
-    A conceptual class for performing dimensional analysis.
-
-    A full implementation of dimensional analysis requires a robust symbolic
-    math engine to parse expressions, substitute variables with their
-    dimensional representations, and algebraically simplify the resulting
-    dimensional equations. This is a significant engineering task. The
-    functions here serve as placeholders to illustrate the intended
-    functionality within the QuantaCirc framework.
+    Performs dimensional analysis for physics validation within QuantaCirc.
     """
-    def __init__(self, unit_registry):
-        self.registry = unit_registry
+    def __init__(self, base_dimensions: dict[str, Dimension]):
+        self.base_dimensions = base_dimensions
 
-    def check_homogeneity(self, left_expr_str, right_expr_str):
+    def check_homogeneity(self, term1: Dimension, term2: Dimension) -> bool:
         """
-        Conceptually checks if two expressions are dimensionally homogeneous.
-
-        For example, in the equation F = m*a, this function would verify that
-        the dimensions of force are equal to the dimensions of mass times acceleration.
-
-        Args:
-            left_expr_str (str): A string representing the left side of an equation.
-            right_expr_str (str): A string representing the right side of an equation.
-
-        Returns:
-            bool: True if the dimensions are consistent (conceptual).
+        Checks if two terms are dimensionally homogeneous.
         """
-        # This is a placeholder for complex parsing and evaluation logic.
-        # A real implementation would require a library like SymPy to parse
-        # the expression strings and substitute variables for their dimensions.
-        print(f"Conceptual check for: {left_expr_str} = {right_expr_str}")
-        print("This would require a symbolic parser to be fully implemented.")
-        return True # Placeholder return value
+        return term1 == term2
 
-    def buckingham_pi_theorem(self, variables, fundamental_dims):
+    def validate_equation(self, terms: list[Dimension]) -> bool:
         """
-        Applies the Buckingham π theorem to find the number of dimensionless groups.
-
-        Args:
-            variables (dict): A dictionary of variables and their dimensions as strings.
-                              e.g., {'v': 'L/T', 'g': 'L/T^2', 'h': 'L'}
-            fundamental_dims (list): A list of fundamental dimensions, e.g., ['L', 'M', 'T'].
-
-        Returns:
-            int: The number of independent dimensionless groups (pi-groups).
+        Validates that all terms in an equation have the same dimension.
         """
-        # A full implementation would build the dimensional matrix from the
-        # variables dict and compute its rank (k).
-        n = len(variables)
-        k = len(fundamental_dims) # This is an approximation of the rank.
+        if not terms:
+            return True
+        first_term_dim = terms[0]
+        return all(self.check_homogeneity(first_term_dim, term) for term in terms)
 
-        print(f"Number of variables (n) = {n}")
-        print(f"Number of fundamental dimensions (k) = {k}")
-        print(f"Expected number of dimensionless groups (n - k) = {n - k}")
+# Example Usage:
+# Define base dimensions for the QuantaCirc system
+ENERGY = Dimension({'E': 1})
+COMPLEXITY = Dimension({'Cplx': 1})
+COUPLING = Dimension({'Cpl': 1})
+CONSTRAINT = Dimension({'Cnst': 1})
+DEBT = Dimension({'Dbt': 1})
+TIME = Dimension({'T': 1})
+DIMENSIONLESS = Dimension({})
 
-        return n - k
-
-def validate_scaling_law(data, proposed_law):
+def setup_quantacirc_analyzer() -> DimensionalAnalyzer:
     """
-    Validates a proposed scaling law against experimental or simulated data.
-    A valid scaling law should result in a constant dimensionless value.
-
-    Args:
-        data (dict): A dictionary where keys are variable names and values are
-                     numpy arrays of observed data.
-        proposed_law (callable): A function that takes the data dictionary and
-                                 computes the dimensionless group.
-                                 e.g., lambda d: d['v']**2 / (d['g'] * d['h'])
-
-    Returns:
-        bool: True if the law produces a constant dimensionless value.
+    Sets up a dimensional analyzer with the standard QuantaCirc dimensions.
     """
-    # Compute the dimensionless value for all observations
-    pi_values = proposed_law(data)
+    base_dims = {
+        'energy': ENERGY,
+        'complexity': COMPLEXITY,
+        'coupling': COUPLING,
+        'constraint': CONSTRAINT,
+        'debt': DEBT,
+        'time': TIME,
+        'dimensionless': DIMENSIONLESS
+    }
+    return DimensionalAnalyzer(base_dims)
 
-    # Check if the resulting dimensionless values are constant
-    if len(pi_values) < 2:
-        return True # Not enough data to check for variation
+def validate_energy_equation(analyzer: DimensionalAnalyzer):
+    """
+    Validates the dimensional homogeneity of the main energy equation.
+    E_total = α·E_complexity + β·E_coupling + γ·E_constraint + δ·E_debt
+    """
+    # Define dimensions of the energy components
+    e_complexity = analyzer.base_dimensions['complexity']
+    e_coupling = analyzer.base_dimensions['coupling']
+    e_constraint = analyzer.base_dimensions['constraint']
+    e_debt = analyzer.base_dimensions['debt']
 
-    return np.allclose(pi_values, np.mean(pi_values))
+    # Define dimensions of the weights (to make terms have dimension of Energy)
+    alpha_dim = ENERGY / e_complexity
+    beta_dim = ENERGY / e_coupling
+    gamma_dim = ENERGY / e_constraint
+    delta_dim = ENERGY / e_debt
+
+    # Calculate the dimensions of each term in the equation
+    term1_dim = alpha_dim * e_complexity
+    term2_dim = beta_dim * e_coupling
+    term3_dim = gamma_dim * e_constraint
+    term4_dim = delta_dim * e_debt
+
+    # Validate that all terms have the dimension of Energy
+    return analyzer.validate_equation([term1_dim, term2_dim, term3_dim, term4_dim, ENERGY])

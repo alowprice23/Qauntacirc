@@ -1,96 +1,93 @@
-# core/lyapunov_monitor.py
+"""
+Lyapunov Monitor for QuantaCirc.
 
-from typing import List, Tuple
+This module provides the LyapunovMonitor class, which is responsible for
+tracking the system's Lyapunov potential and assessing its stability over time.
+"""
+
+from __future__ import annotations
+
+from typing import List, Dict, Any
 import numpy as np
-from core.types import QCState, LyapunovResult
-from core.lyapunov_function import LyapunovFunction
+
+from .types import QCState, LyapunovResult
+from math_utils.lyapunov import (
+    calculate_lyapunov_potential,
+    check_bounded_excursion,
+    estimate_lyapunov_exponent
+)
 
 class LyapunovMonitor:
     """
-    A class to monitor the Lyapunov stability of the system.
+    Tracks the Lyapunov potential of the system and analyzes its stability.
     """
-    def __init__(self, lyapunov_function: LyapunovFunction, excursion_bound: float = 1.5, convergence_threshold: float = 1e-4, min_history_for_stability: int = 10):
-        self.lyapunov_function = lyapunov_function
-        self.excursion_bound = excursion_bound
-        self.convergence_threshold = convergence_threshold
-        self.min_history_for_stability = min_history_for_stability
+
+    def __init__(self, config: Dict[str, Any]):
+        """
+        Initializes the LyapunovMonitor with configuration parameters.
+
+        Args:
+            config: A dictionary containing weights and thresholds for
+                    Lyapunov analysis. Expected keys: 'kappa', 'xi',
+                    'excursion_max_increase', 'excursion_window_size'.
+        """
+        self.kappa = config.get('kappa', 10.0)  # Weight for failing tests
+        self.xi = config.get('xi', 5.0)      # Weight for open obligations
+        self.max_increase = config.get('excursion_max_increase', 0.1)
+        self.window_size = config.get('excursion_window_size', 10)
         self.potential_history: List[float] = []
-        self.state_history: List[QCState] = []
-        self.min_potential: float | None = None
 
-    def reset(self):
-        self.potential_history = []
-        self.state_history = []
-        self.min_potential = None
-
-    def track_state(self, state: QCState):
-        potential = self.lyapunov_function.compute(state)
-        state.lyapunov_potential = potential
+    def record_state(self, state: QCState):
+        """
+        Calculates and records the Lyapunov potential for the given state.
+        """
+        potential = calculate_lyapunov_potential(
+            energy=state.energy,
+            num_failing_tests=state.failing_tests,
+            num_open_obligations=state.open_obligations,
+            kappa=self.kappa,
+            xi=self.xi
+        )
         self.potential_history.append(potential)
-        self.state_history.append(state)
-        if self.min_potential is None or potential < self.min_potential:
-            self.min_potential = potential
 
-    def track_excursion(self) -> Tuple[bool, float]:
-        if not self.potential_history or self.min_potential is None:
-            return False, 0.0
+    def check_stability(self) -> LyapunovResult:
+        """
+        Analyzes the history of the Lyapunov potential to check for stability.
 
-        ratio = self.potential_history[-1] / self.min_potential
-        return ratio > self.excursion_bound, ratio
+        Returns:
+            A LyapunovResult object with the stability assessment.
+        """
+        if len(self.potential_history) < self.window_size:
+            return LyapunovResult(is_stable=True, convergence_status="Insufficient data")
 
-    def verify_stability(self) -> LyapunovResult:
-        if len(self.potential_history) < self.min_history_for_stability:
-            return LyapunovResult(is_stable=False, convergence_status="insufficient_data", exponent=0.0, iterations=len(self.potential_history))
-
-        positive_potentials = np.array([p for p in self.potential_history if p > 0])
-        if len(positive_potentials) < self.min_history_for_stability:
-            return LyapunovResult(is_stable=False, convergence_status="insufficient_data", exponent=0.0, iterations=len(self.potential_history))
-
-        log_potentials = np.log(positive_potentials)
-        time_steps = np.arange(len(log_potentials))
-        try:
-            # Fit a line to the log of the potentials
-            coeffs = np.polyfit(time_steps, log_potentials, 1)
-            exponent = coeffs[0]
-        except np.linalg.LinAlgError:
-            exponent = 0.0
-
-        if exponent < -self.convergence_threshold:
-            status = "stable"
-        elif exponent > self.convergence_threshold:
-            status = "unstable"
-        else:
-            status = "marginal"
-
-        return LyapunovResult(
-            is_stable=status == "stable",
-            convergence_status=status,
-            exponent=exponent,
-            iterations=len(self.potential_history)
+        is_bounded = check_bounded_excursion(
+            self.potential_history,
+            self.max_increase,
+            self.window_size
         )
 
-    def predict_convergence(self, target_potential: float) -> float | None:
-        stability_result = self.verify_stability()
-        if not stability_result.is_stable or stability_result.exponent >= 0:
-            return None
+        if not is_bounded:
+            return LyapunovResult(is_stable=False, convergence_status="Diverging")
 
-        current_potential = self.potential_history[-1]
-        if current_potential <= target_potential:
-            return 0.0
+        exponent = estimate_lyapunov_exponent(np.array(self.potential_history))
 
-        # V(t) = V0 * exp(lambda * t)
-        # log(V(t)/V0) = lambda * t
-        # t = log(V(t)/V0) / lambda
-        time_to_converge = np.log(target_potential / current_potential) / stability_result.exponent
-        return time_to_converge
+        is_stable = exponent < 0
+        status = "Converging" if is_stable else "Stable (not converging)"
 
-    def verify_martingale_property(self) -> Tuple[bool, float]:
-        if len(self.potential_history) < 2:
-            return True, 0.0 # Not enough data to say otherwise
+        return LyapunovResult(
+            is_stable=is_stable,
+            exponent=exponent,
+            convergence_status=status
+        )
 
-        diffs = np.diff(self.potential_history)
-        drift = np.mean(diffs)
+    def get_potential_history(self) -> List[float]:
+        """
+        Returns the recorded history of the Lyapunov potential.
+        """
+        return self.potential_history
 
-        # Supermartingale: E[X_{n+1} | F_n] <= X_n
-        # We check the average drift
-        return drift <= 0, drift
+    def reset(self):
+        """
+        Resets the monitor's history.
+        """
+        self.potential_history = []

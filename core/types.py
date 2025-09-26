@@ -6,13 +6,14 @@ from pydantic import BaseModel, Field, root_validator, validator
 from enum import Enum
 
 class EnergyComponents(BaseModel):
-    static: float
-    dynamic: float
-    interaction: float
+    complexity: float = 0.0
+    coupling: float = 0.0
+    constraints: float = 0.0
+    debt: float = 0.0
 
     @property
     def total(self) -> float:
-        return self.static + self.dynamic + self.interaction
+        return self.complexity + self.coupling + self.constraints + self.debt
 
 class SoftwareState(BaseModel):
     component_versions: Dict[str, str]
@@ -29,14 +30,24 @@ class QCState(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.utcnow)
     software_state: SoftwareState
     quantum_state: Optional[QuantumState] = None
-    energy: float
-    energy_components: EnergyComponents
-    lyapunov_potential: float
-    contraction_factor: float
+
+    # Fields for energy calculation
+    modules: List[str] = Field(default_factory=list)
+    dependency_graph: Any = None  # Using Any for now to avoid numpy dependency here
+    constraints: List[Dict[str, Any]] = Field(default_factory=list)
+    modules_metadata: List[Dict[str, Any]] = Field(default_factory=list)
+
+    energy: float = 0.0
+    energy_components: EnergyComponents = Field(default_factory=EnergyComponents)
+    lyapunov_potential: float = 0.0
+    contraction_factor: float = 1.0
     failing_tests: int = 0
     open_obligations: int = 0
     optimization_phase: str = "initialization"
     metadata: Dict[str, Any] = Field(default_factory=dict)
+
+    class Config:
+        arbitrary_types_allowed = True
 
     @root_validator(pre=True)
     def energy_must_be_sum_of_components(cls, values):

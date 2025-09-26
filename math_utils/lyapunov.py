@@ -1,110 +1,85 @@
 """
-Lyapunov stability functions.
+Lyapunov stability functions for discrete state-space optimization.
 """
-from typing import List, Optional
+from typing import List
 import numpy as np
 
-def is_lyapunov_stable(state_vector: List[float]) -> bool:
+def calculate_lyapunov_potential(
+    energy: float,
+    num_failing_tests: int,
+    num_open_obligations: int,
+    kappa: float,
+    xi: float
+) -> float:
     """
-    A placeholder function to check for Lyapunov stability.
-    In a real implementation, this would involve analyzing the system's dynamics.
-    For now, we'll just check if the norm of the state vector is less than or equal to 1.
+    Calculates the Lyapunov potential as defined in the README.md.
+    Φ(S) = E(S) + κ·#{failing tests} + ξ·#{open obligations}
+
+    Args:
+        energy (float): The current energy of the system, E(S).
+        num_failing_tests (int): The number of failing tests.
+        num_open_obligations (int): The number of open obligations.
+        kappa (float): The weight for failing tests.
+        xi (float): The weight for open obligations.
+
+    Returns:
+        float: The calculated Lyapunov potential Φ(S).
     """
-    return np.linalg.norm(state_vector) <= 1.0
+    return energy + (kappa * num_failing_tests) + (xi * num_open_obligations)
 
-class LyapunovFunction:
+def check_bounded_excursion(
+    potential_history: List[float],
+    max_increase_fraction: float = 0.1,
+    window_size: int = 10
+) -> bool:
     """
-    A placeholder for a Lyapunov function.
+    Checks if the Lyapunov potential is experiencing a bounded excursion.
+    An excursion is a temporary increase in the potential.
+
+    Args:
+        potential_history (List[float]): A history of Lyapunov potential values.
+        max_increase_fraction (float): The maximum allowed fractional increase
+                                     relative to the minimum potential in the window.
+        window_size (int): The size of the sliding window to analyze.
+
+    Returns:
+        bool: True if the potential is stable or in a bounded excursion,
+              False if it appears to be diverging.
     """
-    def __init__(self, function_type: str, P: Optional[np.ndarray] = None):
-        self.function_type = function_type
-        if function_type == 'quadratic':
-            if P is None:
-                raise ValueError("Matrix P must be provided for quadratic Lyapunov functions.")
-            if not np.all(np.linalg.eigvals(P) > 0):
-                raise ValueError("Matrix P must be positive definite.")
-            self.P = P
+    if len(potential_history) < window_size:
+        return True  # Not enough data to determine divergence
 
-    def evaluate(self, state_vector: np.ndarray) -> float:
-        """
-        Evaluates the Lyapunov function for a given state vector.
-        """
-        if self.function_type == 'quadratic':
-            return state_vector.T @ self.P @ state_vector
-        raise NotImplementedError("Only quadratic Lyapunov functions are implemented.")
+    window = potential_history[-window_size:]
+    min_in_window = np.min(window)
+    max_in_window = np.max(window)
 
-    def derivative(self, state_vector: np.ndarray, state_derivative: np.ndarray) -> float:
-        """
-        Evaluates the derivative of the Lyapunov function for a given state vector.
-        """
-        if self.function_type == 'quadratic':
-            return state_derivative.T @ self.P @ state_vector + state_vector.T @ self.P @ state_derivative
-        raise NotImplementedError("Only quadratic Lyapunov functions are implemented.")
+    if min_in_window == 0: # Avoid division by zero
+        return max_in_window <= 0
 
+    increase = max_in_window - min_in_window
+    if increase <= 0:
+        return True # Not an excursion, it's stable or decreasing
 
-class StabilityAnalyzer:
-    """
-    A placeholder for a stability analyzer.
-    """
-    def __init__(self, lyapunov_function: LyapunovFunction, system_dynamics):
-        self.lyapunov_function = lyapunov_function
-        self.system_dynamics = system_dynamics
-
-    def check_stability(self, state_vector: np.ndarray) -> str:
-        """
-        Analyzes the stability of a given state vector.
-        """
-        state_derivative = self.system_dynamics(state_vector)
-        v_dot = self.lyapunov_function.derivative(state_vector, state_derivative)
-
-        if v_dot < 0:
-            return 'asymptotically stable'
-        elif v_dot == 0:
-            return 'stable'
-        else:
-            return 'unstable'
-
-    def estimate_stability_rate(self, state_vector: np.ndarray) -> float:
-        v = self.lyapunov_function.evaluate(state_vector)
-        if v == 0:
-            return np.inf
-        state_derivative = self.system_dynamics(state_vector)
-        v_dot = self.lyapunov_function.derivative(state_vector, state_derivative)
-        return -v_dot / v
-
-    def validate_trajectory(self, trajectory: List[np.ndarray]) -> bool:
-        """
-        Validates the stability of a given trajectory.
-        """
-        for i in range(len(trajectory) - 1):
-            v_i = self.lyapunov_function.evaluate(trajectory[i])
-            v_i1 = self.lyapunov_function.evaluate(trajectory[i+1])
-            if v_i1 > v_i:
-                return False
-        return True
-
+    allowed_increase = abs(min_in_window) * max_increase_fraction
+    return increase <= allowed_increase
 
 def estimate_lyapunov_exponent(time_series: np.ndarray) -> float:
     """
-    A placeholder function to estimate the Lyapunov exponent.
+    Estimates the Lyapunov exponent for a time series.
+    A negative exponent suggests convergence.
     """
     if len(time_series) < 2:
         return 0.0
 
-    # Avoid division by zero by filtering out pairs where the denominator is zero.
-    non_zero_indices = np.where(time_series[:-1] != 0)
-    numerator = time_series[1:][non_zero_indices]
-    denominator = time_series[:-1][non_zero_indices]
+    # Calculate the logarithm of the ratio of successive terms
+    # To avoid issues with zero or negative values, we analyze the separation
+    diffs = np.abs(np.diff(time_series))
 
-    if len(denominator) == 0:
+    # Filter out zero differences to avoid log(0)
+    non_zero_diffs = diffs[diffs > 0]
+    if len(non_zero_diffs) < 2:
         return 0.0
 
-    ratios = np.abs(numerator / denominator)
-
-    # Avoid log(0)
-    log_ratios = np.log(ratios[ratios > 0])
-
-    if len(log_ratios) == 0:
-        return 0.0
+    log_ratios = np.log(non_zero_diffs[1:] / non_zero_diffs[:-1])
 
     return np.mean(log_ratios)

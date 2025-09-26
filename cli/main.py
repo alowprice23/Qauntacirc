@@ -13,7 +13,7 @@ from rich.theme import Theme
 from typing import Optional, Any
 
 from . import __version__
-from .commands import init, generate, verify, deploy, demo, status, memory, chat, process, self_test
+from .commands import init, generate, verify, deploy, demo, status, memory, chat, process, self_test, debug, optimize, bounds, risk
 from core.types import AppContext, QuantaCircConfig
 from core.config_loader import load_config
 from core.exceptions import QuantaCircError
@@ -82,10 +82,11 @@ def main(
         # Setup structured logging first
         setup_logging(level=log_level)
 
-        # Initialize metrics collection
-        initialize_metrics()
-
         # Load configuration
+        config = load_config(config_path)
+
+        # Initialize metrics collection
+        initialize_metrics(config)
         if config_path and not config_path.exists():
             console.print(f"[error]Configuration file not found: {config_path}[/error]")
             raise typer.Exit(1)
@@ -128,6 +129,10 @@ app.add_typer(deploy.app, name="deploy", help="Deploy to target environment")
 app.add_typer(demo.app, name="demo", help="Run demonstration scenarios")
 app.add_typer(status.app, name="status", help="Display system quantum state")
 app.add_typer(memory.app, name="memory", help="Interact with Constellation memory")
+app.add_typer(debug.app, name="debug", help="Run debugging checks")
+app.add_typer(optimize.app, name="optimize", help="Run the two-phase annealer")
+app.add_typer(bounds.app, name="bounds", help="Test convergence and Lyapunov bounds")
+app.add_typer(risk.app, name="risk", help="Compute and validate uncertainty bounds")
 
 # New communication commands
 app.add_typer(chat.app, name="chat", help="Start an interactive chat session")
