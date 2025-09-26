@@ -1,49 +1,40 @@
-import asyncio
-import logging
-from typing import List
-
+from typing import Dict, Any, List
 from agents.base.agent import QuantumAgent
-from core.config_loader import load_config
-from core.types import QuantaCircConfig, AgentTask, AgentResult, Status
-
-log = logging.getLogger(__name__)
+from core.system_state import SystemState
 
 class BoseBoostAgent(QuantumAgent):
     """
-    An agent that optimizes system performance and resource allocation.
+    An agent that optimizes the deduplicated code.
     """
-    def __init__(self, config: QuantaCircConfig):
-        super().__init__(name="BoseBoost", config=config)
+    def __init__(self, config: Dict[str, Any] = None):
+        super().__init__(name="bose_boost", config=config)
 
-    @property
-    def capabilities(self) -> List[str]:
-        return ["performance_optimization", "resource_management", "caching_strategy"]
+    def execute(self, state: SystemState, task: str) -> Dict[str, Any]:
+        """
+        Optimizes the deduplicated code in the state.
+        """
+        deduplicated_code = state.get("deduplicated_code", [])
+        if not deduplicated_code:
+            print("BoseBoost found no deduplicated code to process.")
+            return {}
 
-    async def process_task(self, task: AgentTask) -> AgentResult:
-        log.info(f"BoseBoost received task: {task.payload}")
-        await asyncio.sleep(2.5)
-        result_payload = {
-            "message": "Optimized database query. Added index to 'users' table.",
-            "performance_gain": "150ms",
-            "energy_impact": {"dynamic": -40.0}
+        print(f"BoseBoost is optimizing {len(deduplicated_code)} code snippets.")
+
+        optimized_code = []
+        for code_item in deduplicated_code:
+            # Simulate code optimization
+            original_code = code_item.get('code', '')
+            optimized_code_str = "# Optimized by BoseBoost\n" + original_code
+
+            optimized_code.append({
+                "task_id": code_item.get('task_id'),
+                "original_code": original_code,
+                "optimized_code": optimized_code_str,
+            })
+
+        delta = {
+            "optimized_code": optimized_code,
+            "status": "optimization_complete"
         }
-        return AgentResult(
-            task_id=task.id, agent_name=self.name, action_taken=True,
-            result=result_payload, status=Status.SUCCESS
-        )
 
-async def main():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    config = load_config()
-    agent = BoseBoostAgent(config)
-    try:
-        await agent.start()
-        log.info("BoseBoost Agent is running. Press Ctrl+C to stop.")
-        await asyncio.Event().wait()
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        log.info("BoseBoost Agent is shutting down.")
-    finally:
-        await agent.stop()
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        return delta

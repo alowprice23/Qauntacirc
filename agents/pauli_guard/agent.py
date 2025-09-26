@@ -1,49 +1,36 @@
-import asyncio
-import logging
-from typing import List
-
+from typing import Dict, Any, List
 from agents.base.agent import QuantumAgent
-from core.config_loader import load_config
-from core.types import QuantaCircConfig, AgentTask, AgentResult, Status
-
-log = logging.getLogger(__name__)
+from core.system_state import SystemState
 
 class PauliGuardAgent(QuantumAgent):
     """
-    An agent that enforces security policies and compliance constraints.
+    An agent that performs deduplication on generated code.
     """
-    def __init__(self, config: QuantaCircConfig):
-        super().__init__(name="PauliGuard", config=config)
+    def __init__(self, config: Dict[str, Any] = None):
+        super().__init__(name="pauli_guard", config=config)
 
-    @property
-    def capabilities(self) -> List[str]:
-        return ["security_analysis", "policy_enforcement", "vulnerability_scanning"]
+    def execute(self, state: SystemState, task: str) -> Dict[str, Any]:
+        """
+        Deduplicates the generated code in the state.
+        """
+        generated_code = state.get("generated_code", [])
+        if not generated_code:
+            print("PauliGuard found no generated code to process.")
+            return {}
 
-    async def process_task(self, task: AgentTask) -> AgentResult:
-        log.info(f"PauliGuard received task: {task.payload}")
-        await asyncio.sleep(1.5)
-        result_payload = {
-            "message": "Security scan complete. No violations found.",
-            "report_id": "sec-scan-123",
-            "energy_impact": {"static": -10.0, "interaction": -5.0}
+        print(f"PauliGuard is processing {len(generated_code)} code snippets for deduplication.")
+
+        seen_code = set()
+        deduplicated_code = []
+        for code_item in generated_code:
+            code_hash = hash(code_item.get('code'))
+            if code_hash not in seen_code:
+                seen_code.add(code_hash)
+                deduplicated_code.append(code_item)
+
+        delta = {
+            "deduplicated_code": deduplicated_code,
+            "status": "deduplication_complete"
         }
-        return AgentResult(
-            task_id=task.id, agent_name=self.name, action_taken=True,
-            result=result_payload, status=Status.SUCCESS
-        )
 
-async def main():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    config = load_config()
-    agent = PauliGuardAgent(config)
-    try:
-        await agent.start()
-        log.info("PauliGuard Agent is running. Press Ctrl+C to stop.")
-        await asyncio.Event().wait()
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        log.info("PauliGuard Agent is shutting down.")
-    finally:
-        await agent.stop()
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        return delta

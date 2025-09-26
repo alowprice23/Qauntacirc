@@ -1,116 +1,94 @@
-"""
-System Orchestrator for QuantaCirc.
-"""
-
-from typing import Dict, Any, List
-import numpy as np
-import copy
-
-from .types import QCState, SoftwareState, EnergyComponents
-from .math_engine import MathEngine
-from .two_phase_annealer import TwoPhaseAnnealer
-from math_utils.distance_metrics import calculate_state_distance
-from .lyapunov_monitor import LyapunovMonitor
-from .convergence_engine import ConvergenceEngine, ConvergenceCriteria
+import asyncio
+import concurrent.futures
+from typing import Dict, Any, List, Optional
+from nats.aio.client import Client as NATS
+from core.dependency_graph import DependencyGraph
+from core.system_state import SystemState
+from core.state_manager import StateManager
+from core.rollback_manager import RollbackManager
+from core.failure_manager import FailureManager, RecoveryStrategy
+from core.resource_manager import ResourceManager
+from core.metrics_manager import MetricsManager
+from agents.base.agent import QuantumAgent
 
 class Orchestrator:
-    """
-    Coordinates the entire optimization process.
-    """
-
-    def __init__(self, config: Dict[str, Any]):
+    def __init__(self, config: Dict[str, Any], nats_client: NATS):
         self.config = config
-        self.math_engine = MathEngine(config)
-        self.annealer = TwoPhaseAnnealer(config.get('annealing', {}))
-        self.lyapunov_monitor = LyapunovMonitor(config.get('lyapunov', {}))
-        self.convergence_engine = ConvergenceEngine(
-            ConvergenceCriteria(**config.get('convergence', {}))
+        self.nats_client = nats_client
+        self.dependency_graph = DependencyGraph()
+        self.state_manager = StateManager(nats_client)
+        self.rollback_manager = RollbackManager()
+        self.failure_manager = FailureManager(self.rollback_manager)
+        self.metrics_manager = MetricsManager()
+
+        resource_limits = config.get('resource_limits', {})
+        self.resource_manager = ResourceManager(
+            cpu_limit=resource_limits.get('cpu'),
+            memory_limit=resource_limits.get('memory')
         )
-        self.state_history: List[QCState] = []
 
-    def run_optimization(self, initial_state: QCState, max_iterations: int) -> QCState:
-        """
-        Runs the main optimization loop.
-        """
-        self.annealer.initialize_state(initial_state)
-        self.lyapunov_monitor.record_state(initial_state)
-        self.state_history.append(initial_state)
+        self.agents: Dict[str, QuantumAgent] = {}
+        self.agent_dependencies: Dict[str, Dict[str, List[str]]] = {}
 
-        current_state = initial_state
+    async def initialize(self):
+        await self.state_manager.initialize()
 
-        for i in range(max_iterations):
-            self.annealer.update_temperature(i)
+    def register_agent(self, agent: QuantumAgent, dependencies: Dict[str, List[str]]):
+        self.agents[agent.name] = agent
+        self.agent_dependencies[agent.name] = dependencies
+        self.dependency_graph.add_agent(
+            agent.name,
+            inputs=dependencies.get('inputs', []),
+            outputs=dependencies.get('outputs', [])
+        )
+        self.metrics_manager.increment_counter("agents_registered")
 
-            # Propose a new state using a greedy local search
-            new_state = self._propose_new_state(current_state)
+    async def run(
+        self,
+        initial_state: SystemState,
+        task: str,
+        max_agents: int = 4,
+        recovery_strategy: RecoveryStrategy = RecoveryStrategy.CONTINUE,
+        simulate_failure: Optional[str] = None
+    ) -> SystemState:
+        self.metrics_manager.increment_counter("orchestration_runs_started")
+        await self.state_manager.publish_state_change("orchestrator", {"status": "starting"})
+        execution_plan = self.dependency_graph.resolve_dependencies()
 
-            # Calculate energy of the new state
-            total_energy, components = self.math_engine.compute_system_energy(new_state)
-            new_state.energy = total_energy
-            new_state.energy_components = EnergyComponents(**components)
+        current_state = await self.state_manager.get_current_state(initial_state)
 
-            # Metropolis-Hastings acceptance criterion
-            delta_energy = new_state.energy - current_state.energy
-            if delta_energy < 0 or np.random.rand() < np.exp(-delta_energy / self.annealer.temperature):
-                current_state = new_state
+        with self.metrics_manager.track_execution_time("orchestration_run"):
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_agents) as executor:
+                for agent_name in execution_plan:
 
-            # Record state and metrics
-            self.lyapunov_monitor.record_state(current_state)
-            self.state_history.append(current_state)
+                    while not self.resource_manager.is_within_limits():
+                        self.metrics_manager.increment_counter("resource_throttling_events")
+                        print("Resource limits exceeded. Throttling execution for 5 seconds.")
+                        await asyncio.sleep(5)
 
-            gradient = self.math_engine.compute_gradient(current_state)
-            gradient_norm = self.math_engine.gradient_norm(gradient)
-            self.annealer.record_step(current_state.energy, gradient_norm)
+                    agent = self.agents[agent_name]
+                    self.rollback_manager.save_snapshot(agent_name, current_state)
 
-            # Check for phase switch
-            if self.annealer.phase == "A":
-                self.annealer.check_phase_switch(i)
-            elif self.annealer.phase == "B":
-                # Measure the contraction factor λ
-                if len(self.state_history) >= 3:
-                    s_k = self.state_history[-1]
-                    s_k_minus_1 = self.state_history[-2]
-                    s_k_minus_2 = self.state_history[-3]
+                    try:
+                        if agent_name == simulate_failure:
+                            raise Exception(f"Simulated failure for agent {agent_name}")
 
-                    dist_k = calculate_state_distance(s_k, s_k_minus_1)
-                    dist_k_minus_1 = calculate_state_distance(s_k_minus_1, s_k_minus_2)
+                        with self.metrics_manager.track_execution_time(f"agent_{agent_name}_execution"):
+                            future = executor.submit(agent.execute, current_state, task)
+                            delta = future.result()
 
-                    if dist_k_minus_1 > 1e-9:
-                        factor = dist_k / dist_k_minus_1
-                        self.annealer.contraction_factor_history.append(factor)
+                        await self.state_manager.publish_state_change(agent_name, delta)
+                        current_state = await self.state_manager.get_current_state(initial_state)
+                        self.metrics_manager.increment_counter(f"agent_{agent_name}_success")
 
-            # Check for convergence
-            if self.convergence_engine.check_convergence(self.state_history, self.lyapunov_monitor, self.annealer)['converged']:
-                print(f"Convergence reached at iteration {i}.")
-                break
+                    except Exception as e:
+                        self.metrics_manager.increment_counter(f"agent_{agent_name}_failure")
+                        current_state = self.failure_manager.handle_failure(
+                            agent_name=agent_name,
+                            exception=e,
+                            recovery_strategy=recovery_strategy
+                        )
 
-        return current_state
-
-    def _propose_new_state(self, current_state: QCState) -> QCState:
-        """
-        Proposes a new state by performing a simple greedy local search.
-        It generates a few candidate states and returns the one with the lowest energy.
-        """
-        candidates = []
-        num_candidates = 5
-
-        for _ in range(num_candidates):
-            candidate_state = copy.deepcopy(current_state)
-
-            # Make a small random change to the candidate state
-            if candidate_state.modules:
-                module_idx = np.random.randint(0, len(candidate_state.modules))
-                candidate_state.modules[module_idx] += np.random.choice([" ", "\n", "#"])
-
-            if candidate_state.constraints:
-                constraint_idx = np.random.randint(0, len(candidate_state.constraints))
-                candidate_state.constraints[constraint_idx]['value'] += np.random.randn() * 0.1
-
-            # Evaluate the energy of the candidate
-            energy, _ = self.math_engine.compute_system_energy(candidate_state)
-            candidate_state.energy = energy
-            candidates.append(candidate_state)
-
-        # Return the candidate with the lowest energy
-        best_candidate = min(candidates, key=lambda s: s.energy)
-        return best_candidate
+        await self.state_manager.publish_state_change("orchestrator", {"status": "completed"})
+        self.metrics_manager.increment_counter("orchestration_runs_completed")
+        return await self.state_manager.get_current_state(initial_state)

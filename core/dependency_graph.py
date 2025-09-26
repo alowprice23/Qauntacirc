@@ -1,38 +1,30 @@
-# core/dependency_graph.py
-
-"""
-Constructs and analyzes a dependency graph from software modules.
-"""
-
-from __future__ import annotations
-from typing import List, Tuple
-import networkx as nx
-
-from math_utils.laplacian_analyzer import LaplacianAnalyzer
+from typing import Dict, List, Set
 
 class DependencyGraph:
-    """
-    Represents the dependency graph of a software system.
-    """
+    def __init__(self):
+        self.graph: Dict[str, Set[str]] = {}
+        self.agent_outputs: Dict[str, Set[str]] = {}
 
-    def __init__(self, modules: List[str], dependencies: List[Tuple[str, str]]):
-        """
-        Initializes the dependency graph.
+    def add_agent(self, agent_name: str, inputs: List[str], outputs: List[str]):
+        if agent_name not in self.graph:
+            self.graph[agent_name] = set(inputs)
+            self.agent_outputs[agent_name] = set(outputs)
 
-        Args:
-            modules: A list of module names.
-            dependencies: A list of tuples representing dependencies (source, target).
-        """
-        self.graph = nx.DiGraph()
-        self.graph.add_nodes_from(modules)
-        self.graph.add_edges_from(dependencies)
+    def resolve_dependencies(self) -> List[str]:
+        resolved_order = []
+        resolved_outputs = set()
 
-    def calculate_coupling(self) -> float:
-        """
-        Calculates the coupling energy of the graph.
-        """
-        # The Laplacian is typically defined for undirected graphs.
-        # We'll use the underlying undirected graph for coupling calculation.
-        undirected_graph = self.graph.to_undirected()
-        analyzer = LaplacianAnalyzer(undirected_graph)
-        return analyzer.coupling_energy()
+        while len(resolved_order) < len(self.graph):
+            unresolved_agents = self.graph.keys() - set(resolved_order)
+            made_progress = False
+
+            for agent_name in unresolved_agents:
+                if self.graph[agent_name].issubset(resolved_outputs):
+                    resolved_order.append(agent_name)
+                    resolved_outputs.update(self.agent_outputs[agent_name])
+                    made_progress = True
+
+            if not made_progress:
+                raise Exception("Circular dependency detected.")
+
+        return resolved_order

@@ -1,106 +1,45 @@
-"""
-HydroSpread Agent: Forecasts code growth based on hydrodynamic principles.
-"""
-from typing import Dict, Any, Optional, List
-
+from typing import Dict, Any, List
 from agents.base.agent import QuantumAgent
-from core.state_space import StateSpace
-from core.energy_calculator import EnergyCalculator
-from core.types import AgentTask as Proposal, QCState as State, AgentResult as Action, Status, TaskQuanta
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from agents.base.policies import PolicyEngine
-from agents.base.memory import AgentMemory
-from llm.client import LLMClient
-
-from . import prompts
-from . import ops
+from core.system_state import SystemState
 
 class HydroSpreadAgent(QuantumAgent):
     """
-    The HydroSpread Agent is a project forecasting specialist.
+    An agent that 'deploys' the optimized code.
     """
-    def __init__(
-        self,
-        state_space: StateSpace,
-        energy_calculator: EnergyCalculator,
-        metrics_logger: MetricsLogger,
-        policy_engine: PolicyEngine,
-        agent_memory: AgentMemory,
-        llm_client: LLMClient,
-        agent_id: Optional[str] = None,
-    ):
-        super().__init__(
-            name="hydrospread",
-            state_space=state_space,
-            energy_calculator=energy_calculator,
-            metrics_logger=metrics_logger,
-            policy_engine=policy_engine,
-            agent_memory=agent_memory,
-            agent_id=agent_id,
-        )
-        self.llm_client = llm_client
+    def __init__(self, config: Dict[str, Any] = None):
+        super().__init__(name="hydrospread", config=config)
 
-    async def analyze_state(self, state: State) -> Proposal:
+    def execute(self, state: SystemState, task: str) -> Dict[str, Any]:
         """
-        Analyzes the current project state and forecasts code growth.
+        Simulates the deployment of optimized code, assuming tests have passed.
         """
-        planck_forge_output = state.metadata.get("planck_forge_output", {})
-        tasks: List[TaskQuanta] = planck_forge_output.get("tasks", [])
+        optimized_code = state.get("optimized_code", [])
+        test_results = state.get("test_results", [])
 
-        if not tasks:
-            return Proposal(agent_name=self.name, task_type="forecast", payload={}, status=Status.SUCCESS, reason="No tasks to analyze.")
+        if not optimized_code or not test_results:
+            print("HydroSpread (deployment) found no code or test results to process.")
+            return {}
 
-        # Get viscosity from the state (e.g., based on development friction)
-        # This is a mock value for now
-        viscosity = state.metadata.get("development_viscosity", 1.0)
+        all_tests_passed = all(result.get("passed", False) for result in test_results)
 
-        # Forecast for the next development cycle
-        time_horizon = 1.0
+        if not all_tests_passed:
+            print("HydroSpread (deployment) cannot proceed because some tests failed.")
+            return {"deployment_status": "halted_due_to_test_failures"}
 
-        forecasted_size = ops.forecast_code_growth(tasks, viscosity, time_horizon)
+        print(f"HydroSpread (deployment) is deploying {len(optimized_code)} code snippets.")
 
-        num_tasks = len(tasks)
-        avg_energy = sum(t.energy for t in tasks) / num_tasks if num_tasks > 0 else 0
+        deployment_statuses = []
+        for code_item in optimized_code:
+            # Simulate deployment
+            deployment_statuses.append({
+                "task_id": code_item.get('task_id'),
+                "status": "deployed_successfully",
+                "endpoint": f"https://api.quantacirc.com/v1/{code_item.get('task_id')}"
+            })
 
-        prompt = prompts.get_prompt("generate_growth_forecast").format(
-            num_tasks=num_tasks,
-            avg_energy=avg_energy,
-            viscosity=viscosity,
-            forecasted_size=forecasted_size,
-        )
-
-        response = await self.llm_client.complete({"prompt": prompt})
-
-        return Proposal(
-            agent_name=self.name,
-            task_type="forecast",
-            payload={"forecast_report": response["content"]},
-            status=Status.SUCCESS
-        )
-
-    def validate_proposal(self, proposal: Proposal) -> bool:
-        """
-        Validates the forecast proposal.
-        """
-        if proposal.status != Status.SUCCESS:
-            return False
-        return "forecast_report" in proposal.payload
-
-    def execute(self, proposal: Proposal) -> Action:
-        """
-        This agent is advisory and does not directly impact the system's energy.
-        """
-        forecast_report = proposal.payload.get("forecast_report")
-
-        action_data = {
-            "forecast_report": forecast_report,
-            "energy_impact": {} # No direct energy impact
+        delta = {
+            "deployment_status": deployment_statuses,
+            "status": "deployment_complete"
         }
 
-        return Action(
-            task_id=proposal.id,
-            agent_name=self.name,
-            action_taken=True,
-            status=Status.SUCCESS,
-            result=action_data
-        )
+        return delta

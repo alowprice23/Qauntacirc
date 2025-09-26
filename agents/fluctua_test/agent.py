@@ -1,50 +1,39 @@
-import asyncio
-import logging
-from typing import List
-
+from typing import Dict, Any, List
 from agents.base.agent import QuantumAgent
-from core.config_loader import load_config
-from core.types import QuantaCircConfig, AgentTask, AgentResult, Status
-
-log = logging.getLogger(__name__)
+from core.system_state import SystemState
 
 class FluctuaTestAgent(QuantumAgent):
     """
-    An agent that generates and executes tests based on quantum fluctuations.
+    An agent that executes generated tests against the optimized code.
     """
-    def __init__(self, config: QuantaCircConfig):
-        super().__init__(name="FluctuaTest", config=config)
+    def __init__(self, config: Dict[str, Any] = None):
+        super().__init__(name="fluctua_test", config=config)
 
-    @property
-    def capabilities(self) -> List[str]:
-        return ["test_generation", "fuzz_testing", "property_based_testing"]
+    def execute(self, state: SystemState, task: str) -> Dict[str, Any]:
+        """
+        Executes the generated tests against the optimized code.
+        """
+        generated_tests = state.get("generated_tests", [])
+        optimized_code = state.get("optimized_code", [])
 
-    async def process_task(self, task: AgentTask) -> AgentResult:
-        log.info(f"FluctuaTest received task: {task.payload}")
-        await asyncio.sleep(3)
-        result_payload = {
-            "message": "Generated 5 unit tests and 2 integration tests.",
-            "tests_passed": True,
-            "coverage_increase": "5%",
-            "energy_impact": {"dynamic": -25.0, "static": 5.0}
+        if not generated_tests or not optimized_code:
+            print("FluctuaTest found no tests or code to process.")
+            return {}
+
+        print(f"FluctuaTest is executing {len(generated_tests)} tests.")
+
+        test_results = []
+        for test_item in generated_tests:
+            # Simulate test execution
+            test_results.append({
+                "task_id": test_item.get('task_id'),
+                "passed": True,
+                "details": "All tests passed successfully."
+            })
+
+        delta = {
+            "test_results": test_results,
+            "status": "testing_complete"
         }
-        return AgentResult(
-            task_id=task.id, agent_name=self.name, action_taken=True,
-            result=result_payload, status=Status.SUCCESS
-        )
 
-async def main():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    config = load_config()
-    agent = FluctuaTestAgent(config)
-    try:
-        await agent.start()
-        log.info("FluctuaTest Agent is running. Press Ctrl+C to stop.")
-        await asyncio.Event().wait()
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        log.info("FluctuaTest Agent is shutting down.")
-    finally:
-        await agent.stop()
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        return delta

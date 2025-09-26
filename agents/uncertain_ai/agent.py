@@ -1,49 +1,42 @@
-import asyncio
-import logging
-from typing import List
-
+from typing import Dict, Any, List
 from agents.base.agent import QuantumAgent
-from core.config_loader import load_config
-from core.types import QuantaCircConfig, AgentTask, AgentResult, Status
-
-log = logging.getLogger(__name__)
+from core.system_state import SystemState
 
 class UncertainAIAgent(QuantumAgent):
     """
-    An agent that reasons under uncertainty and resolves ambiguities.
+    An agent that generates tests for the deduplicated code.
     """
-    def __init__(self, config: QuantaCircConfig):
-        super().__init__(name="UncertainAI", config=config)
+    def __init__(self, config: Dict[str, Any] = None):
+        super().__init__(name="uncertain_ai", config=config)
 
-    @property
-    def capabilities(self) -> List[str]:
-        return ["ambiguity_resolution", "bayesian_inference", "decision_making"]
+    def execute(self, state: SystemState, task: str) -> Dict[str, Any]:
+        """
+        Generates tests for the deduplicated code in the state.
+        """
+        deduplicated_code = state.get("deduplicated_code", [])
+        if not deduplicated_code:
+            print("UncertainAI found no deduplicated code to process.")
+            return {}
 
-    async def process_task(self, task: AgentTask) -> AgentResult:
-        log.info(f"UncertainAI received task: {task.payload}")
-        await asyncio.sleep(1)
-        result_payload = {
-            "message": "Resolved ambiguity in requirement. Selected 'OAuth 2.0' for auth.",
-            "decision_confidence": 0.95,
-            "energy_impact": {"static": -5.0, "interaction": 1.0}
+        print(f"UncertainAI is generating tests for {len(deduplicated_code)} code snippets.")
+
+        generated_tests = []
+        for code_item in deduplicated_code:
+            # Simulate test generation
+            test_code = f"# Test for: {code_item.get('task_id')}\n"
+            test_code += "import unittest\n"
+            test_code += "class TestGeneratedCode(unittest.TestCase):\n"
+            test_code += "    def test_main(self):\n"
+            test_code += "        self.assertTrue(True)\n"
+
+            generated_tests.append({
+                "task_id": code_item.get('task_id'),
+                "test_code": test_code
+            })
+
+        delta = {
+            "generated_tests": generated_tests,
+            "status": "test_generation_complete"
         }
-        return AgentResult(
-            task_id=task.id, agent_name=self.name, action_taken=True,
-            result=result_payload, status=Status.SUCCESS
-        )
 
-async def main():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    config = load_config()
-    agent = UncertainAIAgent(config)
-    try:
-        await agent.start()
-        log.info("UncertainAI Agent is running. Press Ctrl+C to stop.")
-        await asyncio.Event().wait()
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        log.info("UncertainAI Agent is shutting down.")
-    finally:
-        await agent.stop()
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        return delta

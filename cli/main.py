@@ -13,7 +13,7 @@ from rich.theme import Theme
 from typing import Optional, Any
 
 from . import __version__
-from .commands import init, generate, verify, deploy, demo, status, memory, chat, process, self_test, debug, optimize, bounds, risk
+from .commands import init, generate, verify, deploy, demo, status, memory, chat, process, self_test, debug, optimize, bounds, risk, orchestrator
 from core.types import AppContext, QuantaCircConfig
 from core.config_loader import load_config
 from core.exceptions import QuantaCircError
@@ -138,6 +138,9 @@ app.add_typer(risk.app, name="risk", help="Compute and validate uncertainty boun
 app.add_typer(chat.app, name="chat", help="Start an interactive chat session")
 app.add_typer(process.app, name="process", help="Process a single intent in batch mode")
 app.add_typer(self_test.app, name="self-test", help="Run a self-test of the system")
+
+# Add the orchestrator command group
+app.add_typer(orchestrator.app, name="orchestrator", help="Manage and run the agent orchestrator")
 
 
 if __name__ == "__main__":

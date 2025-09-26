@@ -1,49 +1,41 @@
-import asyncio
-import logging
-from typing import List
-
+from typing import Dict, Any, List
 from agents.base.agent import QuantumAgent
-from core.config_loader import load_config
-from core.types import QuantaCircConfig, AgentTask, AgentResult, Status
-
-log = logging.getLogger(__name__)
+from core.system_state import SystemState
 
 class HydroSpreadAgent(QuantumAgent):
     """
-    An agent that generates documentation and spreads knowledge.
+    An agent that generates documentation for the optimized code.
     """
-    def __init__(self, config: QuantaCircConfig):
-        super().__init__(name="HydroSpread", config=config)
+    def __init__(self, config: Dict[str, Any] = None):
+        super().__init__(name="hydro_spread", config=config)
 
-    @property
-    def capabilities(self) -> List[str]:
-        return ["documentation_generation", "knowledge_propagation", "api_spec_creation"]
+    def execute(self, state: SystemState, task: str) -> Dict[str, Any]:
+        """
+        Generates documentation for the optimized code in the state.
+        """
+        optimized_code = state.get("optimized_code", [])
+        if not optimized_code:
+            print("HydroSpread found no optimized code to process.")
+            return {}
 
-    async def process_task(self, task: AgentTask) -> AgentResult:
-        log.info(f"HydroSpread received task: {task.payload}")
-        await asyncio.sleep(1.5)
-        result_payload = {
-            "message": "Generated OpenAPI spec and updated README.",
-            "docs_generated": ["docs/api.md", "README.md"],
-            "energy_impact": {"static": -15.0}
+        print(f"HydroSpread is generating documentation for {len(optimized_code)} code snippets.")
+
+        generated_docs = []
+        for code_item in optimized_code:
+            # Simulate documentation generation
+            doc_content = f"# Documentation for: {code_item.get('task_id')}\n\n"
+            doc_content += "This document describes the functionality of the generated code.\n"
+            doc_content += f"## Original Code\n```python\n{code_item.get('original_code')}\n```\n"
+            doc_content += f"## Optimized Code\n```python\n{code_item.get('optimized_code')}\n```\n"
+
+            generated_docs.append({
+                "task_id": code_item.get('task_id'),
+                "documentation": doc_content
+            })
+
+        delta = {
+            "generated_docs": generated_docs,
+            "status": "documentation_generation_complete"
         }
-        return AgentResult(
-            task_id=task.id, agent_name=self.name, action_taken=True,
-            result=result_payload, status=Status.SUCCESS
-        )
 
-async def main():
-    logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    config = load_config()
-    agent = HydroSpreadAgent(config)
-    try:
-        await agent.start()
-        log.info("HydroSpread Agent is running. Press Ctrl+C to stop.")
-        await asyncio.Event().wait()
-    except (KeyboardInterrupt, asyncio.CancelledError):
-        log.info("HydroSpread Agent is shutting down.")
-    finally:
-        await agent.stop()
-
-if __name__ == "__main__":
-    asyncio.run(main())
+        return delta
