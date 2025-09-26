@@ -1,110 +1,61 @@
-"""
-Lyapunov Monitor
-"""
-from typing import List, Tuple
-import numpy as np
-from core.types import QCState, LyapunovResult
+from typing import Dict, Any, Optional
+from core.metrics import get_system_metrics
+# from core.types import QCState # To be uncommented later
+
+# Placeholder for core.types
+class QCState:
+    energy: float = 0.0
+    lyapunov_potential: float = 0.0
+    contraction_factor: float = 0.0
 
 class LyapunovMonitor:
     """
-    A class to monitor the Lyapunov stability of the system.
+    Monitors the Lyapunov function for system stability.
+
+    This component is responsible for calculating and tracking the Lyapunov
+    potential (Φ) and the contraction factor (λ) to ensure the system
+    remains stable and converges towards a solution.
     """
-    def __init__(self, excursion_bound: float = 1.5, convergence_threshold: float = 1e-4, min_history_for_stability: int = 10):
-        self.excursion_bound = excursion_bound
-        self.convergence_threshold = convergence_threshold
-        self.min_history_for_stability = min_history_for_stability
-        self.potential_history: List[float] = []
-        self.state_history: List[QCState] = []
-        self.min_potential: float | None = None
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.metrics = get_system_metrics()
+        self.previous_state: Optional[QCState] = None
 
-    def reset(self):
-        self.potential_history = []
-        self.state_history = []
-        self.min_potential = None
+    def update(self, current_state: QCState):
+        """
+        Updates the monitor with the current system state and records metrics.
+        """
+        if self.previous_state:
+            self._calculate_stability_metrics(current_state)
 
-    def track_state(self, state: QCState):
-        self.potential_history.append(state.lyapunov_potential)
-        self.state_history.append(state)
-        if self.min_potential is None or state.lyapunov_potential < self.min_potential:
-            self.min_potential = state.lyapunov_potential
+        self.metrics.record_quantum_state(current_state)
+        self.previous_state = current_state
 
-    def track_excursion(self) -> Tuple[bool, float]:
-        if not self.potential_history or self.min_potential is None:
-            return False, 0.0
+    def _calculate_stability_metrics(self, current_state: QCState):
+        """
+        Calculates stability metrics like the contraction factor.
+        """
+        # This is a simplified placeholder for the actual calculation.
+        # In a real implementation, this would involve a more complex
+        # mathematical model based on the system's dynamics.
 
-        ratio = self.potential_history[-1] / self.min_potential
-        return ratio > self.excursion_bound, ratio
+        if self.previous_state and hasattr(self.previous_state, 'lyapunov_potential'):
+            prev_phi = self.previous_state.lyapunov_potential
+            current_phi = current_state.lyapunov_potential
 
-    def verify_stability(self) -> LyapunovResult:
-        if len(self.potential_history) < self.min_history_for_stability:
-            return LyapunovResult(is_stable=False, convergence_status="insufficient_data", exponent=0.0, iterations=len(self.potential_history))
+            if prev_phi > 0:
+                contraction_factor = current_phi / prev_phi
+                setattr(current_state, 'contraction_factor', contraction_factor)
 
-        positive_potentials = np.array([p for p in self.potential_history if p > 0])
-        if len(positive_potentials) < self.min_history_for_stability:
-            return LyapunovResult(is_stable=False, convergence_status="insufficient_data", exponent=0.0, iterations=len(self.potential_history))
+    def is_stable(self, state: QCState) -> bool:
+        """
+        Checks if the system is currently in a stable state.
 
-        log_potentials = np.log(positive_potentials)
-        time_steps = np.arange(len(log_potentials))
-        try:
-            # Fit a line to the log of the potentials
-            coeffs = np.polyfit(time_steps, log_potentials, 1)
-            exponent = coeffs[0]
-        except np.linalg.LinAlgError:
-            exponent = 0.0
+        Stability is determined by the Lyapunov potential decreasing and the
+        contraction factor being less than 1.
+        """
+        if hasattr(state, 'contraction_factor'):
+            return state.contraction_factor < 1.0
 
-        if exponent < -self.convergence_threshold:
-            status = "stable"
-        elif exponent > self.convergence_threshold:
-            status = "unstable"
-        else:
-            status = "marginal"
-
-        return LyapunovResult(
-            is_stable=status == "stable",
-            convergence_status=status,
-            exponent=exponent,
-            iterations=len(self.potential_history)
-        )
-
-    def predict_convergence(self, target_potential: float) -> float | None:
-        stability_result = self.verify_stability()
-        if not stability_result.is_stable or stability_result.exponent >= 0:
-            return None
-
-        current_potential = self.potential_history[-1]
-        if current_potential <= target_potential:
-            return 0.0
-
-        # V(t) = V0 * exp(lambda * t)
-        # log(V(t)/V0) = lambda * t
-        # t = log(V(t)/V0) / lambda
-        time_to_converge = np.log(target_potential / current_potential) / stability_result.exponent
-        return time_to_converge
-
-    def verify_martingale_property(self) -> Tuple[bool, float]:
-        if len(self.potential_history) < 2:
-            return True, 0.0 # Not enough data to say otherwise
-
-        diffs = np.diff(self.potential_history)
-        drift = np.mean(diffs)
-
-        # Supermartingale: E[X_{n+1} | F_n] <= X_n
-        # We check the average drift
-        return drift <= 0, drift
-
-class LyapunovFunction:
-    def __init__(self, kappa: float, xi: float):
-        if kappa <= 0 or xi <= 0:
-            raise ValueError("Weights kappa and xi must be positive.")
-        self.kappa = kappa
-        self.xi = xi
-
-    def compute(self, state: QCState) -> float:
-        return state.energy + self.kappa * state.failing_tests + self.xi * state.open_obligations
-
-    def get_components(self, state: QCState) -> dict:
-        return {
-            "energy": state.energy,
-            "test_penalty": self.kappa * state.failing_tests,
-            "obligation_penalty": self.xi * state.open_obligations,
-        }
+        # If no contraction factor, we can't determine stability yet.
+        return True

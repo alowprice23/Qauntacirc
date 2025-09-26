@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 from . import __version__
-from .commands import verify, deploy, demo, status, memory, agents
+from .commands import verify, deploy, demo, status, memory, agents, monitor, generate
 from core.types import AppContext, QuantaCircConfig
 from core.config_loader import load_config
 from core.exceptions import QuantaCircError
@@ -116,13 +116,14 @@ def main(
 
 # Register all subcommands
 # app.add_typer(init.app, name="init", help="Initialize new QuantaCirc project")
-# app.add_typer(generate.app, name="generate", help="Generate code using agent pipeline")
+app.add_typer(generate.app, name="generate", help="Generate code using agent pipeline")
 app.add_typer(verify.app, name="verify", help="Run formal verification checks")
 app.add_typer(deploy.app, name="deploy", help="Deploy to target environment")
 app.add_typer(demo.app, name="demo", help="Run demonstration scenarios")
 app.add_typer(status.app, name="status", help="Display system quantum state")
 app.add_typer(memory.app, name="memory", help="Interact with Constellation memory")
 app.add_typer(agents.app, name="agents", help="Run agents to perform tasks")
+app.add_typer(monitor.app, name="monitor", help="Manage the QuantaCirc monitoring system.")
 
 if __name__ == "__main__":
     app()

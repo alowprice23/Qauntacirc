@@ -1,15 +1,15 @@
-# monitoring/__init__.py
-
 """
-Core monitoring components for the quantum computing simulation platform.
+QuantaCirc Monitoring Infrastructure
+==================================
+
+Comprehensive observability system providing metrics, tracing, logging,
+and health monitoring for the quantum-mechanical software engineering system.
 """
 
-from .metrics import QuantumMetrics
-from .tracing import QuantumTracer
+from .metrics import QuantumMetrics, MetricsCollector
+from .tracing import QuantumTracer, TraceManager
+from .logging import StructuredLogger
 from .anomaly_detector import QuantumAnomalyDetector
 
-__all__ = [
-    "QuantumMetrics",
-    "QuantumTracer",
-    "QuantumAnomalyDetector",
-]
+__all__ = ["QuantumMetrics", "MetricsCollector", "QuantumTracer", "TraceManager",
+           "StructuredLogger", "QuantumAnomalyDetector"]

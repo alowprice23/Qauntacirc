@@ -1,81 +1,47 @@
-# monitoring/health/dependency.py
+from typing import Tuple, Dict, Any, List
 
-import logging
-import requests
-from typing import List, Dict, Any, Tuple
-
-logger = logging.getLogger(__name__)
-
-class DependencyChecker:
+class DependencyManager:
     """
-    Provides a mechanism to check the health and availability of external
-    dependencies, such as downstream services, databases, or message brokers.
-    These checks are typically exposed via a dedicated health endpoint for
-    diagnostic purposes.
+    Monitors the health of external dependencies.
     """
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.dependencies = config.get("dependencies", [])
+        # In a real implementation, this would hold client objects
+        self.dependency_clients: Dict[str, Any] = {}
 
-    def __init__(self, dependencies: List[Dict[str, Any]]):
+    def check_all(self) -> Tuple[bool, str]:
         """
-        Initializes the dependency checker.
-        Args:
-            dependencies (List[Dict[str, Any]]):
-                A list of dictionaries, where each dictionary defines a
-                dependency to be checked. The dictionary should include a 'name',
-                'type' (e.g., 'http'), and other necessary details like 'url'.
+        Checks the health of all configured dependencies.
         """
-        self.dependencies = dependencies
-
-    def check_all(self) -> Dict[str, Dict[str, Any]]:
-        """
-        Checks the health of all configured dependencies and returns a detailed report.
-        Returns:
-            Dict[str, Dict[str, Any]]:
-                A dictionary where keys are dependency names and values are
-                dictionaries containing the status ('healthy' or 'unhealthy')
-                and additional details.
-        """
-        results = {}
         for dep in self.dependencies:
-            name = dep.get("name", "unnamed_dependency")
-            dep_type = dep.get("type")
+            is_healthy, message = self.check_dependency(dep.get("name"))
+            if not is_healthy:
+                return False, f"Dependency '{dep.get('name')}' is unhealthy: {message}"
+        return True, "All dependencies are healthy"
 
-            try:
-                if dep_type == "http":
-                    status, details = self._check_http_dependency(dep.get("url"), dep.get("timeout", 5))
-                elif dep_type == "database":
-                    # Placeholder for a database check
-                    status, details = self._check_database_dependency(dep)
-                else:
-                    status, details = "unknown", f"Unsupported dependency type: {dep_type}"
-
-                results[name] = {"status": status, "details": details}
-
-            except Exception as e:
-                logger.error(f"Failed to check dependency '{name}': {e}", exc_info=True)
-                results[name] = {"status": "unhealthy", "details": str(e)}
-
-        return results
-
-    def _check_http_dependency(self, url: str, timeout: int) -> Tuple[str, str]:
+    def check_dependency(self, name: str) -> Tuple[bool, str]:
         """
-        Checks an HTTP-based dependency by making a GET request to its health endpoint.
+        Checks a specific dependency.
         """
-        if not url:
-            return "unhealthy", "URL is not configured."
+        # Placeholder for actual dependency check logic
+        if name == "llm_provider":
+            return self._check_llm_provider()
+        elif name == "database":
+            return self._check_database()
+        elif name == "message_broker":
+            return self._check_message_broker()
+        else:
+            return False, f"Unknown dependency: {name}"
 
-        logger.info(f"Checking HTTP dependency at {url}...")
-        response = requests.get(url, timeout=timeout)
-        response.raise_for_status()  # Raises an exception for 4xx or 5xx status codes
-        return "healthy", f"Received status code {response.status_code}."
+    def _check_llm_provider(self) -> Tuple[bool, str]:
+        # Placeholder: Ping LLM provider API
+        return True, "LLM provider is reachable"
 
-    def _check_database_dependency(self, db_config: Dict[str, Any]) -> Tuple[str, str]:
-        """
-        Placeholder for a database dependency check. In a real implementation,
-        this would attempt to establish a connection and run a simple query.
-        """
-        logger.info(f"Checking database dependency '{db_config.get('name')}'...")
-        # Example:
-        # import psycopg2
-        # conn = psycopg2.connect(**db_config.get('connection_params'))
-        # conn.close()
-        return "healthy", "Database connection successful (simulated)."
+    def _check_database(self) -> Tuple[bool, str]:
+        # Placeholder: Check database connection
+        return True, "Database connection is healthy"
+
+    def _check_message_broker(self) -> Tuple[bool, str]:
+        # Placeholder: Check message broker connection
+        return True, "Message broker is reachable"

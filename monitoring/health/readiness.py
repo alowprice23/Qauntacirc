@@ -1,86 +1,60 @@
-# monitoring/health/readiness.py
-
-import logging
-from typing import List, Callable, Tuple
-
-logger = logging.getLogger(__name__)
+from typing import Tuple, Dict, Any
 
 class ReadinessProbe:
     """
-    Represents a readiness probe that determines if the application is ready to
-    accept traffic. Readiness can depend on various factors, such as the
-    availability of downstream services, database connections, or the completion
-    of initialization tasks.
+    Kubernetes readiness probe implementation.
+
+    Checks if the system is ready to accept traffic by verifying all
+    critical dependencies and internal states.
     """
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        # These would be initialized with actual clients/connections
+        self.db_client = None
+        self.message_bus_client = None
+        self.dependency_manager = None
 
-    def __init__(self, checks: List[Callable[[], Tuple[bool, str]]]):
+    def check(self) -> Tuple[bool, str]:
         """
-        Initializes the readiness probe with a list of check functions.
-        Args:
-            checks (List[Callable[[], Tuple[bool, str]]]):
-                A list of functions that perform the readiness checks. Each
-                function should return a tuple containing a boolean (True for
-                success, False for failure) and a string message describing
-                the result.
-        """
-        if not checks:
-            raise ValueError("At least one readiness check must be provided.")
-        self.checks = checks
+        Performs the readiness check.
 
-    def check(self) -> Tuple[bool, Dict[str, str]]:
-        """
-        Executes all registered readiness checks and aggregates the results.
         Returns:
-            Tuple[bool, Dict[str, str]]:
-                A tuple containing an overall readiness status (True if all
-                checks pass, False otherwise) and a dictionary with the
-                details of each check.
+            A tuple of (is_ready, message).
         """
-        overall_status = True
-        results = {}
+        checks = [
+            self._check_quantum_state_consistency,
+            self._check_database_connectivity,
+            self._check_message_bus_availability,
+            self._check_agent_system_readiness,
+            self._check_external_dependencies,
+        ]
 
-        for check_func in self.checks:
-            check_name = check_func.__name__
-            try:
-                is_ready, message = check_func()
-                results[check_name] = "Ready" if is_ready else f"Not Ready: {message}"
-                if not is_ready:
-                    overall_status = False
-                    logger.warning(f"Readiness check '{check_name}' failed: {message}")
-            except Exception as e:
-                overall_status = False
-                results[check_name] = f"Error: {str(e)}"
-                logger.error(f"An exception occurred during readiness check '{check_name}': {e}", exc_info=True)
+        for check_func in checks:
+            is_ready, message = check_func()
+            if not is_ready:
+                return False, message
 
-        if overall_status:
-            logger.info("All readiness checks passed successfully.")
+        return True, "System is ready"
 
-        return overall_status, results
+    def _check_quantum_state_consistency(self) -> Tuple[bool, str]:
+        # Placeholder: In a real implementation, this would involve
+        # checking if the current quantum state is valid and consistent.
+        return True, "Quantum state is consistent"
 
-# --- Example Check Functions ---
+    def _check_database_connectivity(self) -> Tuple[bool, str]:
+        # Placeholder: Check database connection
+        return True, "Database connection is healthy"
 
-def check_database_connection() -> Tuple[bool, str]:
-    """Simulates a check for a database connection."""
-    # In a real application, this would involve trying to connect to the DB.
-    logger.info("Checking database connection...")
-    return True, "Database connection is active."
+    def _check_message_bus_availability(self) -> Tuple[bool, str]:
+        # Placeholder: Check message bus connection
+        return True, "Message bus is available"
 
-def check_quantum_subsystem_initialized() -> Tuple[bool, str]:
-    """Simulates a check for the initialization of a critical subsystem."""
-    logger.info("Checking quantum subsystem...")
-    # Replace with actual initialization logic
-    is_initialized = True
-    if is_initialized:
-        return True, "Quantum subsystem is online."
-    else:
-        return False, "Quantum subsystem is still initializing."
+    def _check_agent_system_readiness(self) -> Tuple[bool, str]:
+        # Placeholder: Check if all critical agents are running
+        return True, "Agent system is ready"
 
-def check_downstream_service() -> Tuple[bool, str]:
-    """Simulates a check for a downstream service dependency."""
-    logger.info("Pinging downstream service...")
-    # In a real application, this would make an HTTP request or similar.
-    is_available = True
-    if is_available:
-        return True, "Downstream service is responsive."
-    else:
-        return False, "Downstream service is not available."
+    def _check_external_dependencies(self) -> Tuple[bool, str]:
+        # Placeholder: Check external services like LLM providers
+        if self.dependency_manager:
+            return self.dependency_manager.check_all()
+        return True, "External dependencies are healthy"

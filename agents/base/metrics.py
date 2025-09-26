@@ -1,67 +1,67 @@
-# agents/base/metrics.py
-"""
-Provides a dedicated metrics collection class for agents, building on top
-of the core monitoring framework.
-"""
+from core.metrics import get_system_metrics
+import time
+from contextlib import contextmanager
+from dataclasses import field
 
-from monitoring.metrics import QuantumMetrics as MetricsLogger
-from core.types import QCState as State, AgentResult as Action
-from core.energy_calculator import EnergyCalculator
+# from core.types import AgentResult # To be uncommented later
+
+# Placeholder for core.types
+class AgentResult:
+    action_taken: bool = False
+    error: bool = False
+    energy_delta: dict = field(default_factory=dict)
+    proposal_generated: bool = False
+    resource_usage: dict = field(default_factory=dict)
 
 
 class AgentMetrics:
     """
-    A specialized metrics collector for a single agent.
+    A helper class for agents to record their metrics.
 
-    This class provides a convenient interface for tracking common agent-related
-    metrics and calculating derived ones like success rates.
+    This class provides a simple interface for agents to interact with the
+    centralized monitoring system, abstracting away the details of metrics
+    collection.
     """
-    def __init__(self, agent_name: str, metrics_logger: MetricsLogger, energy_calculator: EnergyCalculator):
+    def __init__(self, agent_name: str):
         self.agent_name = agent_name
-        self.logger = metrics_logger
-        self.energy_calculator = energy_calculator
+        self.metrics = get_system_metrics()
 
-        self.prefix = f"agent_{self.agent_name}"
-
-        # Core counters
-        self.logger.register_counter(f"{self.prefix}_proposals", "Number of proposals generated")
-        self.logger.register_counter(f"{self.prefix}_executions", "Number of successful executions")
-        self.logger.register_counter(f"{self.prefix}_errors", "Number of errors encountered")
-
-        # Histograms
-        self.logger.register_histogram(f"{self.prefix}_execution_duration_seconds", "Execution duration in seconds")
-        self.logger.register_histogram(f"{self.prefix}_energy_impact", "Energy impact of executed actions")
-
-    def track_proposal(self):
-        """Increments the proposals counter."""
-        self.logger.increment_counter(f"{self.prefix}_proposals")
-
-    def track_execution(self, duration_seconds: float, action: Action, initial_state: State):
+    def record_execution(self, result: AgentResult, duration: float):
         """
-        Tracks a successful execution, including its duration and energy impact.
+        Records the metrics for a single agent execution.
+
+        Args:
+            result: The result of the agent's execution.
+            duration: The time taken for the execution in seconds.
         """
-        self.logger.increment_counter(f"{self.prefix}_executions")
-        self.logger.observe_histogram(f"{self.prefix}_execution_duration_seconds", duration_seconds)
+        self.metrics.record_agent_execution(self.agent_name, result, duration)
 
-        # Calculate and track energy impact
-        energy_impact = self.energy_calculator.calculate_action_energy(action)
-        if energy_impact is not None:
-            self.logger.observe_histogram(f"{self.prefix}_energy_impact", energy_impact)
-
-    def track_error(self):
-        """Increments the errors counter."""
-        self.logger.increment_counter(f"{self.prefix}_errors")
-
-    def get_success_rate(self) -> float:
+    @contextmanager
+    def execution_timer(self, result: AgentResult):
         """
-        Calculates the success rate of the agent.
-        Note: This requires the underlying logger to expose its current values,
-              which we assume it does for this example.
+        A context manager to time an agent's execution and record metrics.
+
+        This is a convenient way to ensure that execution time is always
+        recorded, even if errors occur.
+
+        Usage:
+            agent_metrics = AgentMetrics("MyAgent")
+            result = AgentResult()
+            with agent_metrics.execution_timer(result):
+                # Agent's logic here...
         """
-        proposals = self.logger.get_counter_value(f"{self.prefix}_proposals")
-        executions = self.logger.get_counter_value(f"{self.prefix}_executions")
+        start_time = time.time()
+        try:
+            yield
+        finally:
+            duration = time.time() - start_time
+            self.record_execution(result, duration)
 
-        if proposals == 0:
-            return 1.0  # Or 0.0, depending on definition. No proposals means no failures.
-
-        return executions / proposals
+    def proposal_generated(self, accepted: bool):
+        """
+        Records that a proposal was generated.
+        """
+        self.metrics.agent_proposals_counter.labels(
+            agent_name=self.agent_name,
+            accepted='true' if accepted else 'false'
+        ).inc()

@@ -1,90 +1,54 @@
-# monitoring/health/liveness.py
-
-import logging
-from typing import List, Callable, Tuple
-import threading
-
-logger = logging.getLogger(__name__)
+from typing import Tuple, Dict, Any
 
 class LivenessProbe:
     """
-    Represents a liveness probe that determines if the application is running
-    and has not entered a deadlocked or unresponsive state. A failing liveness
-    probe signals to an orchestrator (like Kubernetes) that the application
-    should be restarted.
+    Kubernetes liveness probe implementation.
 
-    Liveness checks should be simple and not rely on external dependencies.
+    Checks if the system is still alive and not in a deadlocked or
+    unrecoverable state.
     """
+    def __init__(self, config: Dict[str, Any]):
+        self.config = config
+        self.error_threshold = config.get("error_threshold", 100)
+        self.last_processed_timestamp = None
 
-    def __init__(self, checks: List[Callable[[], Tuple[bool, str]]]):
+    def check(self) -> Tuple[bool, str]:
         """
-        Initializes the liveness probe with a list of check functions.
-        Args:
-            checks (List[Callable[[], Tuple[bool, str]]]):
-                A list of functions that perform the liveness checks. Each
-                function should return a tuple containing a boolean (True for
-                alive, False for dead) and a string message.
-        """
-        if not checks:
-            raise ValueError("At least one liveness check must be provided.")
-        self.checks = checks
+        Performs the liveness check.
 
-    def check(self) -> Tuple[bool, Dict[str, str]]:
-        """
-        Executes all registered liveness checks.
         Returns:
-            Tuple[bool, Dict[str, str]]:
-                A tuple containing an overall liveness status (True if all
-                checks pass) and a dictionary with the details of each check.
+            A tuple of (is_alive, message).
         """
-        overall_status = True
-        results = {}
+        checks = [
+            self._check_core_process_health,
+            self._check_for_deadlocks,
+            self._check_resource_exhaustion,
+            self._check_critical_error_threshold,
+        ]
 
-        for check_func in self.checks:
-            check_name = check_func.__name__
-            try:
-                is_alive, message = check_func()
-                results[check_name] = "Alive" if is_alive else f"Failed: {message}"
-                if not is_alive:
-                    overall_status = False
-                    logger.critical(f"Liveness check '{check_name}' failed: {message}")
-            except Exception as e:
-                overall_status = False
-                results[check_name] = f"Error: {str(e)}"
-                logger.error(f"An exception occurred during liveness check '{check_name}': {e}", exc_info=True)
+        for check_func in checks:
+            is_alive, message = check_func()
+            if not is_alive:
+                return False, message
 
-        return overall_status, results
+        return True, "System is alive"
 
-# --- Example Check Functions ---
+    def _check_core_process_health(self) -> Tuple[bool, str]:
+        # Placeholder: Check if essential threads/processes are running
+        return True, "Core processes are running"
 
-def check_main_thread_responsive() -> Tuple[bool, str]:
-    """
-    A basic check to ensure the Python process is responsive.
-    """
-    logger.info("Checking main thread responsiveness...")
-    return True, "Process is responsive."
+    def _check_for_deadlocks(self) -> Tuple[bool, str]:
+        # Placeholder: Implement deadlock detection logic, e.g., by
+        # checking if tasks are being processed in a timely manner.
+        return True, "No deadlocks detected"
 
-def check_for_deadlocked_threads() -> Tuple[bool, str]:
-    """
-    Simulates a check for deadlocked threads. In a real implementation, this
-    would involve inspecting the state of all running threads.
-    """
-    logger.info("Checking for deadlocked threads...")
-    # This is a simplified example. A real implementation would be more complex.
-    active_threads = threading.active_count()
-    if active_threads > 50: # An arbitrary threshold
-        return False, f"Potential deadlock detected: {active_threads} active threads."
-    return True, f"{active_threads} active threads, which is within the normal range."
+    def _check_resource_exhaustion(self) -> Tuple[bool, str]:
+        # Placeholder: Check for low memory or disk space
+        return True, "Sufficient resources available"
 
-def check_memory_usage() -> Tuple[bool, str]:
-    """
-    Checks if memory usage is within a reasonable limit.
-    """
-    # This would require a library like `psutil` to be implemented correctly.
-    # import psutil
-    # process = psutil.Process()
-    # memory_mb = process.memory_info().rss / (1024 * 1024)
-    # if memory_mb > 2048: # 2GB threshold
-    #     return False, f"Memory usage ({memory_mb:.2f} MB) exceeds threshold."
-    logger.info("Checking memory usage...")
-    return True, "Memory usage is within acceptable limits."
+    def _check_critical_error_threshold(self) -> Tuple[bool, str]:
+        # Placeholder: Check a global error counter
+        # error_count = get_global_error_count()
+        # if error_count > self.error_threshold:
+        #     return False, "Critical error threshold exceeded"
+        return True, "Error count is within limits"
