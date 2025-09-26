@@ -20,7 +20,7 @@ from .state_space import StateSpace
 # --- Data Management and Validation ---
 from .run_ledger import RunLedger
 from .persistence import PersistenceManager
-from .constraint_solver import ConstraintSolver
+from .constraint_solver import SMTConstraintSolver
 from .closure_rules import ClosureRuleSet
 from .validators import validate_qc_state_consistency
 from .serialization import serialize_model, deserialize_model, save_model_to_json, load_model_from_json
@@ -74,7 +74,7 @@ __all__ = [
     # Data Management
     "RunLedger",
     "PersistenceManager",
-    "ConstraintSolver",
+    "SMTConstraintSolver",
     "ClosureRuleSet",
     "validate_qc_state_consistency",
     "serialize_model",

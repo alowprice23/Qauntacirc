@@ -1,4 +1,5 @@
 import asyncio
+import json
 import numpy as np
 from typing import Dict, Any, Optional
 
@@ -90,16 +91,11 @@ class SchrodingerDevAgent(QuantumAgent):
             # 4. Collapse the state to the most probable implementation
             final_code = self.code_generator.collapse_to_implementation(implementations, psi_final)
 
-            # 5. Generate a proof skeleton for the final, chosen code
-            proof_prompt = prompts.get_prompt("generate_proof").format(
-                task_description=task["description"],
-                verification_criteria=task["verification_criteria"]
-            )
-            proof_response = await self.llm_client.complete({"prompt": proof_prompt})
-            proof_skeleton = ops.extract_python_code(proof_response["content"])
+            # 5. Generate proof obligations for the final code
+            obligations = self._generate_proof_obligations(task, final_code)
 
-            # 6. Create file map for the final code and proof
-            file_map = ops.create_code_and_proof_files(final_code, proof_skeleton, task["id"])
+            # 6. Create file map for the final code and its obligations
+            file_map = self._create_file_map(final_code, obligations, task["id"])
 
         except Exception as e:
             return Proposal(agent_name=self.name, task_type="analysis", payload={}, status=Status.FAILED, reason=f"Failed during quantum evolution: {e}")
@@ -164,3 +160,41 @@ class SchrodingerDevAgent(QuantumAgent):
             result=action_data,
             status=Status.SUCCESS
         )
+
+    def _generate_proof_obligations(self, task: Dict[str, Any], code: str) -> Dict[str, Any]:
+        """
+        Generates a set of proof obligations for the given code and task.
+        """
+        # In a real implementation, this would involve sophisticated code analysis.
+        # Here, we generate a placeholder obligation based on the task description.
+        obligations = {
+            "version": "1.0",
+            "task_id": task["id"],
+            "file": f"{task['id']}.py",
+            "obligations": [
+                {
+                    "id": "obligation-1",
+                    "type": "smt",
+                    "property": "no integer overflow",
+                    "description": "Ensure that all arithmetic operations in the crypto functions do not result in integer overflows.",
+                    "status": "pending"
+                },
+                {
+                    "id": "obligation-2",
+                    "type": "coq",
+                    "property": "functional correctness of 'encrypt'",
+                    "description": "Prove that the 'encrypt' function correctly implements the specified encryption algorithm.",
+                    "status": "pending"
+                }
+            ]
+        }
+        return obligations
+
+    def _create_file_map(self, code: str, obligations: Dict[str, Any], task_id: str) -> Dict[str, str]:
+        """
+        Creates a file map containing the generated code and its proof obligations.
+        """
+        return {
+            f"generated/{task_id}.py": code,
+            f"generated/{task_id}.json": json.dumps(obligations, indent=2)
+        }

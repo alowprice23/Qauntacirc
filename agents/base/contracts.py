@@ -2,7 +2,7 @@ import abc
 from typing import List, Any
 
 from core.types import QCState as State, AgentResult as Action
-from core.constraint_solver import ConstraintSolver
+from core.constraint_solver import SMTConstraintSolver
 from math_utils.lyapunov import is_lyapunov_stable
 from core.closure_rules import ClosureRule
 
@@ -38,18 +38,32 @@ class EnergyCondition(Condition):
     """
     Condition to check if the system's energy state is within allowed bounds.
     """
-    def __init__(self, solver: "ConstraintSolver", max_energy: float):
+    def __init__(self, solver: "SMTConstraintSolver", max_energy: float):
         self.solver = solver
         self.max_energy = max_energy
 
     def check(self, state: "State", **kwargs) -> bool:
         """
-        Verifies that the current energy state is below the maximum threshold.
+        Verifies that the current energy state is below the maximum threshold
+        using the provided SMT solver.
         """
         if not hasattr(state, 'energy'):
             return False
 
-        return self.solver.solve([f"energy <= {self.max_energy}"], {"energy": state.energy})
+        # Use a temporary context in the solver to check the condition.
+        self.solver.solver.push()
+        try:
+            # Declare the variable we'll be constraining. It's idempotent.
+            self.solver.declare_variable('energy', 'Real')
+            # Add a temporary constraint that the 'energy' variable equals the current state's energy.
+            self.solver.add_constraint(f"energy == {state.energy}")
+            # Check if the property holds given this temporary fact.
+            result = self.solver.check_property(f"energy <= {self.max_energy}")
+        finally:
+            # Important: remove the temporary constraint.
+            self.solver.solver.pop()
+
+        return result
 
 
 class LyapunovCondition(Condition):

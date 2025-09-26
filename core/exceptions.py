@@ -53,3 +53,18 @@ class MessagingError(QuantaCircError):
 class QuantumStateError(StateError):
     """Error related to an invalid quantum state."""
     pass
+
+class VerificationError(QuantaCircError):
+    """Base exception for verification failures."""
+    pass
+
+class ProofObligationError(VerificationError):
+    """Error related to discharging a proof obligation."""
+    def __init__(self, message, obligation, details=None, suggested_fix=None):
+        self.obligation = obligation
+        self.details = details or {}
+        super().__init__(message, suggested_fix)
+
+class SMTSolvingError(VerificationError):
+    """Error during SMT solving."""
+    pass

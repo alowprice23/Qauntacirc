@@ -14,3 +14,13 @@ class ConstellationMemory:
             def to_dict(self):
                 return {'type': self.type, 'timestamp': str(self.timestamp), 'summary': self.summary, 'relevance_score': self.relevance_score}
         return [DummyResult("decision", datetime.now(), "A dummy decision", 0.9)]
+
+    def learn_from_artifact(self, artifact_type: str, content: str):
+        """
+        Learns from a given artifact, such as a successful proof log.
+        """
+        print(f"Learning from artifact of type '{artifact_type}'.")
+        # In a real implementation, this would parse the content and
+        # store meaningful patterns, lemmas, or templates.
+        # For example, extracting proved lemmas from a Coq proof log.
+        pass

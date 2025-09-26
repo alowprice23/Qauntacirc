@@ -1,159 +1,126 @@
 import typer
-from rich.progress import Progress, TaskID
+from rich.console import Console
 from pathlib import Path
-from typing import List, Optional
-import subprocess
-import json
+from typing import Optional
 
-# from core.types import AppContext, VerificationReport, ProofResult
-# from core.constraint_solver import SMTSolver
-from proofs.validators import CoqValidator, AgdaValidator, SMTValidator
-# from core.closure_rules import ClosureRuleSet
-# from core.energy_calculator import EnergyCalculator
+from proofs.validators import VerificationManager
+from proofs.reporting import VerificationReporter
+from core.exceptions import QuantaCircError
 
 app = typer.Typer()
+console = Console()
 
-@app.command()
-def all(
+@app.command(name="check-all")
+def check_all(
     ctx: typer.Context,
-    target_dir: Optional[Path] = typer.Option(
-        None,
-        "--dir",
-        help="Target directory to verify (defaults to current)"
-    ),
-    proof_level: str = typer.Option(
-        "standard",
-        "--level",
-        help="Proof level: minimal, standard, complete"
-    ),
-    parallel: bool = typer.Option(
-        True,
-        "--parallel/--sequential",
-        help="Run verifications in parallel"
-    ),
-    output_format: str = typer.Option(
-        "human",
-        "--format",
-        help="Output format: human, json, junit"
-    )
+    obligation_file: Path = typer.Argument(..., help="Path to the proof obligation JSON file."),
+    generate_proofs: bool = typer.Option(False, "--generate-proofs", help="Attempt to generate proof sketches (not implemented).")
 ):
     """
-    Run complete formal verification suite.
-
-    This command validates all mathematical and logical constraints
-    ensuring the system maintains its irrefutability guarantees.
+    Checks all obligations in a file and reports the status.
     """
-    from rich.console import Console
-    console = Console()
-    # app_context: AppContext = ctx.obj
-    # console = app_context.console
+    if not obligation_file.exists():
+        console.print(f"[bold red]Error: Obligation file not found at {obligation_file}[/bold red]")
+        raise typer.Exit(1)
 
-    if target_dir is None:
-        target_dir = Path.cwd()
+    console.print(f"Checking all proof obligations in [cyan]{obligation_file}[/cyan]...")
 
-    console.print("[bold]🔬 QuantaCirc Formal Verification Suite[/bold]\n")
+    if generate_proofs:
+        console.print("[yellow]--generate-proofs is a placeholder and not yet implemented.[/yellow]")
 
-    verification_results = []
+    try:
+        manager = VerificationManager()
+        results = manager.verify_obligations(str(obligation_file))
 
-    with Progress(console=console) as progress:
+        reporter = VerificationReporter(results, str(obligation_file))
+        report = reporter.generate_report('text')
+        console.print(report)
 
-        # Task 1: SMT Constraint Verification
-        smt_task = progress.add_task("SMT constraint checking...", total=100)
-        # smt_solver = SMTSolver(app_context.config)
+        if results.get("overall_status") == "failed":
+            console.print("\n[bold red]Verification checks failed.[/bold red]")
+            raise typer.Exit(1)
+        else:
+            console.print("\n[bold green]All verification checks passed.[/bold green]")
 
-        # try:
-        #     smt_results = smt_solver.verify_all_constraints(target_dir)
-        #     verification_results.extend(smt_results)
-        progress.update(smt_task, completed=100)
-        console.print("[success]✓[/success] SMT constraints verified (mocked)")
-        # except Exception as e:
-        #     console.print(f"[error]❌ SMT verification failed: {str(e)}[/error]")
-        #     verification_results.append(ProofResult(
-        #         type="smt",
-        #         status="failed",
-        #         error=str(e)
-        #     ))
+    except QuantaCircError as e:
+        console.print(f"[bold red]An error occurred: {e.message}[/bold red]")
+        if e.suggested_fix:
+            console.print(f"[yellow]Suggestion: {e.suggested_fix}[/yellow]")
+        raise typer.Exit(1)
 
-        # Task 2: Coq Proof Validation
-        coq_task = progress.add_task("Coq proof validation...", total=100)
-        # coq_validator = CoqValidator(app_context.config)
+@app.command(name="smt")
+def check_smt(
+    ctx: typer.Context,
+    property: str = typer.Option(..., "--property", help="The SMT property to check, e.g., 'x > 5'"),
+):
+    """
+    Checks a specific SMT property.
+    """
+    from core.constraint_solver import SMTConstraintSolver
+    console.print(f"Checking SMT property: [bold cyan]'{property}'[/bold cyan]")
 
-        # try:
-        #     coq_results = coq_validator.validate_proofs(target_dir / "proofs" / "coq")
-        #     verification_results.extend(coq_results)
-        progress.update(coq_task, completed=100)
-        console.print(f"[success]✓[/success] Coq proofs validated (mocked)")
-        # except Exception as e:
-        #     console.print(f"[error]❌ Coq validation failed: {str(e)}[/error]")
+    try:
+        solver = SMTConstraintSolver()
+        # For this standalone check, we assume some context or declare variables.
+        # This is a simplified example.
+        solver.declare_variable('x', 'Int')
+        solver.declare_variable('y', 'Int')
 
-        # Task 3: Energy Function Validation
-        energy_task = progress.add_task("Energy function validation...", total=100)
-        # energy_calc = EnergyCalculator(app_context.config)
+        # Add some base constraints for context
+        solver.add_constraint("x < 100")
+        solver.add_constraint("y > 0")
 
-        # try:
-        #     energy_result = energy_calc.validate_function_properties()
-        #     verification_results.append(energy_result)
-        progress.update(energy_task, completed=100)
-        console.print("[success]✓[/success] Energy function properties verified (mocked)")
-        # except Exception as e:
-        #     console.print(f"[error]❌ Energy validation error: {str(e)}[/error]")
+        if solver.check_property(property):
+            console.print(f"[bold green]Property '{property}' is formally verified.[/bold green]")
+        else:
+            console.print(f"[bold red]Property '{property}' could not be verified.[/bold red]")
+            raise typer.Exit(1)
+    except QuantaCircError as e:
+        console.print(f"[bold red]SMT solver error: {e.message}[/bold red]")
+        raise typer.Exit(1)
 
-        # Task 4: Closure Rule Validation
-        closure_task = progress.add_task("Closure rule validation...", total=100)
-        # closure_rules = ClosureRuleSet(app_context.config)
 
-        # try:
-        #     closure_result = closure_rules.validate_completeness()
-        #     verification_results.append(closure_result)
-        progress.update(closure_task, completed=100)
-        console.print("[success]✓[/success] Closure rules validated (mocked)")
-        # except Exception as e:
-        #     console.print(f"[error]❌ Closure validation error: {str(e)}[/error]")
+@app.command(name="coverage")
+def check_coverage(
+    ctx: typer.Context,
+    obligation_file: Path = typer.Argument(..., help="Path to the proof obligation JSON file."),
+    report: bool = typer.Option(False, "--report", help="Generate a detailed coverage report."),
+    threshold: Optional[float] = typer.Option(None, "--threshold", help="Fail if coverage is below this percentage (e.g., 80.0).")
+):
+    """
+    Calculates and reports the verification coverage.
+    """
+    if not obligation_file.exists():
+        console.print(f"[bold red]Error: Obligation file not found at {obligation_file}[/bold red]")
+        raise typer.Exit(1)
 
-    # Generate final report
-    # report = VerificationReport(
-    #     results=verification_results,
-    #     summary={
-    #         "total": len(verification_results),
-    #         "passed": len([r for r in verification_results if r.status == "passed"]),
-    #         "failed": len([r for r in verification_results if r.status == "failed"]),
-    #         "skipped": len([r for r in verification_results if r.status == "skipped"])
-    #     }
-    # )
+    if not report:
+        console.print("[yellow]--report flag not provided. Calculating coverage without generating a report.[/yellow]")
 
-    # Output results
-    if output_format == "json":
-        console.print(json.dumps({"status": "mocked_success"}, indent=2))
-    elif output_format == "junit":
-        # Generate JUnit XML format
-        pass
-    else:
-        # Human-readable format
-        console.print(f"\n[bold]Verification Summary:[/bold]")
-        console.print(f"Total checks: 4")
-        console.print(f"[success]Passed: 4[/success]")
-        console.print(f"[error]Failed: 0[/error]")
-        console.print(f"[warning]Skipped: 0[/warning]")
+    try:
+        # We need to generate a report object to calculate coverage
+        reporter = VerificationReporter({}, str(obligation_file))
 
-        console.print(f"\n[success]✅ All verifications passed (mocked)[/success]")
+        obligations = reporter.obligations_data.get("obligations", [])
+        total = len(obligations)
+        proved = sum(1 for ob in obligations if ob.get("status") == "proved")
+        coverage = (proved / total) * 100 if total > 0 else 0
 
-@app.command()
-def proofs(ctx: typer.Context, proof_type: str = "all"):
-    """Verify specific proof types (coq, agda, smt)"""
-    from rich.console import Console
-    console = Console()
-    console.print(f"Verifying {proof_type} proofs... (mocked)")
+        console.print(f"Verification Coverage: [bold green]{coverage:.2f}%[/bold green] ({proved}/{total} obligations proved)")
 
-@app.command()
-def energy(ctx: typer.Context):
-    """Verify energy function properties"""
-    from rich.console import Console
-    console = Console()
-    console.print("Verifying energy function properties... (mocked)")
+        if report:
+            console.print("\n--- Full Report ---")
+            full_report = reporter.generate_report('text')
+            console.print(full_report)
 
-@app.command()
-def constraints(ctx: typer.Context):
-    """Verify SMT constraints only"""
-    from rich.console import Console
-    console = Console()
-    console.print("Verifying SMT constraints... (mocked)")
+        if threshold is not None:
+            console.print(f"Checking against threshold: {threshold:.2f}%")
+            if coverage < threshold:
+                console.print(f"[bold red]Coverage ({coverage:.2f}%) is below the required threshold ({threshold:.2f}%).[/bold red]")
+                raise typer.Exit(1)
+            else:
+                console.print("[bold green]Coverage meets or exceeds the threshold.[/bold green]")
+
+    except QuantaCircError as e:
+        console.print(f"[bold red]An error occurred: {e.message}[/bold red]")
+        raise typer.Exit(1)

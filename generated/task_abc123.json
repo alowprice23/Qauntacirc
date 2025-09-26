@@ -1,0 +1,25 @@
+{
+  "version": "1.0",
+  "task_id": "task_abc123",
+  "file": "task_abc123.py",
+  "obligations": [
+    {
+      "id": "obligation-1",
+      "type": "smt",
+      "property": "x > 0",
+      "description": "Ensure x is positive.",
+      "status": "failed",
+      "engine": "smt",
+      "reason": "Property could not be proved."
+    },
+    {
+      "id": "obligation-2",
+      "type": "coq",
+      "property": "functional correctness",
+      "description": "Prove functional correctness.",
+      "status": "pending",
+      "engine": "coq",
+      "reason": "Coq verification not implemented."
+    }
+  ]
+}
