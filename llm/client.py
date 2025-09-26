@@ -2,8 +2,12 @@ import abc
 import time
 import logging
 from typing import Any, Dict, List, Optional, TypedDict
+import json
 
 import uuid
+
+from memory.constellation import ConstellationMemory
+from memory.query import QueryBuilder
 
 # Assuming a QuantumState object exists in the core module
 # from core.quantum_state import QuantumState
@@ -70,6 +74,7 @@ class LLMClient(abc.ABC):
         rate_limiter: Optional[RateLimiter] = None,
         validator: Optional[ResponseValidator] = None,
         injection_detector: Optional[InjectionDetector] = None,
+        constellation_memory: Optional[ConstellationMemory] = None,
     ):
         self.api_key = api_key
         self.model = model
@@ -77,18 +82,49 @@ class LLMClient(abc.ABC):
         self.rate_limiter = rate_limiter or RateLimiter()
         self.validator = validator or ResponseValidator()
         self.injection_detector = injection_detector or InjectionDetector()
+        self.constellation_memory = constellation_memory
         self.total_cost = 0.0
+
+    def _get_memory_context(self, text: str, top_k: int = 3) -> str:
+        if not self.constellation_memory:
+            return ""
+
+        query = QueryBuilder().search(text).limit(top_k).build()
+        results = self.constellation_memory.query(query)
+
+        if not results:
+            return ""
+
+        context_str = "Relevant context from memory:\n"
+        for _, data in results:
+            content = data.get('content', '{}')
+            try:
+                # Pretty print if content is a JSON string
+                parsed_content = json.loads(content)
+                context_str += f"- {json.dumps(parsed_content, indent=2)}\n"
+            except (json.JSONDecodeError, TypeError):
+                # Otherwise, just append the raw content
+                context_str += f"- {content}\n"
+        return context_str
 
     def generate(
         self,
         prompt: str,
         quantum_context: Optional[QuantumState] = None,
+        use_memory: bool = False,
         **kwargs: Any,
     ) -> str:
         """Generate a text completion from a prompt."""
         if self.injection_detector.detect(prompt):
             raise ValueError("Prompt injection detected")
-        return self._do_generate(prompt, quantum_context, **kwargs)
+
+        final_prompt = prompt
+        if use_memory:
+            memory_context = self._get_memory_context(prompt)
+            if memory_context:
+                final_prompt = f"{memory_context}\n---\n\n{prompt}"
+
+        return self._do_generate(final_prompt, quantum_context, **kwargs)
 
     @abc.abstractmethod
     def _do_generate(
@@ -104,11 +140,28 @@ class LLMClient(abc.ABC):
         self,
         messages: List[Dict[str, str]],
         quantum_context: Optional[QuantumState] = None,
+        use_memory: bool = False,
         **kwargs: Any,
     ) -> StandardChatResponse:
         """Generate a chat response from a list of messages."""
         sanitized_messages = self.injection_detector.sanitize(messages)
-        return self._do_chat(sanitized_messages, quantum_context, **kwargs)
+
+        final_messages = list(sanitized_messages)
+        if use_memory and final_messages:
+            # Use the content of the last message to find relevant context.
+            last_user_message = ""
+            for msg in reversed(final_messages):
+                if msg.get("role") == "user":
+                    last_user_message = msg.get("content", "")
+                    break
+
+            if last_user_message:
+                memory_context = self._get_memory_context(last_user_message)
+                if memory_context:
+                    # Insert the context as a system message at the beginning
+                    final_messages.insert(0, {"role": "system", "content": memory_context})
+
+        return self._do_chat(final_messages, quantum_context, **kwargs)
 
     @abc.abstractmethod
     def _do_chat(

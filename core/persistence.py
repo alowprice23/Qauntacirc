@@ -10,15 +10,19 @@ and configurations.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from uuid import UUID
 from typing import TypeVar, Type, Optional
+from datetime import datetime
 
+import networkx as nx
 from pydantic import BaseModel
 
 from core.types import QCState, RunRecord
-from core.serialization import save_model_to_json, load_model_from_json
+from core.serialization import save_model_to_json, load_model_from_json, NumpyJSONEncoder
 from core.run_ledger import RunLedger
+from memory.constellation import ConstellationMemory
 
 T = TypeVar('T', bound=BaseModel)
 
@@ -131,6 +135,41 @@ class PersistenceManager:
             file_path.write_text(content)
         else:
             file_path.write_bytes(content)
+
+    def get_constellation_path(self) -> Path:
+        """Gets the path for storing the constellation memory."""
+        path = self.base_path / "memory"
+        path.mkdir(exist_ok=True)
+        return path / "constellation_graph.json"
+
+    def save_constellation(self, constellation: ConstellationMemory):
+        """Saves the constellation memory graph to a file."""
+        file_path = self.get_constellation_path()
+        graph_data = nx.node_link_data(constellation.graph)
+
+        with file_path.open('w') as f:
+            json.dump(graph_data, f, cls=NumpyJSONEncoder, indent=4)
+
+    def load_constellation(self, constellation: ConstellationMemory):
+        """Loads the constellation memory graph from a file."""
+        file_path = self.get_constellation_path()
+        if not file_path.exists():
+            return  # No saved constellation to load
+
+        with file_path.open('r') as f:
+            graph_data = json.load(f)
+
+        # Manually parse datetime strings back to datetime objects
+        for node in graph_data.get('nodes', []):
+            if 'timestamp' in node and isinstance(node['timestamp'], str):
+                node['timestamp'] = datetime.fromisoformat(node['timestamp'])
+
+        for link in graph_data.get('links', []):
+            if 'timestamp' in link and isinstance(link['timestamp'], str):
+                link['timestamp'] = datetime.fromisoformat(link['timestamp'])
+
+        constellation.graph = nx.node_link_graph(graph_data)
+
 
 # Example Usage
 if __name__ == '__main__':

@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 from typing import Type, TypeVar, Any
 import numpy as np
+from datetime import datetime, date
 
 from pydantic import BaseModel
 from core.types import QCState, RunRecord
@@ -27,6 +28,8 @@ class NumpyJSONEncoder(json.JSONEncoder):
     A custom JSON encoder that can handle NumPy arrays and data types.
     """
     def default(self, obj: Any) -> Any:
+        if isinstance(obj, (datetime, date)):
+            return obj.isoformat()
         if isinstance(obj, np.ndarray):
             return obj.tolist()
         if isinstance(obj, (np.int_, np.intc, np.intp, np.int8,

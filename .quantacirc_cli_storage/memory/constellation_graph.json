@@ -1,0 +1,17 @@
+{
+    "directed": true,
+    "multigraph": false,
+    "graph": {},
+    "nodes": [
+        {
+            "content": "JWT tokens expire after 1 hour in production",
+            "type": "policy",
+            "timestamp": "2025-09-26T01:54:55.029173",
+            "confidence": 1.0,
+            "access_level": "private",
+            "owner": "security_team",
+            "id": "c00598a6-2e21-4b7f-ba57-8da6b8278a02"
+        }
+    ],
+    "links": []
+}
