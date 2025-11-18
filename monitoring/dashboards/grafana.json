@@ -1,0 +1,211 @@
+{
+  "__inputs": [],
+  "__requires": [],
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "gnetId": null,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+      "id": 10,
+      "panels": [],
+      "title": "Quantum State Evolution",
+      "type": "row"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 1 },
+      "id": 2,
+      "title": "Energy Level",
+      "targets": [
+        {
+          "expr": "quantum_energy_level{system_id=\"$system_id\"}",
+          "legendFormat": "{{qubit_id}}",
+          "refId": "A"
+        }
+      ],
+      "type": "graph"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 1 },
+      "id": 4,
+      "title": "Lyapunov Exponent",
+      "targets": [
+        {
+          "expr": "quantum_lyapunov_exponent{system_id=\"$system_id\"}",
+          "legendFormat": "{{system_id}}",
+          "refId": "A"
+        }
+      ],
+      "type": "graph"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 1 },
+      "id": 6,
+      "title": "Phase Angle",
+      "targets": [
+        {
+          "expr": "quantum_phase_angle{system_id=\"$system_id\"}",
+          "legendFormat": "{{qubit_id}}",
+          "refId": "A"
+        }
+      ],
+      "type": "graph"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 9 },
+      "id": 12,
+      "panels": [],
+      "title": "Agent Performance",
+      "type": "row"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 10 },
+      "id": 8,
+      "title": "Agent Execution Time (p95)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(agent_execution_time_seconds_bucket{agent_name=\"$agent_name\"}[5m])) by (le, agent_name))",
+          "legendFormat": "{{agent_name}}",
+          "refId": "A"
+        }
+      ],
+      "type": "graph"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 10 },
+      "id": 14,
+      "title": "Agent Success Rate",
+      "targets": [
+        {
+          "expr": "sum(rate(agent_operations_total{agent_name=\"$agent_name\", status=\"success\"}[5m])) / sum(rate(agent_operations_total{agent_name=\"$agent_name\"}[5m]))",
+          "legendFormat": "{{agent_name}} success rate",
+          "refId": "A"
+        }
+      ],
+      "type": "graph"
+    },
+    {
+      "collapsed": false,
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 18 },
+      "id": 16,
+      "panels": [],
+      "title": "Mathematical Convergence",
+      "type": "row"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 19 },
+      "id": 18,
+      "title": "Convergence Error",
+      "targets": [
+        {
+          "expr": "mathematical_convergence_error{algorithm=\"$algorithm\"}",
+          "legendFormat": "{{algorithm}} iteration {{iteration}}",
+          "refId": "A"
+        }
+      ],
+      "type": "graph"
+    },
+    {
+      "datasource": "Prometheus",
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 19 },
+      "id": 20,
+      "title": "Convergence Residual",
+      "targets": [
+        {
+          "expr": "mathematical_convergence_residual{algorithm=\"$algorithm\"}",
+          "legendFormat": "{{algorithm}} iteration {{iteration}}",
+          "refId": "A"
+        }
+      ],
+      "type": "graph"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 27,
+  "style": "dark",
+  "tags": ["quantum-monitoring"],
+  "templating": {
+    "list": [
+      {
+        "current": { "text": "All", "value": "$__all" },
+        "datasource": "Prometheus",
+        "definition": "label_values(quantum_energy_level, system_id)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "System ID",
+        "multi": false,
+        "name": "system_id",
+        "options": [],
+        "query": "label_values(quantum_energy_level, system_id)",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": { "text": "All", "value": "$__all" },
+        "datasource": "Prometheus",
+        "definition": "label_values(agent_execution_time_seconds_bucket, agent_name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Agent Name",
+        "multi": false,
+        "name": "agent_name",
+        "options": [],
+        "query": "label_values(agent_execution_time_seconds_bucket, agent_name)",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      },
+      {
+        "current": { "text": "All", "value": "$__all" },
+        "datasource": "Prometheus",
+        "definition": "label_values(mathematical_convergence_error, algorithm)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Algorithm",
+        "multi": false,
+        "name": "algorithm",
+        "options": [],
+        "query": "label_values(mathematical_convergence_error, algorithm)",
+        "refresh": 2,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 0,
+        "type": "query"
+      }
+    ]
+  },
+  "time": { "from": "now-1h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Quantum System Monitoring",
+  "uid": "quantum-dashboard-1",
+  "version": 1
+}

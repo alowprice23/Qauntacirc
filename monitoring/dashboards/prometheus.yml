@@ -1,0 +1,22 @@
+# monitoring/dashboards/prometheus.yml
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: 'quantum_simulator'
+    # In a real deployment, service discovery (e.g., Kubernetes SD) would be used.
+    # For this example, we use a static target.
+    static_configs:
+      - targets: ['localhost:8000']
+        labels:
+          service: 'quantum_simulator'
+
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+# Load alerting rules from a separate file for better organization.
+rule_files:
+  - '/etc/prometheus/alert.rules.yml'
