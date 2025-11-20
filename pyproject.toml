@@ -30,24 +30,37 @@ dependencies = [
     "rich>=13.0.0",
     "pydantic>=2.0.0",
     "pydantic-settings>=2.0.0",
+<<<<<<< ours
     
+=======
+
+>>>>>>> theirs
     # LLM providers
     "openai>=1.0.0",
     "anthropic>=0.7.0",
     "groq>=0.4.0",
     "google-generativeai>=0.3.0",
+<<<<<<< ours
     
+=======
+
+>>>>>>> theirs
     # Mathematical libraries
     "numpy>=1.24.0",
     "scipy>=1.10.0",
     "networkx>=3.0",
     "sympy>=1.12",
+<<<<<<< ours
     
+=======
+
+>>>>>>> theirs
     # Data handling
     "sqlite-utils>=3.35.0",
     "pandas>=2.0.0",
     "pyyaml>=6.0",
     "jsonschema>=4.17.0",
+<<<<<<< ours
     
     # Async and messaging
     "nats-py>=2.2.0",
@@ -56,11 +69,19 @@ dependencies = [
     "protobuf>=4.0.0",
     "pybreaker>=1.0.0",
     
+=======
+
+    # Async and messaging
+    "asyncio-nats-client>=2.5.0",
+    "aiofiles>=23.0.0",
+
+>>>>>>> theirs
     # Utilities
     "click>=8.0.0",
     "httpx>=0.24.0",
     "jinja2>=3.1.0",
     "structlog>=23.0.0",
+<<<<<<< ours
     
     # Git integration
     "gitpython>=3.1.0",
@@ -84,6 +105,30 @@ dependencies = [
     "pytest>=7.4.0",
     "hypothesis>=6.82.0",
     "scikit-learn>=1.3.0",
+=======
+
+    # Git integration
+    "gitpython>=3.1.0",
+
+    # Compression (for Kolmogorov approximation)
+    "zstandard>=0.21.0",
+
+    # Hashing and cryptography
+    "cryptography>=41.0.0",
+    "blake3>=0.3.0",
+
+    # Performance monitoring
+    "psutil>=5.9.0",
+    "prometheus-client>=0.16.0",
+
+    # Code analysis
+    "ast-decompiler>=2.0.0",
+    "astor>=0.8.1",
+
+    # Testing framework integration
+    "pytest>=7.4.0",
+    "hypothesis>=6.82.0",
+>>>>>>> theirs
 ]
 
 [project.optional-dependencies]
@@ -174,6 +219,10 @@ strict_equality = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 asyncio_mode = "auto"
+<<<<<<< ours
+=======
+addopts = "--cov=. --cov-report=term-missing --cov-report=html --cov-fail-under=85"
+>>>>>>> theirs
 markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "integration: marks tests as integration tests",
@@ -227,8 +276,13 @@ exclude_lines = [
     "raise NotImplementedError",
     "if 0:",
     "if __name__ == .__main__.:",
+<<<<<<< ours
     "class .*\\bProtocol\\):",
     "@(abc\\.)?abstractmethod",
+=======
+    "class .*\bProtocol\):",
+    "@(abc\.)?abstractmethod",
+>>>>>>> theirs
 ]
 
 [tool.bandit]
@@ -238,4 +292,8 @@ skips = ["B101", "B601"]
 [tool.semantic_release]
 version_toml = ["pyproject.toml:project.version"]
 version_variables = ["version.py:__version__"]
+<<<<<<< ours
 build_command = "pip install build && python -m build"
+=======
+build_command = "pip install build && python -m build"
+>>>>>>> theirs

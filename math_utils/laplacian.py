@@ -32,6 +32,8 @@ def get_normalized_laplacian(adj_matrix, form='sym'):
         np.ndarray: The normalized Laplacian matrix.
     """
     degrees = np.sum(adj_matrix, axis=1)
+<<<<<<< HEAD
+<<<<<<< HEAD
     # To handle disconnected nodes, we only compute the inverse for non-zero degrees.
     inv_degrees = np.zeros_like(degrees, dtype=float)
     non_zero_mask = degrees > 0
@@ -44,6 +46,20 @@ def get_normalized_laplacian(adj_matrix, form='sym'):
         return I - D_inv_sqrt @ adj_matrix @ D_inv_sqrt
     elif form == 'rw':
         D_inv = np.diag(inv_degrees)
+=======
+=======
+>>>>>>> remotes/origin/feat/core-infrastructure
+    D_inv_sqrt = np.diag(1.0 / np.sqrt(degrees), where=degrees > 0)
+
+    if form == 'sym':
+        I = np.identity(adj_matrix.shape[0])
+        return I - D_inv_sqrt @ adj_matrix @ D_inv_sqrt
+    elif form == 'rw':
+        D_inv = np.diag(1.0 / degrees, where=degrees > 0)
+<<<<<<< HEAD
+>>>>>>> remotes/origin/feat/core-infrastructure
+=======
+>>>>>>> remotes/origin/feat/core-infrastructure
         return np.identity(adj_matrix.shape[0]) - D_inv @ adj_matrix
     else:
         raise ValueError("Form must be 'sym' or 'rw'.")
