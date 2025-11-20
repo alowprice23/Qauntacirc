@@ -84,6 +84,8 @@ def optional_stopping_theorem_bound(sequence, stopping_time):
     expected_x0 = np.mean(sequence[0])
 
     return np.isclose(expected_xt, expected_x0)
+<<<<<<< HEAD
+<<<<<<< HEAD
 
 
 def is_supermartingale(sequence: np.ndarray) -> tuple[bool, float]:
@@ -108,3 +110,7 @@ def is_supermartingale(sequence: np.ndarray) -> tuple[bool, float]:
     drift = np.mean(diffs)
 
     return drift <= 0, drift
+=======
+>>>>>>> remotes/origin/feat/core-infrastructure
+=======
+>>>>>>> remotes/origin/feat/core-infrastructure

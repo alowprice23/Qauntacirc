@@ -118,6 +118,8 @@ class StabilityAnalyzer:
             if v_values[i+1] > v_values[i]:
                 return False
         return True
+<<<<<<< HEAD
+<<<<<<< HEAD
 
 
 def is_lyapunov_stable(state_vector: np.ndarray) -> bool:
@@ -177,3 +179,7 @@ def estimate_lyapunov_exponent(trajectory: np.ndarray, dt: float = 1.0) -> float
         return 0.0
 
     return np.mean(finite_ratios) / dt
+=======
+>>>>>>> remotes/origin/feat/core-infrastructure
+=======
+>>>>>>> remotes/origin/feat/core-infrastructure
