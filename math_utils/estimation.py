@@ -24,43 +24,21 @@ def maximum_likelihood_estimator(data, log_likelihood_func, initial_params):
 
     return result.x
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 def huber_rho(u, c=1.345):
     """Huber's rho function, the integral of the psi function."""
     abs_u = np.abs(u)
     return np.where(abs_u <= c, 0.5 * u**2, c * abs_u - 0.5 * c**2)
 
 def m_estimator(data, rho_func, initial_param):
-=======
-def m_estimator(data, psi_func, initial_param):
->>>>>>> remotes/origin/feat/core-infrastructure
-=======
-def m_estimator(data, psi_func, initial_param):
->>>>>>> remotes/origin/feat/core-infrastructure
     """
     Generic M-estimator for a single parameter.
 
     M-estimators are a generalization of MLEs that are robust to outliers.
-<<<<<<< HEAD
-<<<<<<< HEAD
     They minimize sum(rho((x_i - theta) / s)), where rho is a robust loss function.
 
     Args:
         data (np.ndarray): The observed data.
         rho_func (callable): The robust loss function (e.g., Huber's rho).
-=======
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
-    They solve sum(psi((x_i - theta) / s)) = 0, where psi is an influence function.
-
-    Args:
-        data (np.ndarray): The observed data.
-        psi_func (callable): The influence function (e.g., Huber's psi).
-<<<<<<< HEAD
->>>>>>> remotes/origin/feat/core-infrastructure
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
         initial_param (float): Initial guess for the parameter.
 
     Returns:
@@ -68,20 +46,10 @@ def m_estimator(data, psi_func, initial_param):
     """
     # The scale 's' is often estimated robustly, e.g., using MAD.
     s = np.median(np.abs(data - np.median(data))) * 1.4826
-<<<<<<< HEAD
-<<<<<<< HEAD
     if s == 0:
         s = 1.0 # Avoid division by zero if all data points are the same
 
     objective = lambda theta: np.sum(rho_func((data - theta) / s))
-=======
-
-    objective = lambda theta: np.sum(psi_func((data - theta) / s))**2
->>>>>>> remotes/origin/feat/core-infrastructure
-=======
-
-    objective = lambda theta: np.sum(psi_func((data - theta) / s))**2
->>>>>>> remotes/origin/feat/core-infrastructure
 
     result = minimize(objective, initial_param)
 

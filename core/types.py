@@ -12,13 +12,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID, uuid4
-<<<<<<< HEAD
-<<<<<<< HEAD
 from enum import Enum
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
@@ -80,17 +74,11 @@ class QCState(BaseModel):
 # Agent Communication Protocol
 # ==============================================================================
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 class Status(str, Enum):
     """Status of an agent operation."""
     SUCCESS = "SUCCESS"
     FAILED = "FAILED"
 
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
 class AgentTask(BaseModel):
     """Communication protocol for agent requests."""
     id: UUID = Field(default_factory=uuid4, description="Unique identifier for the task.")
@@ -98,14 +86,8 @@ class AgentTask(BaseModel):
     task_type: str = Field(..., description="Type of task to be performed.")
     payload: Dict[str, Any] = Field(..., description="Task-specific data payload.")
     priority: int = Field(5, ge=1, le=10, description="Task priority (1-10).")
-<<<<<<< HEAD
-<<<<<<< HEAD
     status: Status = Field(Status.SUCCESS, description="Status of the proposal.")
     reason: Optional[str] = Field(None, description="Reason for failure, if any.")
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
     quantum_context: Optional[QCState] = Field(None, description="The QCState context for the task.")
     created_at: datetime = Field(default_factory=datetime.utcnow, description="Timestamp of task creation.")
 
@@ -114,14 +96,8 @@ class AgentResult(BaseModel):
     task_id: UUID = Field(..., description="Identifier of the task this is a result for.")
     agent_name: str = Field(..., description="Name of the agent that performed the task.")
     action_taken: bool = Field(..., description="Indicates if the agent took a substantive action.")
-<<<<<<< HEAD
-<<<<<<< HEAD
     status: Status = Field(Status.SUCCESS, description="Status of the action.")
     result: Optional[Dict[str, Any]] = Field(None, description="The result of the action.")
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
     energy_delta: Optional[Dict[str, float]] = Field(None, description="Change in energy components due to the action.")
     error: Optional[str] = Field(None, description="Error message, if any.")
     artifacts: List[str] = Field([], description="List of URIs to any generated artifacts (e.g., plots, logs).")
@@ -191,8 +167,6 @@ class VerificationReport(BaseModel):
 
     def to_json_schema(self):
         return self.schema_json(indent=2)
-<<<<<<< HEAD
-<<<<<<< HEAD
 
 # ==============================================================================
 # CLI Application Context
@@ -200,19 +174,20 @@ class VerificationReport(BaseModel):
 from rich.console import Console
 
 class ProjectConfig(BaseModel):
-    pass
+    name: str = "default"
+    version: str = "0.0.0"
 
 class AgentConfig(BaseModel):
     pass
 
 class ExecutionConfig(BaseModel):
-    pass
+    default_mode: Optional[str] = None
 
 class MemoryConfig(BaseModel):
     pass
 
 class SecurityConfig(BaseModel):
-    pass
+    api_key_path: Optional[str] = None
 
 class QuantaCircConfig(BaseModel):
     project: ProjectConfig = Field(default_factory=ProjectConfig)
@@ -233,7 +208,3 @@ class AppContext(BaseModel):
     def verify_quantum_state(self) -> bool:
         # Dummy implementation
         return True
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
