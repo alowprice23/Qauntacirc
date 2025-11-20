@@ -16,17 +16,9 @@ class TemperatureSchedule:
         if schedule_type == 'exponential':
             self.alpha = (final_temp / initial_temp) ** (1.0 / steps)
         elif schedule_type == 'logarithmic':
-<<<<<<< HEAD
-<<<<<<< HEAD
             # Per README, T_k = c / log(k + 2).
             # To have get_temperature(0) == initial_temp, we need c = initial_temp * log(2).
             self.c = initial_temp * math.log(2)
-=======
-            self.c = initial_temp / math.log(1 + 1)
->>>>>>> remotes/origin/feat/core-infrastructure
-=======
-            self.c = initial_temp / math.log(1 + 1)
->>>>>>> remotes/origin/feat/core-infrastructure
         elif schedule_type == 'linear':
             self.beta = (initial_temp - final_temp) / steps
 
@@ -35,25 +27,15 @@ class TemperatureSchedule:
         if self.schedule_type == 'exponential':
             return self.initial_temp * (self.alpha ** step)
         elif self.schedule_type == 'logarithmic':
-<<<<<<< HEAD
-<<<<<<< HEAD
             # Per README, T_k = c / log(k + 2)
             if step < 0:
                 return float('inf')
             return self.c / math.log(step + 2)
-=======
-            return self.c / math.log(1 + step + 1)
->>>>>>> remotes/origin/feat/core-infrastructure
-=======
-            return self.c / math.log(1 + step + 1)
->>>>>>> remotes/origin/feat/core-infrastructure
         elif self.schedule_type == 'linear':
             return self.initial_temp - self.beta * step
         else:
             raise ValueError(f"Unknown schedule type: {self.schedule_type}")
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 
 class GeometricCoolingSchedule:
     """
@@ -66,10 +48,6 @@ class GeometricCoolingSchedule:
         self.min_temp = min_temp
 
 
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
-=======
->>>>>>> remotes/origin/feat/core-infrastructure
 class TwoPhaseAnnealer:
     """
     A two-phase simulated annealer with quantum-mechanical temperature schedules.

@@ -10,7 +10,7 @@ import yaml
 # from core.types import AppContext, ProjectConfig
 # from core.energy_calculator import initialize_energy_function
 # from core.lyapunov_monitor import initialize_lyapunov_potential
-from artifacts.generator import ArtifactGenerator
+# from artifacts.generator import ArtifactGenerator
 from templates.project import PROJECT_TEMPLATES
 
 app = typer.Typer()
